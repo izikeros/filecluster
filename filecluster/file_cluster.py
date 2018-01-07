@@ -1,10 +1,10 @@
+# -*- coding: utf-8 -*-
 # Copyright (c) 2017 Krystian Safjan
 #
 # This software is released under the MIT License.
 # https://opensource.org/licenses/MIT
 
 # pylint: disable=C0103
-
 
 import base64
 import os
@@ -104,7 +104,7 @@ def create_folder_for_cluster(config, date_string):
     dir_name = os.path.join(pth, date_string)
     try:
         result = os.makedirs(dir_name)
-    except OSError:
+    except OSError as err:
         pass
 
 
@@ -125,6 +125,31 @@ def image_base64(im):
 def image_formatter(im):
     return '<img src="data:image/jpeg;base64,{image_tn}">'.format(
         image_tn=image_base64(im))
+
+
+# Print iterations progress
+def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_length=100):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        bar_length  - Optional  : character length of bar (Int)
+    """
+    import sys
+    str_format = "{0:." + str(decimals) + "f}"
+    percents = str_format.format(100 * (iteration / float(total)))
+    filled_length = int(round(bar_length * iteration / float(total)))
+    bar = '█' * filled_length + '-' * (bar_length - filled_length)
+
+    sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
+
+    if iteration == total:
+        sys.stdout.write('\n')
+    sys.stdout.flush()
 
 
 class ImageGroupper(object):
@@ -151,7 +176,9 @@ class ImageGroupper(object):
 
         DEBUG_MODE = False
 
-        for fn in os.listdir(pth):
+        list_dir = os.listdir(pth)
+        n_files = len(list_dir)
+        for i_file, fn in enumerate(os.listdir(pth)):
             if is_supported_filetype(fn, ext):
                 path_name = os.path.join(pth, fn)
                 m_time, c_time, exif_date = get_date_from_file(path_name)
@@ -174,9 +201,10 @@ class ImageGroupper(object):
                                'media_type': media_type
                                }
                 row_list.append(new_row)
+            print_progress(i_file, n_files-1, 'reading files: ')
+        print("")
 
         self.df = pd.DataFrame(row_list)
-
         # use exif date as base
         self.df['date'] = self.df['exif_date']
         # unless is missing - then use modification date:
@@ -211,11 +239,16 @@ class ImageGroupper(object):
             td = self.config['granularity_minutes']
             cluster_idx = 0
 
+            n_files = len(self.df)
+            i_file = 0
             for index, _row in self.df.iterrows():
                 d_previous = self.df.loc[index][date_col]
                 if d_previous > td:
                     cluster_idx += 1
                 self.df.loc[index, cluster_col] = cluster_idx
+                i_file += 1
+                print_progress(i_file, n_files, 'clustering: ')
+            print("")
 
     def get_num_of_clusters_in_df(self):
         return self.df['cluster_id'].value_counts()
@@ -261,6 +294,8 @@ class ImageGroupper(object):
         """ move or copy items to dedicated folder"""
         pth_out = self.config['outDirName']
         pth_in = self.config['inDirName']
+        n_files = len(self.df)
+        i_file = 0
         for idx, row in self.df.iterrows():
             date_string = row['date_string']
             file_name = row['file_name']
@@ -268,6 +303,9 @@ class ImageGroupper(object):
             dst = os.path.join(pth_out, date_string, file_name)
             if mode == 'copy':
                 copy2(src, dst)
+            i_file += 1
+            print_progress(i_file, n_files, 'move/copy: ')
+        print("")
 
     def move_files_to_cluster_folder(self):
         dirs = self.df['date_string'].unique()
@@ -278,15 +316,14 @@ class ImageGroupper(object):
         self.move_or_copy_pictures(mode='copy')
 
     def run_clustering(self):
-        print("calculating gaps")
         # TODO: create 'date' column and map there exif date if available or
         #  m_date otherwise
-        self.calculate_gaps('date', 'date_delta')
-        print("clustering")
-        self.do_clustering(method='baseline')
         n_files = len(self.df)
-        print ("%d files found") % n_files
-        print("Done")
+        print("%d files found") % n_files
+        print("")
+        print("calculating gaps")
+        self.calculate_gaps('date', 'date_delta')
+        self.do_clustering(method='baseline')
 
 
 if __name__ == '__main__':
@@ -296,3 +333,10 @@ if __name__ == '__main__':
     image_groupper.run_clustering()
     image_groupper.assign_date_to_clusters(method='random')
     image_groupper.move_files_to_cluster_folder()
+
+# TODO: add progress and timing information to each step: reading,
+# gap calculation, clustering, moving
+
+# TODO: add safety mechanism
+# TODO: Break if error
+# TODO: periodically check size of inbox and outbox if size is correct
