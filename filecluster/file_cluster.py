@@ -278,15 +278,15 @@ class ImageGroupper(object):
         self.move_or_copy_pictures(mode='copy')
 
     def run_clustering(self):
-        print('calculating gaps')
+        print("calculating gaps")
         # TODO: create 'date' column and map there exif date if available or
         #  m_date otherwise
         self.calculate_gaps('date', 'date_delta')
-        print('clustering')
+        print("clustering")
         self.do_clustering(method='baseline')
         n_files = len(self.df)
         print ("%d files found") % n_files
-        print('Done')
+        print("Done")
 
 
 if __name__ == '__main__':
