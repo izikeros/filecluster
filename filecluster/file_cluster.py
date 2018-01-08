@@ -11,7 +11,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from io import BytesIO
-from shutil import copy2
+from shutil import copy2, move
 
 import exifread
 import pandas as pd
@@ -334,9 +334,5 @@ if __name__ == '__main__':
     image_groupper.assign_date_to_clusters(method='random')
     image_groupper.move_files_to_cluster_folder()
 
-# TODO: add progress and timing information to each step: reading,
-# gap calculation, clustering, moving
-
-# TODO: add safety mechanism
 # TODO: Break if error
 # TODO: periodically check size of inbox and outbox if size is correct
