@@ -20,7 +20,8 @@ from PIL import Image
 
 def get_default_config():
     # path to files to be clustered
-    inbox_path = "/home/izik/fc_data/mix2"
+    #inbox_path = "/home/izik/fc_data/mix2"
+    inbox_path = "/media/root/Foto/zdjecia/inbox"
 
     # filename extensions in scope of clustering
     image_extensions = ['.jpg', '.cr2']
@@ -31,11 +32,11 @@ def get_default_config():
 
     config = {
         'inDirName': inbox_path,
-        'outDirName': '/home/izik/fc_data/out',
+        'outDirName': "/media/root/Foto/zdjecia/inbox_clust/2017_new",
         'image_extensions': image_extensions,
         'video_extensions': video_extensions,
         'granularity_minutes': max_gap,
-        'move_instead_of_copy': False,
+        'move_instead_of_copy': True,
         'cluster_col': 'cluster_id'
     }
 
@@ -303,6 +304,8 @@ class ImageGroupper(object):
             dst = os.path.join(pth_out, date_string, file_name)
             if mode == 'copy':
                 copy2(src, dst)
+            else:
+                move(src, dst)
             i_file += 1
             print_progress(i_file, n_files, 'move/copy: ')
         print("")
