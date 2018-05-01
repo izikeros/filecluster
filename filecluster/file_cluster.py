@@ -16,28 +16,52 @@ from shutil import copy2, move
 import exifread
 import pandas as pd
 from PIL import Image
+import sqlite3
+import logging
+
+DEBUG_MODE = True
+DEV_MODE = True
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def get_default_config():
     # path to files to be clustered
-    # TODO: automatically detect if it is dev or production environment
-    inbox_path = "/home/izik/fc_data/mix2"
-    #inbox_path = "/media/root/Foto/zdjecia/inbox"
 
-    # filename extensions in scope of clustering
+    # Configure inbox
+    inbox_dev_path = '/home/izik/bulk/fc_data/mix2a'
+    inbox_path = '/media/root/Foto/zdjecia/inbox'
+    if DEV_MODE:
+        inbox_path = inbox_dev_path
+
+    # Configure outbox
+    outbox_dev_path = '/home/izik/bulk/fc_data/out'
+    outbox_path = '/media/root/Foto/zdjecia/inbox_clust/2017_new'
+    if DEV_MODE:
+        outbox_path = outbox_dev_path
+
+    # Configure database
+    db_dev_file = '/home/izik/bulk/fc_data/cluster_db_development.sqlite3'
+    db_file = '/media/root/Foto/zdjecia/cluster_db.sqlite3'
+    if DEV_MODE:
+        db_file = db_dev_file
+
+    # Filename extensions in scope of clustering
     image_extensions = ['.jpg', '.cr2']
     video_extensions = ['.mp4', '.3gp', 'mov']
 
-    # minimum gap that separate two events
+    # Minimum gap that separate two events
     max_gap = timedelta(minutes=60)
 
     config = {
         'inDirName': inbox_path,
-        'outDirName': "/media/root/Foto/zdjecia/inbox_clust/2017_new",
+        'outDirName': outbox_path,
+        'db_file': db_file,
         'image_extensions': image_extensions,
         'video_extensions': video_extensions,
         'granularity_minutes': max_gap,
-        'move_instead_of_copy': True,
+        'move_instead_of_copy': False,
         'cluster_col': 'cluster_id'
     }
 
@@ -130,7 +154,8 @@ def image_formatter(im):
 
 
 # Print iterations progress
-def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_length=100):
+def print_progress(iteration, total, prefix='', suffix='', decimals=1,
+                   bar_length=100):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -138,7 +163,8 @@ def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_lengt
         total       - Required  : total iterations (Int)
         prefix      - Optional  : prefix string (Str)
         suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        decimals    - Optional  : positive number of decimals in percent
+        complete (Int)
         bar_length  - Optional  : character length of bar (Int)
     """
     import sys
@@ -147,7 +173,8 @@ def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_lengt
     filled_length = int(round(bar_length * iteration / float(total)))
     bar = '█' * filled_length + '-' * (bar_length - filled_length)
 
-    sys.stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
+    sys.stdout.write(
+        '\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
 
     if iteration == total:
         sys.stdout.write('\n')
@@ -176,8 +203,6 @@ class ImageGroupper(object):
         pth = self.config['inDirName']
         ext = self.config['image_extensions'] + self.config['video_extensions']
 
-        DEBUG_MODE = False
-
         list_dir = os.listdir(pth)
         n_files = len(list_dir)
         for i_file, fn in enumerate(os.listdir(pth)):
@@ -203,7 +228,7 @@ class ImageGroupper(object):
                                'media_type': media_type
                                }
                 row_list.append(new_row)
-            print_progress(i_file, n_files-1, 'reading files: ')
+            print_progress(i_file, n_files - 1, 'reading files: ')
         print("")
 
         self.df = pd.DataFrame(row_list)
@@ -323,20 +348,27 @@ class ImageGroupper(object):
         # TODO: create 'date' column and map there exif date if available or
         #  m_date otherwise
         n_files = len(self.df)
-        print("%d files found") % n_files
+        if n_files:
+            print("%d files found") % n_files
+        else:
+            logger.ERROR("No files to cluster found")
+            return True
         print("")
         print("calculating gaps")
         self.calculate_gaps('date', 'date_delta')
         self.do_clustering(method='baseline')
-
+        return False
 
 if __name__ == '__main__':
     this_config = get_default_config()
     image_groupper = ImageGroupper(this_config)
     image_groupper.get_data_from_files()
-    image_groupper.run_clustering()
-    image_groupper.assign_date_to_clusters(method='random')
-    image_groupper.move_files_to_cluster_folder()
+    return_code = image_groupper.run_clustering()
+    if not return_code:
+        image_groupper.assign_date_to_clusters(method='random')
+        image_groupper.move_files_to_cluster_folder()
+    else:
+        logger.ERROR("Clustering Failed")
 
 # TODO: Break if error
 # TODO: periodically check size of inbox and outbox if size is correct
