@@ -19,6 +19,8 @@ from PIL import Image
 import sqlite3
 import logging
 
+# In debug mode there are more columns in dataframe, e.g. thumbnails are
+# generated
 DEBUG_MODE = True
 DEV_MODE = True
 
@@ -96,10 +98,10 @@ def get_date_from_file(path_name):
     get date information from photo file
     """
 
-    mtime = time.ctime(os.path.getmtime(path_name))
-    ctime = time.ctime(os.path.getctime(path_name))
+    m_time = time.ctime(os.path.getmtime(path_name))
+    c_time = time.ctime(os.path.getctime(path_name))
     exif_date = get_exif_date(path_name)
-    return mtime, ctime, exif_date
+    return m_time, c_time, exif_date
 
 
 def get_exif_date(path_name):
@@ -129,7 +131,7 @@ def create_folder_for_cluster(config, date_string):
     pth = config['outDirName']
     dir_name = os.path.join(pth, date_string)
     try:
-        result = os.makedirs(dir_name)
+        os.makedirs(dir_name)
     except OSError as err:
         pass
 
@@ -181,7 +183,7 @@ def print_progress(iteration, total, prefix='', suffix='', decimals=1,
     sys.stdout.flush()
 
 
-class ImageGroupper(object):
+class ImageReader(object):
     def __init__(self, config):
         # read the config
         self.config = config
@@ -199,6 +201,25 @@ class ImageGroupper(object):
         :rtype: pandas dataframe
         """
 
+        def _add_new_row():
+            if DEBUG_MODE:
+                new_row = {'file_name': fn,
+                           'm_date': m_time,
+                           'c_date': c_time,
+                           'exif_date': exif_date,
+                           'full_path': path_name,
+                           'image': get_thumbnail(path_name),
+                           'media_type': media_type
+                           }
+            else:
+                new_row = {'file_name': fn,
+                           'm_date': m_time,
+                           'c_date': c_time,
+                           'exif_date': exif_date,
+                           'media_type': media_type
+                           }
+            return new_row
+
         row_list = []
         pth = self.config['inDirName']
         ext = self.config['image_extensions'] + self.config['video_extensions']
@@ -211,22 +232,7 @@ class ImageGroupper(object):
                 m_time, c_time, exif_date = get_date_from_file(path_name)
                 media_type = get_media_type(path_name, self.config[
                     'image_extensions'], self.config['video_extensions'])
-                if DEBUG_MODE:
-                    new_row = {'file_name': fn,
-                               'm_date': m_time,
-                               'c_date': c_time,
-                               'exif_date': exif_date,
-                               'full_path': path_name,
-                               'image': get_thumbnail(path_name),
-                               'media_type': media_type
-                               }
-                else:
-                    new_row = {'file_name': fn,
-                               'm_date': m_time,
-                               'c_date': c_time,
-                               'exif_date': exif_date,
-                               'media_type': media_type
-                               }
+                new_row = _add_new_row()
                 row_list.append(new_row)
             print_progress(i_file, n_files - 1, 'reading files: ')
         print("")
@@ -246,6 +252,16 @@ class ImageGroupper(object):
                                            infer_datetime_format=True)
         self.df['exif_date'] = pd.to_datetime(self.df['exif_date'],
                                               infer_datetime_format=True)
+
+    def get_data_frame(self):
+        return self.df
+
+
+class ImageGroupper(object):
+    def __init__(self, config, data_frame):
+        # read the config
+        self.config = config
+        self.df = data_frame
 
     def calculate_gaps(self, date_col, delta_col):
         """ calculate gaps between consecutive shots
@@ -276,6 +292,8 @@ class ImageGroupper(object):
                 i_file += 1
                 print_progress(i_file, n_files, 'clustering: ')
             print("")
+            print("{num_clusters} clusters identified".format(
+                num_clusters=cluster_idx+1))
 
     def get_num_of_clusters_in_df(self):
         return self.df['cluster_id'].value_counts()
@@ -349,9 +367,9 @@ class ImageGroupper(object):
         #  m_date otherwise
         n_files = len(self.df)
         if n_files:
-            print("%d files found") % n_files
+            print(f"{n_files} files found")
         else:
-            logger.ERROR("No files to cluster found")
+            logger.error("No files to cluster found")
             return True
         print("")
         print("calculating gaps")
@@ -359,16 +377,22 @@ class ImageGroupper(object):
         self.do_clustering(method='baseline')
         return False
 
+
 if __name__ == '__main__':
     this_config = get_default_config()
-    image_groupper = ImageGroupper(this_config)
-    image_groupper.get_data_from_files()
+    # read date when pictures/recordings in inbox were taken
+    image_reader = ImageReader(this_config)
+    image_reader.get_data_from_files()
+
+    # group media by time
+    image_groupper = ImageGroupper(config=this_config,
+                                   data_frame=image_reader.get_data_frame())
     return_code = image_groupper.run_clustering()
     if not return_code:
         image_groupper.assign_date_to_clusters(method='random')
         image_groupper.move_files_to_cluster_folder()
     else:
-        logger.ERROR("Clustering Failed")
+        logger.error("Clustering Failed")
 
 # TODO: Break if error
 # TODO: periodically check size of inbox and outbox if size is correct
