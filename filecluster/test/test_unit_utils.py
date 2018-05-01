@@ -5,8 +5,8 @@
 
 # pylint: disable=C0103
 
-from filecluster.file_cluster import *
-from filecluster.utils import get_default_config
+from filecluster.file_cluster import get_default_config, ImageGroupper
+
 import unittest
 assertions = unittest.TestCase('__init__')
 

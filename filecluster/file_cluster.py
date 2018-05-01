@@ -20,8 +20,9 @@ from PIL import Image
 
 def get_default_config():
     # path to files to be clustered
-    #inbox_path = "/home/izik/fc_data/mix2"
-    inbox_path = "/media/root/Foto/zdjecia/inbox"
+    # TODO: automatically detect if it is dev or production environment
+    inbox_path = "/home/izik/fc_data/mix2"
+    #inbox_path = "/media/root/Foto/zdjecia/inbox"
 
     # filename extensions in scope of clustering
     image_extensions = ['.jpg', '.cr2']
