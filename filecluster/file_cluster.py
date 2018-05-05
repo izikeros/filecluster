@@ -6,16 +6,10 @@
 
 # pylint: disable=C0103
 
-import base64
+from filecluster import utlis as ut
 import os
-import time
-from datetime import datetime, timedelta
-from io import BytesIO
 from shutil import copy2, move
-
-import exifread
 import pandas as pd
-from PIL import Image
 import sqlite3
 import logging
 
@@ -26,161 +20,7 @@ DEV_MODE = True
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-
-def get_default_config():
-    # path to files to be clustered
-
-    # Configure inbox
-    inbox_dev_path = '/home/izik/bulk/fc_data/mix2a'
-    inbox_path = '/media/root/Foto/zdjecia/inbox'
-    if DEV_MODE:
-        inbox_path = inbox_dev_path
-
-    # Configure outbox
-    outbox_dev_path = '/home/izik/bulk/fc_data/out'
-    outbox_path = '/media/root/Foto/zdjecia/inbox_clust/2017_new'
-    if DEV_MODE:
-        outbox_path = outbox_dev_path
-
-    # Configure database
-    db_dev_file = '/home/izik/bulk/fc_data/cluster_db_development.sqlite3'
-    db_file = '/media/root/Foto/zdjecia/cluster_db.sqlite3'
-    if DEV_MODE:
-        db_file = db_dev_file
-
-    # Filename extensions in scope of clustering
-    image_extensions = ['.jpg', '.cr2']
-    video_extensions = ['.mp4', '.3gp', 'mov']
-
-    # Minimum gap that separate two events
-    max_gap = timedelta(minutes=60)
-
-    config = {
-        'inDirName': inbox_path,
-        'outDirName': outbox_path,
-        'db_file': db_file,
-        'image_extensions': image_extensions,
-        'video_extensions': video_extensions,
-        'granularity_minutes': max_gap,
-        'move_instead_of_copy': False,
-        'cluster_col': 'cluster_id'
-    }
-
-    # ensure extensions are lowercase
-    config['image_extensions'] = [xx.lower() for xx in
-                                  config['image_extensions']]
-    config['video_extensions'] = [xx.lower() for xx in
-                                  config['video_extensions']]
-    return config
-
-
-def is_supported_filetype(file_name, ext):
-    fn_lower = file_name.lower()
-    return fn_lower.endswith(tuple(ext))
-
-
-def get_media_type(file_name, ext_image, ext_video):
-    fn_lower = file_name.lower()
-    is_video = fn_lower.endswith(tuple(ext_video))
-    is_image = fn_lower.endswith(tuple(ext_image))
-
-    if is_image:
-        return 'image'
-    elif is_video:
-        return 'video'
-    else:
-        return 'unknown'
-
-
-def get_date_from_file(path_name):
-    """
-    get date information from photo file
-    """
-
-    m_time = time.ctime(os.path.getmtime(path_name))
-    c_time = time.ctime(os.path.getctime(path_name))
-    exif_date = get_exif_date(path_name)
-    return m_time, c_time, exif_date
-
-
-def get_exif_date(path_name):
-    """
-    return exif date or none
-    """
-
-    # Open image file for reading (binary mode)
-    img_file = open(path_name, 'rb')
-
-    # Return Exif tags
-    tags = exifread.process_file(img_file, details=False,
-                                 stop_tag='EXIF DateTimeOriginal')
-
-    try:
-        exif_date_str = tags['EXIF DateTimeOriginal'].values
-        exif_date = datetime.strptime(exif_date_str, '%Y:%m:%d %H:%M:%S')
-    except KeyError:
-        exif_date = None
-
-    return exif_date
-
-
-def create_folder_for_cluster(config, date_string):
-    """ create designation folder that for all pictures from the cluster
-    """
-    pth = config['outDirName']
-    dir_name = os.path.join(pth, date_string)
-    try:
-        os.makedirs(dir_name)
-    except OSError as err:
-        pass
-
-
-def get_thumbnail(path):
-    i = Image.open(path)
-    i.thumbnail((150, 150), Image.LANCZOS)
-    return i
-
-
-def image_base64(im):
-    if isinstance(im, str):
-        im = get_thumbnail(im)
-    with BytesIO() as buffer:
-        im.save(buffer, 'jpeg')
-        return base64.b64encode(buffer.getvalue()).decode()
-
-
-def image_formatter(im):
-    return '<img src="data:image/jpeg;base64,{image_tn}">'.format(
-        image_tn=image_base64(im))
-
-
-# Print iterations progress
-def print_progress(iteration, total, prefix='', suffix='', decimals=1,
-                   bar_length=100):
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent
-        complete (Int)
-        bar_length  - Optional  : character length of bar (Int)
-    """
-    import sys
-    str_format = "{0:." + str(decimals) + "f}"
-    percents = str_format.format(100 * (iteration / float(total)))
-    filled_length = int(round(bar_length * iteration / float(total)))
-    bar = '█' * filled_length + '-' * (bar_length - filled_length)
-
-    sys.stdout.write(
-        '\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix)),
-
-    if iteration == total:
-        sys.stdout.write('\n')
-    sys.stdout.flush()
+logger.info("Using info log-level")
 
 
 class ImageReader(object):
@@ -202,22 +42,17 @@ class ImageReader(object):
         """
 
         def _add_new_row():
-            if DEBUG_MODE:
-                new_row = {'file_name': fn,
-                           'm_date': m_time,
-                           'c_date': c_time,
-                           'exif_date': exif_date,
-                           'full_path': path_name,
-                           'image': get_thumbnail(path_name),
-                           'media_type': media_type
-                           }
-            else:
-                new_row = {'file_name': fn,
-                           'm_date': m_time,
-                           'c_date': c_time,
-                           'exif_date': exif_date,
-                           'media_type': media_type
-                           }
+            new_row = {'file_name': fn,
+                       'm_date': m_time,
+                       'c_date': c_time,
+                       'exif_date': exif_date,
+                       'date': None,
+                       'size': None,
+                       'md5': None,
+                       'full_path': path_name,
+                       'image': ut.get_thumbnail(path_name),
+                       'is_image': media_type
+                       }
             return new_row
 
         row_list = []
@@ -227,17 +62,22 @@ class ImageReader(object):
         list_dir = os.listdir(pth)
         n_files = len(list_dir)
         for i_file, fn in enumerate(os.listdir(pth)):
-            if is_supported_filetype(fn, ext):
+            if ut.is_supported_filetype(fn, ext):
                 path_name = os.path.join(pth, fn)
-                m_time, c_time, exif_date = get_date_from_file(path_name)
-                media_type = get_media_type(path_name, self.config[
+                m_time, c_time, exif_date = ut.get_date_from_file(path_name)
+                media_type = ut.get_media_type(path_name, self.config[
                     'image_extensions'], self.config['video_extensions'])
                 new_row = _add_new_row()
                 row_list.append(new_row)
-            print_progress(i_file, n_files - 1, 'reading files: ')
+            ut.print_progress(i_file, n_files - 1, 'reading files: ')
         print("")
+        return row_list
 
+    def save_data_to_data_frame(self, row_list):
+        # save to dataframe
         self.df = pd.DataFrame(row_list)
+
+    def cleanup_data_frame_timestamps(self):
         # use exif date as base
         self.df['date'] = self.df['exif_date']
         # unless is missing - then use modification date:
@@ -264,7 +104,7 @@ class ImageGroupper(object):
         self.df = data_frame
 
     def calculate_gaps(self, date_col, delta_col):
-        """ calculate gaps between consecutive shots
+        """Calculate gaps between consecutive shots, save delta to dataframe
 
         Use 'creation date' from given column and save results to
         selected 'delta' column
@@ -275,25 +115,27 @@ class ImageGroupper(object):
         self.df[delta_col] = self.df[date_col].diff()
 
     def do_clustering(self, date_col='date_delta',
-                      cluster_col='cluster_id', method=None):
-        """ add cluster id to dataframe
+                      cluster_col='cluster_id', method='time_gap'):
+        """Add tmp cluster id information to each file
         """
-        if method == 'baseline':
-            td = self.config['granularity_minutes']
+        if method == 'time_gap':
+            time_delta = self.config['granularity_minutes']
             cluster_idx = 0
 
             n_files = len(self.df)
             i_file = 0
             for index, _row in self.df.iterrows():
                 d_previous = self.df.loc[index][date_col]
-                if d_previous > td:
+                if d_previous > time_delta:
                     cluster_idx += 1
                 self.df.loc[index, cluster_col] = cluster_idx
                 i_file += 1
-                print_progress(i_file, n_files, 'clustering: ')
+                ut.print_progress(i_file, n_files, 'clustering: ')
             print("")
             print("{num_clusters} clusters identified".format(
                 num_clusters=cluster_idx+1))
+        else:
+            logger.error(f"Unknown clustering method: {method}")
 
     def get_num_of_clusters_in_df(self):
         return self.df['cluster_id'].value_counts()
@@ -316,8 +158,6 @@ class ImageGroupper(object):
                 date_str = ts.strftime('[%Y_%m_%d]')
                 time_str = ts.strftime('%H%M%S')
 
-                df_media = df.groupby('media_type')
-
                 image_count = df.loc[df['media_type'] ==
                                      'image'].shape[0]
                 video_count = df.loc[df['media_type'] ==
@@ -330,9 +170,6 @@ class ImageGroupper(object):
                     'VC_{vc}'.format(vc=video_count)])
 
                 self.df.loc[mask, 'date_string'] = date_string
-
-        elif method == 'mean':
-            pass
         return date_string
 
     def move_or_copy_pictures(self, mode='copy'):
@@ -351,14 +188,14 @@ class ImageGroupper(object):
             else:
                 move(src, dst)
             i_file += 1
-            print_progress(i_file, n_files, 'move/copy: ')
+            ut.print_progress(i_file, n_files, 'move/copy: ')
         print("")
 
     def move_files_to_cluster_folder(self):
         dirs = self.df['date_string'].unique()
 
         for dir_name in dirs:
-            create_folder_for_cluster(self.config, dir_name)
+            ut.create_folder_for_cluster(self.config, dir_name)
 
         self.move_or_copy_pictures(mode='copy')
 
@@ -374,19 +211,77 @@ class ImageGroupper(object):
         print("")
         print("calculating gaps")
         self.calculate_gaps('date', 'date_delta')
-        self.do_clustering(method='baseline')
+        self.do_clustering()
         return False
 
+def db_open_or_create(config):
+
+    try:
+        # Creates or opens a file called mydb with a SQLite3 DB
+        db = sqlite3.connect(config['db_file'])
+        # Get a cursor object
+        cursor = db.cursor()
+        # Check if table users does not exist and create it
+
+        # table for individual media files
+        cursor.execute('''CREATE TABLE IF NOT EXISTS media(
+                             file_name TEXT(256) PRIMARY KEY,
+                             m_date DATETIME, 
+                             c_date DATETIME, 
+                             exif_date DATETIME, 
+                             date DATETIME, 
+                             size INTEGER,
+                             md5 TEXT,
+                             full_path TEXT
+                             image BLOB,
+                             is_image INTEGER''')
+
+        # table with cluster information
+        cursor.execute('''CREATE TABLE IF NOT EXISTS clusters(
+                          id INTEGER PRIMARY KEY, 
+                          start_date DATETIME, 
+                          end_date DATETIME, 
+                          median DATETIME)''')
+        # Commit the change
+        db.commit()
+        print("Database created/opened")
+    # Catch the exception
+    except Exception as e:
+        # Roll back any change if something goes wrong
+        db.rollback()
+        raise e
+    finally:
+        # Close the db connection
+        db.close()
+
+
+def read_clusters_from_database(config):
+    clusters = None
+    return clusters
 
 if __name__ == '__main__':
-    this_config = get_default_config()
+    """Main routine to perform groupping process"""
+
+    config = ut.get_default_config()
+    if DEV_MODE:
+        config = ut.get_development_config()
+
     # read date when pictures/recordings in inbox were taken
-    image_reader = ImageReader(this_config)
-    image_reader.get_data_from_files()
+    image_reader = ImageReader(config)
+    row_list = image_reader.get_data_from_files()
+    image_reader.save_data_to_data_frame(row_list)
+    image_reader.cleanup_data_frame_timestamps()
+
+    # open or create database
+    db = db_open_or_create(config)
 
     # group media by time
-    image_groupper = ImageGroupper(config=this_config,
+    image_groupper = ImageGroupper(config=config,
                                    data_frame=image_reader.get_data_frame())
+
+    # read clusters from database
+    # TODO:
+
     return_code = image_groupper.run_clustering()
     if not return_code:
         image_groupper.assign_date_to_clusters(method='random')
@@ -396,3 +291,4 @@ if __name__ == '__main__':
 
 # TODO: Break if error
 # TODO: periodically check size of inbox and outbox if size is correct
+# https://stackoverflow.com/questions/23574614/appending-pandas-dataframe-to-sqlite-table-by-primary-key
