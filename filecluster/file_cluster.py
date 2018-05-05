@@ -16,7 +16,7 @@ import pandas as pd
 from filecluster import utlis as ut
 
 # In debug mode thumbnails are generated
-DEBUG_MODE = True
+GENERATE_THUMBNAIL = False
 DEV_MODE = True
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,10 @@ class ImageReader(object):
 
         def _add_new_row():
             """generate single row based on values defined in outer method"""
+            thumbnail = None
+            if GENERATE_THUMBNAIL:
+                thumbnail = ut.get_thumbnail(path_name)
+
             row = {'file_name': fn,
                    'm_date': m_time,
                    'c_date': c_time,
@@ -51,7 +55,7 @@ class ImageReader(object):
                    'size': file_size,
                    'md5': md5_signature,
                    'full_path': path_name,
-                   'image': ut.get_thumbnail(path_name),
+                   'image': thumbnail,
                    'is_image': media_type
                    }
             return row
@@ -203,8 +207,31 @@ class ImageGroupper(object):
 
         self.move_or_copy_pictures(mode='copy')
 
-    def db_save_images(self):
-        pass
+    def db_save_images(self, connection):
+        query = '''INSERT OR REPLACE INTO media (file_name, date, size, md5, 
+        full_path, image, is_image) 
+        VALUES (?,?,?,?,?,?,?);'''
+
+        connection = sqlite3.connect(self.config['db_file'])
+
+        cursor = connection.execute('SELECT * FROM media;')
+        num_before = len(cursor.fetchall())
+
+        connection.executemany(query, self.df[
+            ['file_name', 'date',
+             'size', 'md5', 'full_path', 'image', 'is_image']].to_records(
+            index=False))
+        connection.commit()
+
+        cursor = connection.cursor()
+        # result = cursor.execute('''SELECT COUNT(*) FROM media''')  # returns
+        # # array of tupples
+        # num_of_rows = result[0][0]
+
+        cursor = connection.execute('SELECT * FROM media;')
+        num_after = len(cursor.fetchall())
+        print(f"{num_after-num_before} rows added (before: {num_before}, "
+              f"after: {num_after}")
 
     def db_save_clusters(self):
         pass
@@ -213,12 +240,13 @@ class ImageGroupper(object):
 def db_open_or_create(config):
     try:
         # Creates or opens a file called mydb with a SQLite3 DB
-        db = sqlite3.connect(config['db_file'])
+        conn = sqlite3.connect(config['db_file'])
         # Get a cursor object
-        cursor = db.cursor()
+        cursor = conn.cursor()
         # Check if table users does not exist and create it
 
         # table for individual media files
+        # FIXME: change image type from INTEGER to BLOB
         cursor.execute('''CREATE TABLE IF NOT EXISTS media(
                              file_name TEXT(256) PRIMARY KEY,
                              m_date DATETIME, 
@@ -227,8 +255,8 @@ def db_open_or_create(config):
                              date DATETIME, 
                              size INTEGER,
                              md5 TEXT,
-                             full_path TEXT
-                             image BLOB,
+                             full_path TEXT,
+                             image INTEGER,
                              is_image INTEGER)''')
 
         # table with cluster information
@@ -238,24 +266,21 @@ def db_open_or_create(config):
                           end_date DATETIME, 
                           median DATETIME)''')
         # Commit the change
-        db.commit()
+        conn.commit()
         print("Database created/opened")
     # Catch the exception
     except Exception as e:
         # Roll back any change if something goes wrong
-        db.rollback()
+        conn.rollback()
         raise e
     finally:
         # Close the db connection
-        db.close()
+        conn.close()
 
 
 def read_clusters_from_database(config=None):
     clusters = None
     return clusters
-
-
-
 
 
 if __name__ == '__main__':
@@ -265,14 +290,16 @@ if __name__ == '__main__':
     if DEV_MODE:
         config = ut.get_development_config()
 
+    # --- Open or create database
+    conn = db_open_or_create(config)
+
     # --- Read date when pictures/recordings in inbox were taken
     image_reader = ImageReader(config)
     row_list = image_reader.get_data_from_files()
     image_reader.save_data_to_data_frame(row_list)
     image_reader.cleanup_data_frame_timestamps()
 
-    # --- Open or create database
-    db = db_open_or_create(config)
+
 
     # --- Group media by time
     image_groupper = ImageGroupper(configuration=config,
@@ -292,8 +319,10 @@ if __name__ == '__main__':
     image_groupper.move_files_to_cluster_folder()
 
     # -- Save info to database
-    image_groupper.db_save_images()
+    image_groupper.db_save_images(conn)
     image_groupper.db_save_clusters()
 
 # https://stackoverflow.com/questions/23574614/appending-pandas-dataframe-to
 # -sqlite-table-by-primary-key
+
+# TODO: read config from yaml
