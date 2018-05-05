@@ -11,15 +11,11 @@ import os
 import time
 from datetime import datetime, timedelta
 from io import BytesIO
-from shutil import copy2, move
+import sys
 
 import exifread
-import pandas as pd
 from PIL import Image
-import sqlite3
-import logging
 
-import sys
 
 def get_development_config():
     """ Configuration for development"""
@@ -32,7 +28,8 @@ def get_development_config():
     # overwrite with development specific params
     config['inDirName'] = '/home/izik/bulk/fc_data/mix2a'
     config['outDirName'] = '/home/izik/bulk/fc_data/out'
-    config['db_file'] = '/home/izik/bulk/fc_data/cluster_db_development.sqlite3'
+    config[
+        'db_file'] = '/home/izik/bulk/fc_data/cluster_db_development.sqlite3'
     return config
 
 
@@ -55,6 +52,11 @@ def get_default_config():
     # Minimum gap that separate two events
     max_gap = timedelta(minutes=60)
 
+    # method that is used to group images, default: assume different events
+    # are separated by significant time gape (max_gap config parameter)
+    clustering_method = 'time_gap'
+
+    assign_date_to_clusters_method = 'random'
     config = {
         'inDirName': inbox_path,
         'outDirName': outbox_path,
@@ -63,7 +65,9 @@ def get_default_config():
         'video_extensions': video_extensions,
         'granularity_minutes': max_gap,
         'move_instead_of_copy': False,
-        'cluster_col': 'cluster_id'
+        'cluster_col': 'cluster_id',
+        'assign_date_to_clusters_method': assign_date_to_clusters_method,
+        'clustering_method': clustering_method
     }
 
     # ensure extensions are lowercase
@@ -80,16 +84,11 @@ def is_supported_filetype(file_name, ext):
 
 
 def get_media_type(file_name, ext_image, ext_video):
+    is_image = False
     fn_lower = file_name.lower()
     is_video = fn_lower.endswith(tuple(ext_video))
     is_image = fn_lower.endswith(tuple(ext_image))
-
-    if is_image:
-        return 'image'
-    elif is_video:
-        return 'video'
-    else:
-        return 'unknown'
+    return is_image
 
 
 def get_date_from_file(path_name):
