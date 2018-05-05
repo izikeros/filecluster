@@ -12,9 +12,12 @@ import time
 from datetime import datetime, timedelta
 from io import BytesIO
 import sys
-
+import hashlib
 import exifread
 from PIL import Image
+
+# TODO: optimize this parameter for speed
+block_size_for_hashing = 4096*32
 
 
 def get_development_config():
@@ -90,6 +93,8 @@ def get_media_type(file_name, ext_image, ext_video):
     is_image = fn_lower.endswith(tuple(ext_image))
     return is_image
 
+def get_file_size(path_name):
+    pass
 
 def get_date_from_file(path_name):
     """
@@ -154,6 +159,7 @@ def image_formatter(im):
 
 
 # Print iterations progress
+# from: https://gist.github.com/aubricus/f91fb55dc6ba5557fbab06119420dd6a
 def print_progress(iteration, total, prefix='', suffix='', decimals=1,
                    bar_length=100):
     """
@@ -179,3 +185,14 @@ def print_progress(iteration, total, prefix='', suffix='', decimals=1,
     if iteration == total:
         sys.stdout.write('\n')
     sys.stdout.flush()
+
+# modified version of
+# https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
+def hash_file(fname, hash_funct=hashlib.sha1):
+    """hash funct can be e.g.: md5, sha1, sha256,..."""
+    hash = hash_funct()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(block_size_for_hashing), b""):
+            hash.update(chunk)
+    return hash.hexdigest()
+
