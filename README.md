@@ -1,6 +1,10 @@
 # filecluster
-a piece of python code to group "by event" photos downloaded from various 
-photographing devices.
+Python library for creating image and video catalog. Media catalog is stored in Sqlite database.
+
+## Features
+- clustering media (images, video) by event
+- detecting duplicate files
+- handling adding new photos from events that already exist in database
 
 ## Installation:
 clone the repo, install required packages (see `filecluster/requirements.txt`)
