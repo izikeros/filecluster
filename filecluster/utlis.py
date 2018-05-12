@@ -93,8 +93,10 @@ def get_media_type(file_name, ext_image, ext_video):
     is_image = fn_lower.endswith(tuple(ext_image))
     return is_image
 
+
 def get_file_size(path_name):
     pass
+
 
 def get_date_from_file(path_name):
     """
@@ -186,13 +188,14 @@ def print_progress(iteration, total, prefix='', suffix='', decimals=1,
         sys.stdout.write('\n')
     sys.stdout.flush()
 
+
 # modified version of
 # https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
 def hash_file(fname, hash_funct=hashlib.sha1):
     """hash funct can be e.g.: md5, sha1, sha256,..."""
-    hash = hash_funct()
+    hash_value = hash_funct()
     with open(fname, "rb") as f:
         for chunk in iter(lambda: f.read(block_size_for_hashing), b""):
-            hash.update(chunk)
-    return hash.hexdigest()
+            hash_value.update(chunk)
+    return hash_value.hexdigest()
 
