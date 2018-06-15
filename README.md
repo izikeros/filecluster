@@ -1,3 +1,4 @@
+[![Build Status](https://semaphoreci.com/api/v1/izikeros/filecluster/branches/master/shields_badge.svg)](https://semaphoreci.com/izikeros/filecluster)
 # filecluster
 Python library for creating image and video catalog. Media catalog is stored in Sqlite database.
 
