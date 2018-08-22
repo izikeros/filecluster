@@ -18,6 +18,7 @@ from filecluster import utlis as ut
 # In debug mode thumbnails are generated
 GENERATE_THUMBNAIL = False
 DEV_MODE = True
+DELETE_DB = False
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -28,10 +29,10 @@ class ImageReader(object):
     def __init__(self, config):
         # read the config
         self.config = config
-        self.df = pd.DataFrame
+        self.image_df = pd.DataFrame
 
     def get_data_from_files(self):
-        """return files data as list of rows
+        """return files data as list of rows (each row represented by dict)
 
         :param pth: path to inbox directory with files (pictures, video)
         :type pth: basestring
@@ -47,16 +48,19 @@ class ImageReader(object):
             if GENERATE_THUMBNAIL:
                 thumbnail = ut.get_thumbnail(path_name)
 
+            # define structure of images dataframe and fill with data
             row = {'file_name': fn,
                    'm_date': m_time,
                    'c_date': c_time,
                    'exif_date': exif_date,
                    'date': date,
                    'size': file_size,
-                   'md5': hash,
+                   'hash_value': hash_value,
                    'full_path': path_name,
                    'image': thumbnail,
-                   'is_image': media_type
+                   'is_image': media_type,
+                   'cluster_id': cluster_id,
+                   'duplicate_to_ids': duplicate_to_ids
                    }
             return row
 
@@ -64,6 +68,7 @@ class ImageReader(object):
         pth = self.config['inDirName']
         ext = self.config['image_extensions'] + self.config['video_extensions']
 
+        print(f"Reading data from: {pth}")
         list_dir = os.listdir(pth)
         n_files = len(list_dir)
         for i_file, fn in enumerate(os.listdir(pth)):
@@ -78,14 +83,20 @@ class ImageReader(object):
                 media_type = ut.get_media_type(path_name, self.config[
                     'image_extensions'], self.config['video_extensions'])
 
-                # placeholder for date representatice for file
-                date = None # to be filled in later
-
                 # file size
                 file_size = os.path.getsize(path_name)
 
                 # file hash
-                hash = ut.hash_file(path_name)
+                hash_value = ut.hash_file(path_name)
+
+                # placeholder for date representative for file
+                date = None  # to be filled in later
+
+                # placeholder for assignment to cluster
+                cluster_id = None
+
+                # placeholder for storing info on this file duplicates
+                duplicate_to_ids = []
 
                 # generate new row using data obtained above
                 new_row = _add_new_row()
@@ -95,38 +106,50 @@ class ImageReader(object):
         print("")
         return list_of_rows
 
-    def save_data_to_data_frame(self, row_list):
+    def save_image_data_to_data_frame(self, list_of_rows):
         """convert list of rows to pandas dataframe"""
-        self.df = pd.DataFrame(row_list)
+        self.image_df = pd.DataFrame(list_of_rows)
 
     def cleanup_data_frame_timestamps(self):
         """Decide on which timestamp use as representative for file"""
 
         # use exif date as base
-        self.df['date'] = self.df['exif_date']
+        self.image_df['date'] = self.image_df['exif_date']
         # unless is missing - then use modification date:
-        self.df['date'] = self.df['date'].fillna(self.df['m_date'])
+        self.image_df['date'] = self.image_df['date'].fillna(
+            self.image_df['m_date'])
 
         # infer dataformat  from strings
-        self.df['date'] = pd.to_datetime(self.df['date'],
-                                         infer_datetime_format=True)
-        self.df['m_date'] = pd.to_datetime(self.df['m_date'],
-                                           infer_datetime_format=True)
-        self.df['c_date'] = pd.to_datetime(self.df['c_date'],
-                                           infer_datetime_format=True)
-        self.df['exif_date'] = pd.to_datetime(self.df['exif_date'],
-                                              infer_datetime_format=True)
+        self.image_df['date'] = pd.to_datetime(self.image_df['date'],
+                                               infer_datetime_format=True)
+        self.image_df['m_date'] = pd.to_datetime(self.image_df['m_date'],
+                                                 infer_datetime_format=True)
+        self.image_df['c_date'] = pd.to_datetime(self.image_df['c_date'],
+                                                 infer_datetime_format=True)
+        self.image_df['exif_date'] = pd.to_datetime(self.image_df['exif_date'],
+                                                    infer_datetime_format=True)
 
-    def compare_data_frame_to_media_table(self):
-        print("checking newly imported files against database")
+    def compare_data_frame_to_image_database(self):
+        print("(TODO): checking newly imported files against database")
+
+        # TODO: 1. check for duplicates: in newly imported files
+        # TODO: 2. check for duplicates: newly imported files against database
+        # TODO: mark duplicates if found any
         pass
 
+
 class ImageGroupper(object):
-    def __init__(self, configuration, data_frame=None):
+    def __init__(self, configuration, image_df=None, cluster_df=None):
         # read the config
         self.config = configuration
-        if data_frame is not None:
-            self.df = data_frame
+
+        # initialize image data frame (if provided)
+        if image_df is not None:
+            self.image_df = image_df
+
+        # initialize cluster data frame (if provided)
+        if cluster_df is not None:
+            self.cluster_df = cluster_df
 
     def calculate_gaps(self, date_col, delta_col):
         """Calculate gaps between consecutive shots, save delta to dataframe
@@ -135,49 +158,133 @@ class ImageGroupper(object):
         selected 'delta' column
         """
         # sort by creation date
-        self.df.sort_values(by=date_col, ascending=True, inplace=True)
+        self.image_df.sort_values(by=date_col, ascending=True, inplace=True)
         # calculate breaks between the shoots
-        self.df[delta_col] = self.df[date_col].diff()
+        self.image_df[delta_col] = self.image_df[date_col].diff()
 
-    def add_tmp_cluster_id_to_files_in_data_frame(self,
-                                                  date_col='date_delta',
-                                                  cluster_col='cluster_id',
-                                                  clustering_method='time_gap'):
+    def assign_images_to_existing_clusters(self, date_start, date_end,
+                                           margin, conn):
+        # TODO: finalize implemantation
+        # --- check if image can be assigned to any of existing clusters
+        run_again = True
+        while run_again:
+            # iterate over and over since new cluster members might drag
+            # cluster boundaries that new images will fit now
+            run_again = False
+            # find images <existing_clusters_start, existing_clusters_end>
+            # see pandas Query:
+            # https://stackoverflow.com/questions/11869910/
+            for index, _row in self.image_df[
+                (self.image_df['cluster_id'].isnull() &
+                 self.image_df['date'] > date_start - margin &
+                 self.image_df['date'] < date_end + margin)].iterrows():
+
+                # TODO: add query to the cluster
+                fit = None
+                # is in cluster range with margins:
+                # where
+                # date > (date_start - margin) and
+                # date < (date_stop + margin)
+                if fit:
+                    run_again = True
+                    # add cluster info to image
+                    # update cluster range (start/end date)
+
+    def add_tmp_cluster_id_to_files_in_data_frame(self):
         """Add tmp cluster id information to each file
         """
-        if clustering_method == 'time_gap':
-            time_delta = self.config['granularity_minutes']
-            cluster_idx = 0
 
-            n_files = len(self.df)
-            i_file = 0
-            for index, _row in self.df.iterrows():
-                d_previous = self.df.loc[index][date_col]
-                if d_previous > time_delta:
-                    cluster_idx += 1
-                self.df.loc[index, cluster_col] = cluster_idx
-                i_file += 1
-                ut.print_progress(i_file, n_files, 'clustering: ')
-            print("")
-            print("{num_clusters} clusters identified".format(
-                num_clusters=cluster_idx + 1))
-        else:
-            logger.error(f"Unknown clustering method: {clustering_method}")
+        # open connection to db
+        conn = self.db_connect()
+
+        # Hint on reading date: http://numericalexpert.com/blog/sqlite_blob_time/
+        cursor = conn.execute(f"SELECT MIN(start_date) FROM clusters;")
+        existing_clusters_start = cursor.fetchone()  # FIXME
+
+        cursor = conn.execute(f"SELECT MAX(end_date) FROM clusters;")
+        existing_clusters_end = cursor.fetchone()  # FIXME
+
+        cursor = conn.execute(f"SELECT MAX(id) FROM clusters;")
+        existing_clusters_last_id = cursor.fetchone()
+
+        # entry for new potential record
+        new_cluster_idx = existing_clusters_last_id + 1
+        cluster = {'id': new_cluster_idx,
+                   'start_date': None,
+                   'stop_date': None}
+
+        list_new_clusters = []
+
+        max_time_delta = self.config['granularity_minutes']
+
+        n_files = len(self.image_df)
+        i_file = 0
+
+        # TODO: uncomment when implemented
+        if 0 == 1:
+            self.assign_images_to_existing_clusters(
+                date_start=existing_clusters_start,
+                date_end=existing_clusters_end,
+                margin=self.config['granularity_minutes'],
+                conn=conn)
+
+        # new_images_df
+        # df.loc[df['column_name'] == some_value]
+        for index, _row in self.image_df[
+            self.image_df['cluster_id'].isnull()].iterrows():
+            delta_from_previous = self.image_df.loc[index]['date_delta']
+
+            # check if new cluster encountered
+            if delta_from_previous > max_time_delta or index == 0:
+                new_cluster_idx += 1
+
+                # append previous cluster date to the list
+                if index > 0:
+                    # add previous cluster info to the list of clusters
+                    list_new_clusters.append(cluster)
+
+                # create record for new cluster
+                cluster = {'id': new_cluster_idx,
+                           'start_date': self.image_df.loc[index]['date'],
+                           'end_date': None}
+
+            # assign cluster id to image
+            self.image_df.loc[index, 'cluster_id'] = new_cluster_idx
+
+            # update cluster stop date
+            cluster['end_date'] = self.image_df.loc[index]['date']
+
+            i_file += 1
+            ut.print_progress(i_file, n_files, 'clustering: ')
+
+        # save last cluster (TODO: check border cases: one file,
+        # one cluster, no-files,...)
+        list_new_clusters.append(cluster)
+
+        print("")
+        print("{num_clusters} clusters identified".format(
+            num_clusters=new_cluster_idx))
+
+        return list_new_clusters
+
+    def save_cluster_data_to_data_frame(self, row_list):
+        """convert list of rows to pandas dataframe"""
+        self.cluster_df = pd.DataFrame(row_list)
 
     def get_num_of_clusters_in_df(self):
-        return self.df['cluster_id'].value_counts()
+        return self.image_df['cluster_id'].value_counts()
 
     def get_cluster_ids(self):
-        return self.df['cluster_id'].unique()
+        return self.image_df['cluster_id'].unique()
 
-    def assign_date_to_clusters(self, method='random'):
+    def assign_representative_date_to_clusters(self, method='random'):
         """ return date representing cluster
         """
         if method == 'random':
             clusters = self.get_cluster_ids()
             for cluster in clusters:
-                mask = self.df['cluster_id'] == cluster
-                df = self.df.loc[mask]
+                mask = self.image_df['cluster_id'] == cluster
+                df = self.image_df.loc[mask]
 
                 exif_date = df.sample(n=1)['date']
                 exif_date = exif_date.values[0]
@@ -194,16 +301,16 @@ class ImageGroupper(object):
                     'IC_{ic}'.format(ic=image_count),
                     'VC_{vc}'.format(vc=video_count)])
 
-                self.df.loc[mask, 'date_string'] = date_string
+                self.image_df.loc[mask, 'date_string'] = date_string
         return date_string
 
     def move_or_copy_pictures(self, mode='copy'):
         """ move or copy items to dedicated folder"""
         pth_out = self.config['outDirName']
         pth_in = self.config['inDirName']
-        n_files = len(self.df)
+        n_files = len(self.image_df)
         i_file = 0
-        for idx, row in self.df.iterrows():
+        for idx, row in self.image_df.iterrows():
             date_string = row['date_string']
             file_name = row['file_name']
             src = os.path.join(pth_in, file_name)
@@ -217,7 +324,7 @@ class ImageGroupper(object):
         print("")
 
     def move_files_to_cluster_folder(self):
-        dirs = self.df['date_string'].unique()
+        dirs = self.image_df['date_string'].unique()
 
         for dir_name in dirs:
             ut.create_folder_for_cluster(self.config, dir_name)
@@ -236,13 +343,13 @@ class ImageGroupper(object):
         return num_records
 
     def db_save_images(self):
-        """Import data frame with media information into database. Existing
+        """Export data frame with media information into database. Existing
         records will be replaced by new."""
         connection = self.db_connect()
 
         # TODO: consider insert or ignore
-        query = '''INSERT OR REPLACE INTO media (file_name, date, size, md5, 
-        full_path, image, is_image) 
+        query = '''INSERT OR REPLACE INTO media (file_name, date, size, 
+        hash_value, full_path, image, is_image) 
         VALUES (?,?,?,?,?,?,?);'''
 
         # get number of rows before importing new media
@@ -251,22 +358,56 @@ class ImageGroupper(object):
         # see: # https://stackoverflow.com/questions/23574614/appending
         # -pandas-dataframe-to
         # # -sqlite-table-by-primary-key
-        connection.executemany(query, self.df[
+        connection.executemany(query, self.image_df[
             ['file_name', 'date',
-             'size', 'md5', 'full_path', 'image', 'is_image']].to_records(
+             'size', 'hash_value', 'full_path', 'image',
+             'is_image']].to_records(
             index=False))
         connection.commit()
 
         # get number of rows after importing new media
         num_after = self.db_get_table_rowcount('media')
-        print(f"{num_after-num_before} rows added (before: {num_before}, "
+        print(f"{num_after-num_before} image rows added, before: "
+              f"{num_before}, "
               f"after: {num_after}")
 
     def db_save_clusters(self):
-        pass
+        """Export data frame with media information into database. Existing
+        records will be replaced by new."""
+        connection = self.db_connect()
+
+        cluster_table_name = 'clusters'
+        # TODO: consider insert or ignore
+        query = f'''INSERT OR REPLACE INTO {cluster_table_name} (id, 
+        start_date, end_date) VALUES (?,?,?);'''
+
+        # get number of rows before importing new media
+        num_before = self.db_get_table_rowcount(cluster_table_name)
+
+        # see: # https://stackoverflow.com/questions/23574614/appending
+        # -pandas-dataframe-to-sqlite-table-by-primary-key
+        new_df = self.cluster_df[['id', 'start_date', 'end_date']]
+        new_df.id = new_df.id.astype(float)  # FIXME:
+        # temporal workaround
+        connection.executemany(query, new_df.to_records(index=False))
+        connection.commit()
+
+        # get number of rows after importing new media
+        num_after = self.db_get_table_rowcount(cluster_table_name)
+        print(f"{num_after-num_before} cluster rows added, before: "
+              f"{num_before}, "
+              f"after: {num_after}")
 
 
 def db_create_tables_if_not_exists(configuration):
+    # TODO: remove when development will be done
+    if DELETE_DB:
+        try:
+            os.remove(configuration['db_file'])
+            print(f"Database: {configuration['db_file']} has been deteted")
+        except Exception as ex:
+            print(ex)
+
     try:
         # Creates or opens a file called mydb with a SQLite3 DB
         conn = sqlite3.connect(configuration['db_file'])
@@ -282,7 +423,7 @@ def db_create_tables_if_not_exists(configuration):
                              exif_date DATETIME, 
                              date DATETIME, 
                              size INTEGER,
-                             md5 TEXT,
+                             hash_value TEXT,
                              full_path TEXT,
                              image BLOB,
                              is_image INTEGER)''')
@@ -306,9 +447,13 @@ def db_create_tables_if_not_exists(configuration):
         conn.close()
 
 
-def read_clusters_from_database(config=None):
+def read_clusters_database(config=None):
     clusters = None
     return clusters
+
+
+def read_images_database():
+    pass
 
 
 if __name__ == '__main__':
@@ -318,38 +463,46 @@ if __name__ == '__main__':
     if DEV_MODE:
         config = ut.get_development_config()
 
-    # --- create database witch schema if not exist
+    # --- create database with schema if not exist (image and cluster tables)
     db_create_tables_if_not_exists(config)
+    read_images_database()
+
+    # --- TODO: run media scan if needed
 
     # --- Read date when pictures/recordings in inbox were taken
     image_reader = ImageReader(config)
     row_list = image_reader.get_data_from_files()
-    image_reader.save_data_to_data_frame(row_list)
+    # save image data to data frame (name, path, date, hash)
+    image_reader.save_image_data_to_data_frame(row_list)
+    # handle cases with missing exif data
     image_reader.cleanup_data_frame_timestamps()
 
-    image_reader.compare_data_frame_to_media_table()
+    # TODO: mark duplicates
+    image_reader.compare_data_frame_to_image_database()
 
-    # --- Group media by time
+    # --- initialize media grouper
     image_groupper = ImageGroupper(configuration=config,
-                                   data_frame=image_reader.df)
+                                   image_df=image_reader.image_df)
 
     # --- Read clusters from database
-    read_clusters_from_database()
+    # TODO: read clusters
+    read_clusters_database()
 
     # --- Perform clustering
     print("calculating gaps")
     image_groupper.calculate_gaps(date_col='date', delta_col='date_delta')
-    image_groupper.add_tmp_cluster_id_to_files_in_data_frame(
-        clustering_method=config['clustering_method'])
+    # actual clustering takes place here:
+    cluster_list = image_groupper.add_tmp_cluster_id_to_files_in_data_frame()
+    image_groupper.save_cluster_data_to_data_frame(cluster_list)
 
-    image_groupper.assign_date_to_clusters(
+    image_groupper.assign_representative_date_to_clusters(
         method=config['assign_date_to_clusters_method'])
+
+    # Physically move or copy files to folders
     image_groupper.move_files_to_cluster_folder()
 
     # -- Save info to database
     image_groupper.db_save_images()
     image_groupper.db_save_clusters()
-
-
 
 # TODO: read config from yaml
