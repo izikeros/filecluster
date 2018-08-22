@@ -40,16 +40,16 @@ def get_default_config():
     # path to files to be clustered
 
     # Configure inbox
-    inbox_path = '/media/root/Foto/zdjecia/inbox'
+    inbox_path = '/media/root/Foto/incomming/inbox'
 
     # Configure outbox
-    outbox_path = '/media/root/Foto/zdjecia/inbox_clust/2017_new'
+    outbox_path = '/media/root/Foto/incomming/inbox_clust/'
 
     # Configure database
     db_file = '/media/root/Foto/zdjecia/cluster_db.sqlite3'
 
     # Filename extensions in scope of clustering
-    image_extensions = ['.jpg', '.cr2']
+    image_extensions = ['.jpg', '.jpeg', '.dng', '.cr2']
     video_extensions = ['.mp4', '.3gp', 'mov']
 
     # Minimum gap that separate two events
