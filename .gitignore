@@ -7,3 +7,5 @@ __pycache__
 *.pyc
 *.m
 *.ipynb
+fc-venv
+venv
