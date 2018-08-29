@@ -67,7 +67,7 @@ def get_default_config():
         'image_extensions': image_extensions,
         'video_extensions': video_extensions,
         'granularity_minutes': max_gap,
-        'move_instead_of_copy': False,
+        'move_instead_of_copy': True,
         'cluster_col': 'cluster_id',
         'assign_date_to_clusters_method': assign_date_to_clusters_method,
         'clustering_method': clustering_method

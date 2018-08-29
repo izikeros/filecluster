@@ -17,8 +17,8 @@ from filecluster import utlis as ut
 
 # In debug mode thumbnails are generated
 GENERATE_THUMBNAIL = False
-DEV_MODE = True
-DELETE_DB = False
+DEV_MODE = False
+DELETE_DB = True
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -332,8 +332,8 @@ class ImageGroupper(object):
 
         for dir_name in dirs:
             ut.create_folder_for_cluster(self.config, dir_name)
-
-        self.move_or_copy_pictures(mode='copy')
+        # FIXME: read from config parameters
+        self.move_or_copy_pictures(mode='move')
 
     def db_connect(self):
         connection = sqlite3.connect(self.config['db_file'])
