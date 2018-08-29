@@ -205,10 +205,14 @@ class ImageGroupper(object):
         existing_clusters_end = cursor.fetchone()  # FIXME
 
         cursor = conn.execute(f"SELECT MAX(id) FROM clusters;")
-        existing_clusters_last_id = cursor.fetchone()
+        existing_clusters_last_id = cursor.fetchone()[0]
+
+        if not existing_clusters_last_id:
+            existing_clusters_last_id = 0  # FIXME: check if this is ok
 
         # entry for new potential record
         new_cluster_idx = existing_clusters_last_id + 1
+
         cluster = {'id': new_cluster_idx,
                    'start_date': None,
                    'stop_date': None}
