@@ -1,7 +1,7 @@
-ExifRead==2.1.2
-numpy==1.14.3
-pandas==0.23.4
-Pillow==5.1.0
-python-dateutil==2.7.2
-pytz==2018.4
-six==1.11.0
+ExifRead
+numpy
+pandas
+Pillow
+python-dateutil
+pytz
+six

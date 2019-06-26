@@ -6,10 +6,10 @@
 
 # pylint: disable=C0103
 
-import os
-from shutil import copy2, move
-import sqlite3
 import logging
+import os
+import sqlite3
+from shutil import copy2, move
 
 import pandas as pd
 
@@ -371,7 +371,7 @@ class ImageGroupper(object):
 
         # get number of rows after importing new media
         num_after = self.db_get_table_rowcount('media')
-        print(f"{num_after-num_before} image rows added, before: "
+        print(f"{num_after - num_before} image rows added, before: "
               f"{num_before}, "
               f"after: {num_after}")
 
@@ -398,7 +398,7 @@ class ImageGroupper(object):
 
         # get number of rows after importing new media
         num_after = self.db_get_table_rowcount(cluster_table_name)
-        print(f"{num_after-num_before} cluster rows added, before: "
+        print(f"{num_after - num_before} cluster rows added, before: "
               f"{num_before}, "
               f"after: {num_after}")
 

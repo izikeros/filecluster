@@ -10,5 +10,8 @@ Python library for creating image and video catalog. Media catalog is stored in 
 ## Installation:
 clone the repo, install required packages (see `filecluster/requirements.txt`)
 
+On Windows to have numpy working one might need to install:
+
+https://aka.ms/vs/15/release/vc_redist.x64.exe
 
  
