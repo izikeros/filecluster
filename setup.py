@@ -9,4 +9,3 @@ setup(name='filecluster',
       license='MIT',
       packages=['filecluster'],
       zip_safe=False)
-      

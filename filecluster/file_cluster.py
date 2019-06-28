@@ -19,11 +19,11 @@ from filecluster.image_reader import ImageReader
 # === Configuration
 # generate thumbnail to be stored in pandas dataframe during the processing.
 # Might be used in notebook.
-GENERATE_THUMBNAIL = False
+# GENERATE_THUMBNAIL = False
 # in dev mode path are set to development datasets
 DEV_MODE = True
 # delete database during the start - provide clean start for development mode
-DELETE_DB = False
+# DELETE_DB = True
 # for more configuration options see: utils.get_development_config() and get_default_config()
 
 logger = logging.getLogger(__name__)
