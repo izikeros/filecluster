@@ -4,7 +4,8 @@ import os
 import pandas as pd
 
 import filecluster.utlis as ut
-from filecluster.file_cluster import GENERATE_THUMBNAIL
+
+GENERATE_THUMBNAIL = False
 
 logger = logging.getLogger(__name__)
 

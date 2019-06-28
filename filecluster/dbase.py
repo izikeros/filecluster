@@ -2,7 +2,7 @@ import logging
 import os
 import sqlite3
 
-from filecluster.file_cluster import DELETE_DB
+DELETE_DB = True
 
 logger = logging.getLogger(__name__)
 
