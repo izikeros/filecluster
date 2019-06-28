@@ -6,6 +6,7 @@ from shutil import copy2, move
 import pandas as pd
 
 from filecluster import utlis as ut
+from filecluster.dbase import get_new_cluster_id
 
 logger = logging.getLogger(__name__)
 
@@ -63,27 +64,8 @@ class ImageGroupper(object):
                     # update cluster range (start/end date)
 
     def add_tmp_cluster_id_to_files_in_data_frame(self):
-        """Add tmp cluster id information to each file
-        """
-
-        # open connection to db
-        conn = self.db_connect()
-
-        # Hint on reading date: http://numericalexpert.com/blog/sqlite_blob_time/
-        cursor = conn.execute(f"SELECT MIN(start_date) FROM clusters;")
-        existing_clusters_start = cursor.fetchone()  # FIXME
-
-        cursor = conn.execute(f"SELECT MAX(end_date) FROM clusters;")
-        existing_clusters_end = cursor.fetchone()  # FIXME
-
-        cursor = conn.execute(f"SELECT MAX(id) FROM clusters;")
-        existing_clusters_last_id = cursor.fetchone()[0]
-
-        if not existing_clusters_last_id:
-            existing_clusters_last_id = 0  # FIXME: check if this is ok
-
-        # entry for new potential record
-        new_cluster_idx = existing_clusters_last_id + 1
+        connection = self.db_connect()
+        new_cluster_idx = get_new_cluster_id(connection)
 
         cluster = {'id': new_cluster_idx,
                    'start_date': None,
@@ -96,13 +78,13 @@ class ImageGroupper(object):
         n_files = len(self.image_df)
         i_file = 0
 
-        # TODO: uncomment when implemented
-        if 0 == 1:
-            self.assign_images_to_existing_clusters(
-                date_start=existing_clusters_start,
-                date_end=existing_clusters_end,
-                margin=self.config['granularity_minutes'],
-                conn=conn)
+        # # TODO: uncomment when implemented
+        # if 0 == 1:
+        #     self.assign_images_to_existing_clusters(
+        #         date_start=existing_clusters_start,
+        #         date_end=existing_clusters_end,
+        #         margin=self.config['granularity_minutes'],
+        #         conn=conn)
 
         # new_images_df
         # df.loc[df['column_name'] == some_value]
@@ -180,7 +162,7 @@ class ImageGroupper(object):
                 self.image_df.loc[mask, 'date_string'] = date_string
         return date_string
 
-    def move_or_copy_pictures(self, mode='copy'):
+    def move_or_copy_pictures(self, mode):
         """ move or copy items to dedicated folder"""
         pth_out = self.config['outDirName']
         pth_in = self.config['inDirName']
@@ -196,7 +178,7 @@ class ImageGroupper(object):
             else:
                 move(src, dst)
             i_file += 1
-            ut.print_progress(i_file, n_files, 'move/copy: ')
+            ut.print_progress(i_file, n_files, f'{mode}: ')
         print("")
 
     def move_files_to_cluster_folder(self):
@@ -204,8 +186,8 @@ class ImageGroupper(object):
 
         for dir_name in dirs:
             ut.create_folder_for_cluster(self.config, dir_name)
-        # FIXME: read from config parameters
-        self.move_or_copy_pictures(mode='move')
+
+        self.move_or_copy_pictures(mode=self.config['move_or_copy'])
 
     def db_connect(self):
         connection = sqlite3.connect(self.config['db_file'])
@@ -262,8 +244,8 @@ class ImageGroupper(object):
 
         # see: # https://stackoverflow.com/questions/23574614/appending
         # -pandas-dataframe-to-sqlite-table-by-primary-key
-        new_df = self.cluster_df[['id', 'start_date', 'end_date']]
-        new_df.id = new_df.id.astype(float)  # FIXME:
+        new_df = self.cluster_df[['id', 'start_date', 'end_date']].copy()
+        new_df.id = new_df.id.astype(float)
         # temporal workaround
         connection.executemany(query, new_df.to_records(index=False))
         connection.commit()

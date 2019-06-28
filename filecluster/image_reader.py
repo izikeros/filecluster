@@ -5,8 +5,6 @@ import pandas as pd
 
 import filecluster.utlis as ut
 
-GENERATE_THUMBNAIL = False
-
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +28,7 @@ class ImageReader(object):
         def _add_new_row():
             """generate single row based on values defined in outer method"""
             thumbnail = None
-            if GENERATE_THUMBNAIL:
+            if ut.GENERATE_THUMBNAIL:
                 thumbnail = ut.get_thumbnail(path_name)
 
             # define structure of images dataframe and fill with data
@@ -114,10 +112,13 @@ class ImageReader(object):
         self.image_df['exif_date'] = pd.to_datetime(self.image_df['exif_date'],
                                                     infer_datetime_format=True)
 
-    def compare_data_frame_to_image_database(self):
+    def check_import_for_duplicates_in_existing_clusters(self):
         print("(TODO): checking newly imported files against database")
 
         # TODO: 1. check for duplicates: in newly imported files
         # TODO: 2. check for duplicates: newly imported files against database
         # TODO: mark duplicates if found any
-        pass
+
+
+def run_media_scan():
+    logger.info('Running media scan (not implemented yet)')

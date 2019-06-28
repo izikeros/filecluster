@@ -9,12 +9,11 @@
 import logging
 
 from filecluster import utlis as ut
-
-# In debug mode thumbnails are generated
-from filecluster.dbase import db_create_tables_if_not_exists, read_images_database, \
-    read_clusters_database
+# In development mode thumbnails can be generated
+from filecluster.dbase import read_clusters_database, delete_db_if_needed, read_images_database, \
+    db_create_clusters, db_create_media
 from filecluster.image_groupper import ImageGroupper
-from filecluster.image_reader import ImageReader
+from filecluster.image_reader import ImageReader, run_media_scan
 
 # === Configuration
 # generate thumbnail to be stored in pandas dataframe during the processing.
@@ -27,40 +26,43 @@ DEV_MODE = True
 # for more configuration options see: utils.get_development_config() and get_default_config()
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO)
 logger.info("Using info log-level")
 
 if __name__ == '__main__':
-    """Main routine to perform groupping process"""
+    """Main routine to perform grouping process"""
 
     config = ut.get_default_config()
     if DEV_MODE:
         config = ut.get_development_config()
 
-    # --- create database with schema if not exist (image and cluster tables)
-    db_create_tables_if_not_exists(config)
-    read_images_database()
+    # --- create database with schema if not exist: image(media) and cluster tables
+    delete_db_if_needed(config)
+    db_create_media(config)
+    db_create_clusters(config)
 
-    # --- TODO: run media scan if needed
+    read_images_database()  # To be implemented
+
+    run_media_scan()  # To be implemented
 
     # --- Read date when pictures/recordings in inbox were taken
     image_reader = ImageReader(config)
     row_list = image_reader.get_data_from_files()
+
     # save image data to data frame (name, path, date, hash)
     image_reader.save_image_data_to_data_frame(row_list)
+
     # handle cases with missing exif data
     image_reader.cleanup_data_frame_timestamps()
 
-    # TODO: mark duplicates
-    image_reader.compare_data_frame_to_image_database()
+    image_reader.check_import_for_duplicates_in_existing_clusters()  # To be implemented
 
     # --- initialize media grouper
     image_groupper = ImageGroupper(configuration=config,
                                    image_df=image_reader.image_df)
 
     # --- Read clusters from database
-    # TODO: read clusters
-    read_clusters_database()
+    read_clusters_database()  # To be implemented
 
     # --- Perform clustering
     print("calculating gaps")
@@ -78,5 +80,3 @@ if __name__ == '__main__':
     # -- Save info to database
     image_groupper.db_save_images()
     image_groupper.db_save_clusters()
-
-# TODO: read config from yaml

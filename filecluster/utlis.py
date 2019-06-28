@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 # TODO: optimize this parameter for speed
 block_size_for_hashing = 4096 * 32
 
+DELETE_DB = True
+GENERATE_THUMBNAIL = False
+
 
 def get_development_config():
     """ Configuration for development"""
@@ -28,18 +31,21 @@ def get_development_config():
     # get defaults
     config = get_default_config()
 
+    config['move_or_copy'] = 'copy'
+
     # overwrite defaults with development specific params
     if os.name == 'nt':
-        pth = 'h:/incomming'
+        pth = 'h:\\incomming'
         config['inDirName'] = os.path.join(pth, 'inbox_test_a')
         config['outDirName'] = os.path.join(pth, 'inbox_clust_test')
-        config['db_file'] = os.path.join(pth, 'cluster_db_development.sqlite3')
     else:
         pth = '/home/izik/bulk/fc_data'
-
         config['inDirName'] = os.path.join(pth, 'mix2a')
         config['outDirName'] = os.path.join(pth, 'out')
-        config['db_file'] = os.path.join(pth, 'cluster_db_development.sqlite3')
+
+    config['db_file'] = os.path.join(pth, 'filecluster_db.sqlite3')
+    config['db_file_media'] = os.path.join(pth, 'media.p')
+    config['db_file_cluster'] = os.path.join(pth, 'clusters.p')
     return config
 
 
@@ -53,7 +59,9 @@ def get_default_config():
     outbox_path = '/media/root/Foto/incomming/inbox_clust/'
 
     # Configure database
-    db_file = '/media/root/Foto/zdjecia/cluster_db.sqlite3'
+    db_file = '/media/root/Foto/zdjecia/filecluster_db.sqlite3'
+    db_file_clusters = '/media/root/Foto/zdjecia/clusters.p'
+    db_file_media = '/media/root/Foto/zdjecia/media.p'
 
     # Filename extensions in scope of clustering
     image_extensions = ['.jpg', '.jpeg', '.dng', '.cr2']
@@ -67,17 +75,21 @@ def get_default_config():
     clustering_method = 'time_gap'
 
     assign_date_to_clusters_method = 'random'
+
     config = {
         'inDirName': inbox_path,
         'outDirName': outbox_path,
-        'db_file': db_file,
+        'db_file_clusters': db_file_clusters,
+        'db_file_media': db_file_media,
+        'db_file_sqlite': db_file,
         'image_extensions': image_extensions,
         'video_extensions': video_extensions,
         'granularity_minutes': max_gap,
-        'move_instead_of_copy': True,
         'cluster_col': 'cluster_id',
         'assign_date_to_clusters_method': assign_date_to_clusters_method,
-        'clustering_method': clustering_method
+        'clustering_method': clustering_method,
+        'move_or_copy': 'move',
+        'db_driver': 'sqlite',  # dataframe | sqlite
     }
 
     # ensure extensions are lowercase
@@ -94,15 +106,10 @@ def is_supported_filetype(file_name, ext):
 
 
 def get_media_type(file_name, ext_image, ext_video):
-    is_image = False
     fn_lower = file_name.lower()
     is_video = fn_lower.endswith(tuple(ext_video))
     is_image = fn_lower.endswith(tuple(ext_image))
     return is_image
-
-
-def get_file_size(path_name):
-    pass
 
 
 def get_date_from_file(path_name):
@@ -145,7 +152,7 @@ def create_folder_for_cluster(config, date_string):
     try:
         os.makedirs(dir_name)
     except OSError as err:
-        pass
+        logger.error(err)
 
 
 def get_thumbnail(path):
