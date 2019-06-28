@@ -23,7 +23,7 @@ GENERATE_THUMBNAIL = False
 # in dev mode path are set to development datasets
 DEV_MODE = True
 # delete database during the start - provide clean start for development mode
-DELETE_DB = True
+DELETE_DB = False
 # for more configuration options see: utils.get_development_config() and get_default_config()
 
 logger = logging.getLogger(__name__)
