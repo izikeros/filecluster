@@ -6,6 +6,5 @@ __pycache__
 .vscode
 *.pyc
 *.m
-*.ipynb
-fc-venv
-venv
+*venv
+

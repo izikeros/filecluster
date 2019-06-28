@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
-# Copyright (c) 2017 Krystian Safjan
-#
+#!/usr/bin/python3
 # This software is released under the MIT License.
 # https://opensource.org/licenses/MIT
 
 # pylint: disable=C0103
 
 import base64
+import logging
 import os
 import time
 from datetime import datetime, timedelta
@@ -16,23 +15,31 @@ import hashlib
 import exifread
 from PIL import Image
 
+logger = logging.getLogger(__name__)
+
 # TODO: optimize this parameter for speed
-block_size_for_hashing = 4096*32
+block_size_for_hashing = 4096 * 32
 
 
 def get_development_config():
     """ Configuration for development"""
-
     print("Warning: Using development configuration")
 
     # get defaults
     config = get_default_config()
 
-    # overwrite with development specific params
-    config['inDirName'] = '/home/izik/bulk/fc_data/mix2a'
-    config['outDirName'] = '/home/izik/bulk/fc_data/out'
-    config[
-        'db_file'] = '/home/izik/bulk/fc_data/cluster_db_development.sqlite3'
+    # overwrite defaults with development specific params
+    if os.name == 'nt':
+        pth = 'h:/incomming'
+        config['inDirName'] = os.path.join(pth, 'inbox_test_a')
+        config['outDirName'] = os.path.join(pth, 'inbox_clust_test')
+        config['db_file'] = os.path.join(pth, 'cluster_db_development.sqlite3')
+    else:
+        pth = '/home/izik/bulk/fc_data'
+
+        config['inDirName'] = os.path.join(pth, 'mix2a')
+        config['outDirName'] = os.path.join(pth, 'out')
+        config['db_file'] = os.path.join(pth, 'cluster_db_development.sqlite3')
     return config
 
 
@@ -198,4 +205,3 @@ def hash_file(fname, hash_funct=hashlib.sha1):
         for chunk in iter(lambda: f.read(block_size_for_hashing), b""):
             hash_value.update(chunk)
     return hash_value.hexdigest()
-
