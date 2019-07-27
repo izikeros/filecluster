@@ -4,6 +4,7 @@ import os
 import pandas as pd
 
 import filecluster.utlis as ut
+from filecluster.configuration import GENERATE_THUMBNAIL
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class ImageReader(object):
         def _add_new_row():
             """generate single row based on values defined in outer method"""
             thumbnail = None
-            if ut.GENERATE_THUMBNAIL:
+            if GENERATE_THUMBNAIL:
                 thumbnail = ut.get_thumbnail(path_name)
 
             # define structure of images dataframe and fill with data

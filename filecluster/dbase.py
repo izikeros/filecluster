@@ -4,7 +4,7 @@ import sqlite3
 
 import pandas as pd
 
-from filecluster.utlis import DELETE_DB
+from filecluster.configuration import DELETE_DB
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

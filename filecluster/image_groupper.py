@@ -175,8 +175,10 @@ class ImageGroupper(object):
             dst = os.path.join(pth_out, date_string, file_name)
             if mode == 'copy':
                 copy2(src, dst)
-            else:
+            elif mode == 'move':
                 move(src, dst)
+            elif mode == 'nop':
+                pass
             i_file += 1
             ut.print_progress(i_file, n_files, f'{mode}: ')
         print("")
@@ -185,7 +187,7 @@ class ImageGroupper(object):
         dirs = self.image_df['date_string'].unique()
 
         for dir_name in dirs:
-            ut.create_folder_for_cluster(self.config, dir_name)
+            ut.create_folder_for_cluster(self.config, dir_name, mode=self.config['move_or_copy'])
 
         self.move_or_copy_pictures(mode=self.config['move_or_copy'])
 
