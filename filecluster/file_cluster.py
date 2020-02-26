@@ -25,8 +25,8 @@ DEV_MODE = False
 # DELETE_DB = True
 # for more configuration options see: utils.get_development_config() and get_default_config()
 
-logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 logger.info("Using info log-level")
 
 if __name__ == '__main__':
