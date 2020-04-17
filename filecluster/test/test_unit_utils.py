@@ -7,8 +7,8 @@
 
 import unittest
 
+from filecluster.configuration import get_default_config
 from filecluster.file_cluster import ImageGroupper
-from filecluster.utlis import get_default_config
 
 assertions = unittest.TestCase('__init__')
 
@@ -22,10 +22,10 @@ class TestImageImporter():
 class TestUtils(unittest.TestCase):
 
     def test_get_exif_date(self):
-        assert (False)
+        assert False
 
     def create_folder_for_cluster(self):
-        assert (False)
+        assert False
 
     def test_get_date_info_from_file(self):
-        assert (False)
+        assert False

@@ -13,13 +13,15 @@ def get_development_config():
     config = get_default_config()
 
     # move/copy/nop
-    config['move_or_copy'] = 'move'
+    config['mode'] = 'move'
 
     # overwrite defaults with development specific params
     if os.name == 'nt':
         pth = 'h:\\incomming'
     else:
         pth = '/home/izik/bulk/fc_data'
+        pth = '/home/safjan/Pictures'
+
     inbox_dir = 'inbox_test_a'
     outbox_dir = 'inbox_clust_test'
 
@@ -28,7 +30,7 @@ def get_development_config():
 
     config['db_file'] = os.path.join(pth, 'filecluster_db.sqlite3')
     config['db_file_media'] = os.path.join(pth, 'media.p')
-    config['db_file_cluster'] = os.path.join(pth, 'clusters.p')
+    config['db_file_clusters'] = os.path.join(pth, 'clusters.p')
     return config
 
 
@@ -82,7 +84,7 @@ def get_default_config():
         'cluster_col': 'cluster_id',
         'assign_date_to_clusters_method': assign_date_to_clusters_method,
         'clustering_method': clustering_method,
-        'move_or_copy': 'move',
+        'mode': 'move',  # move | copy | nop
         'db_driver': 'sqlite',  # dataframe | sqlite
     }
 

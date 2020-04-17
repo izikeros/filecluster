@@ -165,3 +165,89 @@ def get_new_cluster_id(conn):
     new_cluster_idx = existing_clusters_last_id + 1
 
     return new_cluster_idx
+
+
+def db_connect(db_file):
+    connection = sqlite3.connect(db_file)
+    return connection
+
+
+class DbHandler:
+    def __init__(self):
+        self.config = None
+        self.image_df = None
+        self.cluster_df = None
+        self.connection = None
+
+    def init_with_image_handler(self, image_handler):
+        self.config = image_handler.config
+        self.image_df = image_handler.image_df
+        self.cluster_df = image_handler.cluster_df
+
+    def db_connect(self):
+        connection = sqlite3.connect(self.config['db_file'])
+        return connection
+
+    def db_get_table_rowcount(self, table, connection=None):
+        if not connection:
+            connection = self.db_connect()
+        cursor = connection.execute(f"SELECT * FROM {table};")
+        num_records = len(cursor.fetchall())
+        return num_records
+
+    def db_save_images(self):
+        """Save media information into database.
+
+         Existing records will be replaced by new."""
+        connection = self.db_connect()
+
+        # TODO: consider insert or ignore
+        query = '''INSERT OR REPLACE INTO media (file_name, date, size, 
+        hash_value, full_path, image, is_image) 
+        VALUES (?,?,?,?,?,?,?);'''
+
+        # get number of rows before importing new media
+        num_before = self.db_get_table_rowcount('media')
+
+        # see: # https://stackoverflow.com/questions/23574614/appending
+        # -pandas-dataframe-to
+        # # -sqlite-table-by-primary-key
+        connection.executemany(query, self.image_df[
+            ['file_name', 'date',
+             'size', 'hash_value', 'full_path', 'image',
+             'is_image']].to_records(
+            index=False))
+        connection.commit()
+
+        # get number of rows after importing new media
+        num_after = self.db_get_table_rowcount('media')
+        print(f"DB save:\t{num_after - num_before} image rows added, before: "
+              f"{num_before}, "
+              f"after: {num_after}")
+
+    def db_save_clusters(self):
+        """Export data frame with media information into database. Existing
+        records will be replaced by new."""
+        connection = self.db_connect()
+
+        cluster_table_name = 'clusters'
+        # TODO: consider insert or ignore
+        query = f'''INSERT OR REPLACE INTO {cluster_table_name} (id, 
+        start_date, end_date) VALUES (?,?,?);'''
+
+        # get number of rows before importing new media
+        num_before = self.db_get_table_rowcount(cluster_table_name)
+
+        # see: # https://stackoverflow.com/questions/23574614/appending
+        # -pandas-dataframe-to-sqlite-table-by-primary-key
+        new_df = self.cluster_df[['id', 'start_date', 'end_date']].copy()
+        new_df.id = new_df.id.astype(float)
+        # temporal workaround
+        connection.executemany(query, new_df.to_records(index=False))
+        connection.commit()
+
+        # get number of rows after importing new media
+        num_after = self.db_get_table_rowcount(cluster_table_name)
+        print(f"DB save:\t{num_after - num_before} cluster rows added, before: "
+              f"{num_before}, "
+              f"after: {num_after}")

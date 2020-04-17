@@ -1,12 +1,11 @@
 import logging
 import os
-import sqlite3
 from shutil import copy2, move
 
 import pandas as pd
 
 from filecluster import utlis as ut
-from filecluster.dbase import get_new_cluster_id
+from filecluster.dbase import get_new_cluster_id, db_connect
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +63,7 @@ class ImageGroupper(object):
                     # update cluster range (start/end date)
 
     def add_tmp_cluster_id_to_files_in_data_frame(self):
-        connection = self.db_connect()
-        new_cluster_idx = get_new_cluster_id(connection)
+        new_cluster_idx = get_new_cluster_id(db_connect(self.config['db_file']))
 
         cluster = {'id': new_cluster_idx,
                    'start_date': None,
@@ -162,8 +160,15 @@ class ImageGroupper(object):
                 self.image_df.loc[mask, 'date_string'] = date_string
         return date_string
 
-    def move_or_copy_pictures(self, mode):
-        """ move or copy items to dedicated folder"""
+    def move_files_to_cluster_folder(self):
+        dirs = self.image_df['date_string'].unique()
+        mode = self.config['mode']
+
+        # prepare directories in advance
+        for dir_name in dirs:
+            ut.create_folder_for_cluster(self.config, dir_name, mode=mode)
+
+        # Move or copy items to dedicated folder."""
         pth_out = self.config['outDirName']
         pth_in = self.config['inDirName']
         n_files = len(self.image_df)
@@ -182,78 +187,3 @@ class ImageGroupper(object):
             i_file += 1
             ut.print_progress(i_file, n_files, f'{mode}: ')
         print("")
-
-    def move_files_to_cluster_folder(self):
-        dirs = self.image_df['date_string'].unique()
-
-        for dir_name in dirs:
-            ut.create_folder_for_cluster(self.config, dir_name, mode=self.config['move_or_copy'])
-
-        self.move_or_copy_pictures(mode=self.config['move_or_copy'])
-
-    def db_connect(self):
-        connection = sqlite3.connect(self.config['db_file'])
-        return connection
-
-    def db_get_table_rowcount(self, table, connection=None):
-        if not connection:
-            connection = self.db_connect()
-        cursor = connection.execute(f"SELECT * FROM {table};")
-        num_records = len(cursor.fetchall())
-        return num_records
-
-    def db_save_images(self):
-        """Export data frame with media information into database. Existing
-        records will be replaced by new."""
-        connection = self.db_connect()
-
-        # TODO: consider insert or ignore
-        query = '''INSERT OR REPLACE INTO media (file_name, date, size, 
-        hash_value, full_path, image, is_image) 
-        VALUES (?,?,?,?,?,?,?);'''
-
-        # get number of rows before importing new media
-        num_before = self.db_get_table_rowcount('media')
-
-        # see: # https://stackoverflow.com/questions/23574614/appending
-        # -pandas-dataframe-to
-        # # -sqlite-table-by-primary-key
-        connection.executemany(query, self.image_df[
-            ['file_name', 'date',
-             'size', 'hash_value', 'full_path', 'image',
-             'is_image']].to_records(
-            index=False))
-        connection.commit()
-
-        # get number of rows after importing new media
-        num_after = self.db_get_table_rowcount('media')
-        print(f"{num_after - num_before} image rows added, before: "
-              f"{num_before}, "
-              f"after: {num_after}")
-
-    def db_save_clusters(self):
-        """Export data frame with media information into database. Existing
-        records will be replaced by new."""
-        connection = self.db_connect()
-
-        cluster_table_name = 'clusters'
-        # TODO: consider insert or ignore
-        query = f'''INSERT OR REPLACE INTO {cluster_table_name} (id, 
-        start_date, end_date) VALUES (?,?,?);'''
-
-        # get number of rows before importing new media
-        num_before = self.db_get_table_rowcount(cluster_table_name)
-
-        # see: # https://stackoverflow.com/questions/23574614/appending
-        # -pandas-dataframe-to-sqlite-table-by-primary-key
-        new_df = self.cluster_df[['id', 'start_date', 'end_date']].copy()
-        new_df.id = new_df.id.astype(float)
-        # temporal workaround
-        connection.executemany(query, new_df.to_records(index=False))
-        connection.commit()
-
-        # get number of rows after importing new media
-        num_after = self.db_get_table_rowcount(cluster_table_name)
-        print(f"{num_after - num_before} cluster rows added, before: "
-              f"{num_before}, "
-              f"after: {num_after}")

@@ -1,19 +1,16 @@
-#!/usr/bin/python3
 # This software is released under the MIT License.
 # https://opensource.org/licenses/MIT
 
-# pylint: disable=C0103
-
 import base64
+import exifread
+import hashlib
 import logging
 import os
+import sys
 import time
+from PIL import Image
 from datetime import datetime, timedelta
 from io import BytesIO
-import sys
-import hashlib
-import exifread
-from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +31,7 @@ def get_media_type(file_name, ext_image, ext_video):
 
 
 def get_date_from_file(path_name):
-    """
-    get date information from photo file
-    """
+    """Get date information from photo file."""
 
     m_time = time.ctime(os.path.getmtime(path_name))
     c_time = time.ctime(os.path.getctime(path_name))
@@ -45,9 +40,7 @@ def get_date_from_file(path_name):
 
 
 def get_exif_date(path_name):
-    """
-    return exif date or none
-    """
+    """Return exif date or none."""
 
     # Open image file for reading (binary mode)
     img_file = open(path_name, 'rb')
@@ -70,8 +63,7 @@ def get_exif_date(path_name):
 
 
 def create_folder_for_cluster(config, date_string, mode):
-    """ create designation folder that for all pictures from the cluster
-    """
+    """Create destination folder that for all pictures from the cluster."""
     if mode != 'nop':
         pth = config['outDirName']
         dir_name = os.path.join(pth, date_string)
@@ -102,6 +94,7 @@ def image_formatter(im):
 
 # Print iterations progress
 # from: https://gist.github.com/aubricus/f91fb55dc6ba5557fbab06119420dd6a
+# TODO: KS: 2020-04-17: Consider using tqdm instead
 def print_progress(iteration, total, prefix='', suffix='', decimals=1,
                    bar_length=100):
     """
@@ -132,7 +125,7 @@ def print_progress(iteration, total, prefix='', suffix='', decimals=1,
 # modified version of
 # https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
 def hash_file(fname, hash_funct=hashlib.sha1):
-    """hash funct can be e.g.: md5, sha1, sha256,..."""
+    """Hash function can be e.g.: md5, sha1, sha256,..."""
     hash_value = hash_funct()
     with open(fname, "rb") as f:
         for chunk in iter(lambda: f.read(block_size_for_hashing), b""):

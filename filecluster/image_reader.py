@@ -91,11 +91,12 @@ class ImageReader(object):
         return list_of_rows
 
     def save_image_data_to_data_frame(self, list_of_rows):
-        """convert list of rows to pandas dataframe"""
+        """Convert list of rows to pandas dataframe."""
+        # save image data: name, path, date, hash to data frame
         self.image_df = pd.DataFrame(list_of_rows)
 
     def cleanup_data_frame_timestamps(self):
-        """Decide on which timestamp use as representative for file"""
+        """Decide on which timestamp use as representative for file."""
 
         # use exif date as base
         self.image_df['date'] = self.image_df['exif_date']
