@@ -8,7 +8,7 @@
 
 import logging
 
-from filecluster.configuration import get_default_config, get_development_config
+from filecluster import utlis as ut
 # In development mode thumbnails can be generated
 from filecluster.dbase import read_clusters_database, delete_db_if_needed, read_images_database, \
     db_create_clusters, db_create_media
@@ -20,22 +20,22 @@ from filecluster.image_reader import ImageReader, run_media_scan
 # Might be used in notebook.
 # GENERATE_THUMBNAIL = False
 # in dev mode path are set to development datasets
-DEV_MODE = False
+DEV_MODE = True
 # delete database during the start - provide clean start for development mode
 # DELETE_DB = True
 # for more configuration options see: utils.get_development_config() and get_default_config()
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 logger.info("Using info log-level")
 
 if __name__ == '__main__':
     """Main routine to perform grouping process"""
 
     if DEV_MODE:
-        config = get_development_config()
+        config = ut.get_development_config()
     else:
-        config = get_default_config()
+        config = ut.get_default_config()
 
     # --- create database with schema if not exist: image(media) and cluster tables
     delete_db_if_needed(config)
