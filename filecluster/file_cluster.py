@@ -72,4 +72,9 @@ def main():
 
 if __name__ == '__main__':
     """Main routine to perform grouping process"""
+    parser = argparse.ArgumentParser(description="Purpose of the script")
+    parser.add_argument('-i', 'inbox_dir', help="help1")
+    parser.add_argument('-d', "--development_mode", help="help2", type=bool, default=False)
+    args = parser.parse_args()
+
     main()
