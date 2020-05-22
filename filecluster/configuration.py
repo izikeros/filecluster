@@ -1,37 +1,35 @@
 import os
+from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
+from typing import List
 
-DELETE_DB = True
-GENERATE_THUMBNAIL = False
+# === Configuration
+# generate thumbnail to be stored in pandas dataframe during the processing.
+# Might be used in notebook.
+# GENERATE_THUMBNAIL = False
+# in dev mode path are set to development datasets
+# delete database during the start - provide clean start for development mode
+# DELETE_DB = True
+# for more configuration options see: utils.get_development_config() and get_default_config()
 
-
-def get_development_config():
-    """ Configuration for development"""
-    print("Warning: Using development configuration")
-
-    # get defaults
-    config = get_default_config()
-
-    # move/copy/nop
-    config['mode'] = 'move'
-
-    # overwrite defaults with development specific params
-    if os.name == 'nt':
-        pth = 'h:\\incomming'
-    else:
-        pth = '/home/izik/bulk/fc_data'
-        pth = '/home/safjan/Pictures'
-
-    inbox_dir = 'inbox_test_a'
-    outbox_dir = 'inbox_clust_test'
-
-    config['inDirName'] = os.path.join(pth, inbox_dir)
-    config['outDirName'] = os.path.join(pth, outbox_dir)
-
-    config['db_file'] = os.path.join(pth, 'filecluster_db.sqlite3')
-    config['db_file_media'] = os.path.join(pth, 'media.p')
-    config['db_file_clusters'] = os.path.join(pth, 'clusters.p')
-    return config
+@dataclass
+class Config:
+    in_dir_name: Path
+    out_dir_name: Path
+    db_file_clusters: Path
+    db_file_media: Path
+    db_file: Path
+    image_extensions: List[str]
+    video_extensions: List[str]
+    granularity_minutes: timedelta
+    cluster_col: str
+    assign_date_to_clusters_method: str  # TODO: KS: 2020-05-22: enum
+    clustering_method: str  # TODO: KS: 2020-05-22: enum
+    mode: str  # TODO: KS: 2020-05-22: enum
+    db_driver: str  # TODO: KS: 2020-05-22: enum
+    generate_thumbnails: bool
+    delete_db: bool
 
 
 def get_default_config():
@@ -63,6 +61,10 @@ def get_default_config():
     image_extensions = ['.jpg', '.jpeg', '.dng', '.cr2']
     video_extensions = ['.mp4', '.3gp', 'mov']
 
+    # ensure extensions are lowercase
+    image_extensions = [ext.lower() for ext in image_extensions]
+    video_extensions = [ext.lower() for ext in video_extensions]
+
     # Minimum gap that separate two events
     max_gap = timedelta(minutes=60)
 
@@ -72,9 +74,9 @@ def get_default_config():
 
     assign_date_to_clusters_method = 'random'
 
-    config = {
-        'inDirName': inbox_path,
-        'outDirName': outbox_path,
+    conf_dict = {
+        'in_dir_name': inbox_path,
+        'out_dir_name': outbox_path,
         'db_file_clusters': db_file_clusters,
         'db_file_media': db_file_media,
         'db_file': db_file,
@@ -86,11 +88,37 @@ def get_default_config():
         'clustering_method': clustering_method,
         'mode': 'move',  # move | copy | nop
         'db_driver': 'sqlite',  # dataframe | sqlite
+        'generate_thumbnails': False,
+        'delete_db': True,
     }
+    config = Config(**conf_dict)
+    return config
 
-    # ensure extensions are lowercase
-    config['image_extensions'] = [xx.lower() for xx in
-                                  config['image_extensions']]
-    config['video_extensions'] = [xx.lower() for xx in
-                                  config['video_extensions']]
+
+def get_development_config():
+    """ Configuration for development"""
+    print("Warning: Using development configuration")
+
+    # get defaults
+    config = get_default_config()
+
+    # move/copy/nop
+    config.mode = 'copy'
+
+    # overwrite defaults with development specific params
+    if os.name == 'nt':
+        pth = 'h:\\incomming'
+    else:
+        pth = '/home/izik/bulk/fc_data'
+        pth = '/home/safjan/Pictures'
+
+    inbox_dir = 'inbox_test_a'
+    outbox_dir = 'inbox_clust_test'
+
+    config.in_dir_name = os.path.join(pth, inbox_dir)
+    config.out_dir_name = os.path.join(pth, outbox_dir)
+
+    config.db_file = os.path.join(pth, 'filecluster_db.sqlite3')
+    config.db_file_media = os.path.join(pth, 'media.p')
+    config.db_file_clusters = os.path.join(pth, 'clusters.p')
     return config

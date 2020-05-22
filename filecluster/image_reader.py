@@ -4,7 +4,6 @@ import os
 import pandas as pd
 
 import filecluster.utlis as ut
-from filecluster.configuration import GENERATE_THUMBNAIL
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class ImageReader(object):
         def _add_new_row():
             """generate single row based on values defined in outer method"""
             thumbnail = None
-            if GENERATE_THUMBNAIL:
+            if self.config.generate_thumbnails:
                 thumbnail = ut.get_thumbnail(path_name)
 
             # define structure of images dataframe and fill with data
@@ -42,15 +41,15 @@ class ImageReader(object):
                    'hash_value': hash_value,
                    'full_path': path_name,
                    'image': thumbnail,
-                   'is_image': media_type,
+                   'is_image': is_img,
                    'cluster_id': cluster_id,
                    'duplicate_to_ids': duplicate_to_ids
                    }
             return row
 
         list_of_rows = []
-        pth = self.config['inDirName']
-        ext = self.config['image_extensions'] + self.config['video_extensions']
+        pth = self.config.in_dir_name
+        ext = self.config.image_extensions + self.config.video_extensions
 
         print(f"Reading data from: {pth}")
         list_dir = os.listdir(pth)
@@ -63,9 +62,8 @@ class ImageReader(object):
                 # get modification, creation and exif dates
                 m_time, c_time, exif_date = ut.get_date_from_file(path_name)
 
-                # determine if media file is ana image or other type
-                media_type = ut.get_media_type(path_name, self.config[
-                    'image_extensions'], self.config['video_extensions'])
+                # determine if media file is image or other type
+                is_img = ut.is_image(path_name, self.config.image_extensions)
 
                 # file size
                 file_size = os.path.getsize(path_name)

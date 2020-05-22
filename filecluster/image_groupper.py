@@ -63,7 +63,7 @@ class ImageGroupper(object):
                     # update cluster range (start/end date)
 
     def add_tmp_cluster_id_to_files_in_data_frame(self):
-        new_cluster_idx = get_new_cluster_id(db_connect(self.config['db_file']))
+        new_cluster_idx = get_new_cluster_id(db_connect(self.config.db_file))
 
         cluster = {'id': new_cluster_idx,
                    'start_date': None,
@@ -71,7 +71,7 @@ class ImageGroupper(object):
 
         list_new_clusters = []
 
-        max_time_delta = self.config['granularity_minutes']
+        max_time_delta = self.config.granularity_minutes
 
         n_files = len(self.image_df)
         i_file = 0
@@ -162,15 +162,15 @@ class ImageGroupper(object):
 
     def move_files_to_cluster_folder(self):
         dirs = self.image_df['date_string'].unique()
-        mode = self.config['mode']
+        mode = self.config.mode
 
         # prepare directories in advance
         for dir_name in dirs:
             ut.create_folder_for_cluster(self.config, dir_name, mode=mode)
 
         # Move or copy items to dedicated folder."""
-        pth_out = self.config['outDirName']
-        pth_in = self.config['inDirName']
+        pth_out = self.config.out_dir_name
+        pth_in = self.config.in_dir_name
         n_files = len(self.image_df)
         i_file = 0
         for idx, row in self.image_df.iterrows():

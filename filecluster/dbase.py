@@ -4,47 +4,45 @@ import sqlite3
 
 import pandas as pd
 
-from filecluster.configuration import DELETE_DB
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
 def delete_db_if_needed(config):
-    if DELETE_DB:
+    if config.delete_db:
         try:
-            if config['db_driver'] == 'dataframe':
-                os.remove(config['db_file_clusters'])
-                print(f"Database: {config['db_file_clusters']} has been deleted")
-                os.remove(config['db_file_media'])
-                print(f"Database: {config['db_file_media']} has been deleted")
+            if config.db_driver == 'dataframe':
+                os.remove(config.db_file_clusters)
+                print(f"Database: {config.db_file_clusters} has been deleted")
+                os.remove(config.db_file_media)
+                print(f"Database: {config.db_file_media} has been deleted")
             else:
-                os.remove(config['db_file'])
-                print(f"Database: {config['db_file']} has been deleted")
+                os.remove(config.db_file)
+                print(f"Database: {config.db_file} has been deleted")
 
         except Exception as ex:
             print(ex)
 
 
 def db_create_clusters(config):
-    if config['db_driver'] == 'dataframe':
+    if config.db_driver == 'dataframe':
         db_create_clusters_df(config)
-    elif config['db_driver'] == 'sqlite':
+    elif config.db_driver == 'sqlite':
         db_create_clusters_sqlite_table(config)
 
 
 def db_create_media(config):
-    if config['db_driver'] == 'dataframe':
+    if config.db_driver == 'dataframe':
         db_create_media_df(config)
-    elif config['db_driver'] == 'sqlite':
+    elif config.db_driver == 'sqlite':
         db_create_media_sqlite_table(config)
 
 
 def db_create_clusters_df(config):
     logger.info('Check if need to create empty df for clusters')
-    if not os.path.isfile(config['db_file_media']):
+    if not os.path.isfile(config.db_file_media):
         df = pd.DataFrame(columns=['id', 'start_date', 'end_date', 'median'])
-        df.to_pickle(config['db_file_media'])
+        df.to_pickle(config.db_file_media)
         logger.info('Empty dataframe for cluster data created')
     else:
         logger.info('Dataframe with cluster data already exists')
@@ -52,11 +50,11 @@ def db_create_clusters_df(config):
 
 def db_create_media_df(config):
     logger.info('Check if need to create empty df for media')
-    if not os.path.isfile(config['db_file_clusters']):
+    if not os.path.isfile(config.db_file_clusters):
         df = pd.DataFrame(
             columns=['file_name', 'm_date', 'c_date', 'exif_date', 'date', 'size', 'hash_value',
                      'full_path', 'image', 'is_image'])
-        df.to_pickle(config['db_file'])
+        df.to_pickle(config.db_file)
         logger.info('Empty dataframe for media data created')
     else:
         logger.info('Dataframe with media data already exists')
@@ -68,7 +66,7 @@ def db_create_media_sqlite_table(configuration):
 
     try:
         # Creates or opens a file called mydb with a SQLite3 DB
-        conn = sqlite3.connect(configuration['db_file'])
+        conn = sqlite3.connect(configuration.db_file)
         # Get a cursor object
         cursor = conn.cursor()
         # Check if table users does not exist and create it
@@ -106,7 +104,7 @@ def db_create_clusters_sqlite_table(configuration):
 
     try:
         # Creates or opens a file called mydb with a SQLite3 DB
-        conn = sqlite3.connect(configuration['db_file'])
+        conn = sqlite3.connect(configuration.db_file)
         # Get a cursor object
         cursor = conn.cursor()
         # Check if table users does not exist and create it
@@ -185,7 +183,7 @@ class DbHandler:
         self.cluster_df = image_handler.cluster_df
 
     def db_connect(self):
-        connection = sqlite3.connect(self.config['db_file'])
+        connection = sqlite3.connect(self.config.db_file)
         return connection
 
     def db_get_table_rowcount(self, table, connection=None):

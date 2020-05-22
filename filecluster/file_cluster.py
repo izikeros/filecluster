@@ -3,42 +3,40 @@
 # This software is released under the MIT License.
 import argparse
 import logging
+from pathlib import Path
 
 from filecluster.configuration import get_development_config, get_default_config
 from filecluster.dbase import delete_db_if_needed, db_create_clusters, db_create_media, DbHandler
 from filecluster.image_groupper import ImageGroupper
 from filecluster.image_reader import ImageReader
 
-# === Configuration
-# generate thumbnail to be stored in pandas dataframe during the processing.
-# Might be used in notebook.
-# GENERATE_THUMBNAIL = False
-# in dev mode path are set to development datasets
-DEV_MODE = True
-# delete database during the start - provide clean start for development mode
-# DELETE_DB = True
-# for more configuration options see: utils.get_development_config() and get_default_config()
-
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 logger.info("Using info log-level")
 
 
-def main(inbox_dir, output_dir, development_mode, no_operation=False):
-    if DEV_MODE or development_mode:
+def main(inbox_dir, output_dir, db_dir, development_mode, no_operation=False):
+    if development_mode:
         config = get_development_config()
     else:
         config = get_default_config()
 
     # CLI arguments overrides default configuration options
     if inbox_dir:
-        config['inDirName'] = inbox_dir
+        config.in_dir_name = inbox_dir
 
     if output_dir:
-        config['outDirName'] = output_dir
+        config.out_dir_name = output_dir
 
     if no_operation:
-        config['mode'] = 'nop'
+        config.mode = 'nop'
+
+    if not db_dir:
+        db_dir = config.out_dir_name
+
+    config.db_file = Path(db_dir) / 'filecluster_db'
+    config.db_file_clusters = Path(db_dir) / 'clusters.p'  # TODO: KS: 2020-05-23: do not use picke
+    config.db_file_media = Path(db_dir) / 'media.p'  # TODO: KS: 2020-05-23: do not use picke
 
     # --- create database with schema if not exist: image(media) and cluster tables
     delete_db_if_needed(config)
@@ -61,7 +59,7 @@ def main(inbox_dir, output_dir, development_mode, no_operation=False):
     # read_clusters_database()  # To be implemented
     image_groupper = run_clustering(config, image_groupper)
 
-    mode = image_groupper.config['mode']
+    mode = image_groupper.config.mode
     if mode != 'nop':
         # -- Physically move or copy files to folders
         image_groupper.move_files_to_cluster_folder()
@@ -81,7 +79,7 @@ def run_clustering(config, image_groupper):
     cluster_list = image_groupper.add_tmp_cluster_id_to_files_in_data_frame()
     image_groupper.save_cluster_data_to_data_frame(cluster_list)
     image_groupper.assign_representative_date_to_clusters(
-        method=config['assign_date_to_clusters_method'])
+        method=config.assign_date_to_clusters_method)
     return image_groupper
 
 
@@ -96,7 +94,7 @@ if __name__ == '__main__':
         help="output directory for clustered images")
     parser.add_argument(
         '-d', "--development-mode",
-        help="Run script with development configuration - work on test directories",
+        help="Run script with development configuration - work on tests directories",
         action='store_true',
         default=False)
     parser.add_argument(

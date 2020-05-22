@@ -2,6 +2,8 @@
 # https://opensource.org/licenses/MIT
 
 import base64
+from typing import List
+
 import exifread
 import hashlib
 import logging
@@ -18,15 +20,17 @@ logger = logging.getLogger(__name__)
 block_size_for_hashing = 4096 * 32
 
 
-def is_supported_filetype(file_name, ext):
+def is_supported_filetype(file_name: str, ext_list: List[str]):
+    """Check if filename has one of the allowed extensions from the list."""
+    ext_list_lower = [ext.lower() for ext in ext_list]
     fn_lower = file_name.lower()
-    return fn_lower.endswith(tuple(ext))
+    return fn_lower.endswith(tuple(ext_list_lower))
 
 
-def get_media_type(file_name, ext_image, ext_video):
+def is_image(file_name, ext_list_image):
+    ext_list_lower = [ext.lower() for ext in ext_list_image]
     fn_lower = file_name.lower()
-    is_video = fn_lower.endswith(tuple(ext_video))
-    is_image = fn_lower.endswith(tuple(ext_image))
+    is_image = fn_lower.endswith(tuple(ext_list_lower))
     return is_image
 
 
@@ -65,7 +69,7 @@ def get_exif_date(path_name):
 def create_folder_for_cluster(config, date_string, mode):
     """Create destination folder that for all pictures from the cluster."""
     if mode != 'nop':
-        pth = config['outDirName']
+        pth = config.out_dir_name
         dir_name = os.path.join(pth, date_string)
         try:
             os.makedirs(dir_name)
@@ -79,11 +83,11 @@ def get_thumbnail(path):
     return i
 
 
-def image_base64(im):
-    if isinstance(im, str):
-        im = get_thumbnail(im)
+def image_base64(img):
+    if isinstance(img, str):
+        img = get_thumbnail(img)
     with BytesIO() as buffer:
-        im.save(buffer, 'jpeg')
+        img.save(buffer, 'jpeg')
         return base64.b64encode(buffer.getvalue()).decode()
 
 
