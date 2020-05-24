@@ -3,84 +3,65 @@
 # This software is released under the MIT License.
 import argparse
 import logging
-from pathlib import Path
 
-from filecluster.configuration import get_development_config, get_default_config
-from filecluster.dbase import delete_db_if_needed, db_create_clusters, db_create_media, DbHandler
-from filecluster.image_groupper import ImageGroupper
-from filecluster.image_reader import ImageReader
+from filecluster.clustering import override_config_with_cli_params, set_db_paths_in_config, \
+    read_timestamps_form_media_files, run_clustering_no_prior
+from filecluster.configuration import get_development_config, get_default_config, Driver
+from filecluster.dbase import delete_db_if_needed, db_create_clusters, db_create_media, \
+    save_media_and_cluster_info_to_database, read_images_database, read_clusters_database
+from filecluster.image_reader import run_media_scan_on_watch_folders, ImageReader
 
+log_fmt = '%(levelname).1s %(message)s'
+logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-logger.info("Using info log-level")
+logger.setLevel(logging.DEBUG)
 
 
-def main(inbox_dir, output_dir, db_dir, development_mode, no_operation=False):
+def main(inbox_dir, output_dir, db_dir, db_driver, development_mode, no_operation=False):
+    # get proper config
     if development_mode:
         config = get_development_config()
     else:
         config = get_default_config()
-
-    # CLI arguments overrides default configuration options
-    if inbox_dir:
-        config.in_dir_name = inbox_dir
-
-    if output_dir:
-        config.out_dir_name = output_dir
-
-    if no_operation:
-        config.mode = 'nop'
-
+    config = override_config_with_cli_params(config=config, inbox_dir=inbox_dir,
+                                             no_operation=no_operation, output_dir=output_dir,
+                                             db_driver=db_driver)
+    # setup directory for storing databases
     if not db_dir:
         db_dir = config.out_dir_name
+    config = set_db_paths_in_config(config, db_dir)
 
-    config.db_file = Path(db_dir) / 'filecluster_db'
-    config.db_file_clusters = Path(db_dir) / 'clusters.p'  # TODO: KS: 2020-05-23: do not use picke
-    config.db_file_media = Path(db_dir) / 'media.p'  # TODO: KS: 2020-05-23: do not use picke
-
-    # --- create database with schema if not exist: image(media) and cluster tables
+    logger.debug(config)
+    # create databases with schema
     delete_db_if_needed(config)
     db_create_media(config)
     db_create_clusters(config)
-    # read_images_database()  # To be implemented
-    # run_media_scan()  # To be implemented
 
-    # --- Read date when pictures/recordings in inbox were taken
-    image_reader = ImageReader(config)
-    row_list = image_reader.get_data_from_files()
-    image_reader.save_image_data_to_data_frame(row_list)
-    image_reader.cleanup_data_frame_timestamps()
-    # image_reader.check_import_for_duplicates_in_existing_clusters()  # To be implemented
-    # --- initialize media grouper
-    image_groupper = ImageGroupper(configuration=config,
-                                   image_df=image_reader.image_df)
+    df_media = read_images_database(config)
+    run_media_scan_on_watch_folders()
 
-    # --- Read clusters from database
-    # read_clusters_database()  # To be implemented
-    image_groupper = run_clustering(config, image_groupper)
+    # initialize image reader
+    image_reader = ImageReader(config, df_media)
 
+    # Read timestamps from imported pictures/recordings
+    image_groupper = read_timestamps_form_media_files(config, image_reader)
+
+    # Read clusters from database
+    df_clusters = read_clusters_database()  # To be implemented
+
+    # Run clustering
+    if df_clusters is None:
+        image_groupper = run_clustering_no_prior(config, image_groupper)
+    else:
+        image_groupper = run_clustering_with_prior(config, image_groupper)
+
+    # Physically move or copy files to folders
     mode = image_groupper.config.mode
     if mode != 'nop':
-        # -- Physically move or copy files to folders
         image_groupper.move_files_to_cluster_folder()
 
-    # -- Save info to database
-    db_handler = DbHandler()
-    db_handler.init_with_image_handler(image_groupper)
-    db_handler.db_save_images()
-    db_handler.db_save_clusters()
-
-
-def run_clustering(config, image_groupper):
-    """Perform clustering."""
-    print("calculating gaps")
-    image_groupper.calculate_gaps(date_col='date', delta_col='date_delta')
-    # actual clustering takes place here:
-    cluster_list = image_groupper.add_tmp_cluster_id_to_files_in_data_frame()
-    image_groupper.save_cluster_data_to_data_frame(cluster_list)
-    image_groupper.assign_representative_date_to_clusters(
-        method=config.assign_date_to_clusters_method)
-    return image_groupper
+    # Save media and cluster info to database
+    save_media_and_cluster_info_to_database(image_groupper)
 
 
 if __name__ == '__main__':
@@ -93,7 +74,12 @@ if __name__ == '__main__':
         '-o', '--output-dir',
         help="output directory for clustered images")
     parser.add_argument(
-        '-d', "--development-mode",
+        '-d', '--db-driver',
+        help="technology to use to store cluster and media databases. sqlite|dataframe",
+        required=False
+    )
+    parser.add_argument(
+        '-t', "--development-mode",
         help="Run script with development configuration - work on tests directories",
         action='store_true',
         default=False)
@@ -106,5 +92,7 @@ if __name__ == '__main__':
 
     main(inbox_dir=args.inbox_dir,
          output_dir=args.output_dir,
+         db_dir=None,
+         db_driver=Driver[args.db_driver.upper()],
          development_mode=args.development_mode,
          no_operation=args.no_operation)
