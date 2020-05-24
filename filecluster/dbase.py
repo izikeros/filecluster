@@ -141,13 +141,26 @@ def db_create_clusters_sqlite_table(configuration):
 
 
 def read_clusters_database(config=None):
-    logger.info('Reading clusters database (not implemented yet)')
-    clusters = None
-    return clusters
+    logger.info('Trying to read clusters database')
+    db_file_clusters = config.db_file_clusters
+    try:
+        pkl_file = open(db_file_clusters, 'rb')
+        df_clusters = pd.read_pickle(pkl_file)
+    except FileNotFoundError:
+        logger.info(f'File {db_file_clusters} not found. New one will be created.')
+        df_clusters = None
+    return df_clusters
 
 
-def read_images_database():
-    logger.info('Reading media database (not implemented yet)')
+def read_images_database(config):
+    logger.info('Trying to read media database')
+    try:
+        pkl_file = open(config.db_file_media, 'rb')
+        media_df = pd.read_pickle(pkl_file)
+    except FileNotFoundError:
+        logger.info(f'File {config.db_file_media} not found. New one will be created.')
+        media_df = None
+    return media_df
 
 
 def get_new_cluster_id(conn):
