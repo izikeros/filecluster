@@ -10,18 +10,28 @@ logger.setLevel(logging.DEBUG)
 
 def delete_db_if_needed(config):
     if config.delete_db:
-        try:
-            if config.db_driver == 'dataframe':
+        if config.db_driver == Driver.DATAFRAME:
+            try:
                 os.remove(config.db_file_clusters)
-                print(f"Database: {config.db_file_clusters} has been deleted")
-                os.remove(config.db_file_media)
-                print(f"Database: {config.db_file_media} has been deleted")
-            else:
-                os.remove(config.db_file)
-                print(f"Database: {config.db_file} has been deleted")
+                logger.info(f"Database: {config.db_file_clusters} has been deleted")
+            except FileNotFoundError:
+                pass
 
-        except Exception as ex:
-            print(ex)
+            try:
+                os.remove(config.db_file_media)
+                logger.info(f"Database: {config.db_file_media} has been deleted")
+            except FileNotFoundError:
+                pass
+
+        elif config.db_driver == Driver.SQLITE:
+            if os.path.isfile(config.db_file):
+                try:
+                    os.remove(config.db_file)
+                    logger.info(f"Database: {config.db_file} has been deleted")
+                except Exception as ex:
+                    print(ex)
+        else:
+            logger.error(f"Unknown driver: {config.db_driver}")
 
 
 def db_create_clusters(config):
