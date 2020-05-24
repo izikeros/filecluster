@@ -4,6 +4,8 @@ import sqlite3
 
 import pandas as pd
 
+from filecluster.configuration import Driver
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -75,6 +77,12 @@ def db_create_media_sqlite_table(configuration):
     conn = None
 
     try:
+        # Ensure that path for DBs exists, create if needed
+        parent = configuration.db_file.parent
+        if not os.path.isdir(parent):
+            os.makedirs(name=parent, exist_ok=False)
+            logger.info(f"Created all dirs needed for {parent}")
+
         # Creates or opens a file called mydb with a SQLite3 DB
         conn = sqlite3.connect(configuration.db_file)
         # Get a cursor object
@@ -96,7 +104,7 @@ def db_create_media_sqlite_table(configuration):
 
         # Commit the change
         conn.commit()
-        print("Database created/opened")
+        logger.info("Media database created/opened")
     # Catch the exception
     except Exception as e:
         # Roll back any change if something goes wrong
@@ -127,7 +135,7 @@ def db_create_clusters_sqlite_table(configuration):
                           median DATETIME)''')
         # Commit the change
         conn.commit()
-        print("Database created/opened")
+        logger.info("Cluster database created/opened")
     # Catch the exception
     except Exception as e:
         # Roll back any change if something goes wrong
@@ -272,3 +280,10 @@ class DbHandler:
         print(f"DB save:\t{num_after - num_before} cluster rows added, before: "
               f"{num_before}, "
               f"after: {num_after}")
+
+
+def save_media_and_cluster_info_to_database(image_groupper):
+    db_handler = DbHandler()
+    db_handler.init_with_image_handler(image_groupper)
+    db_handler.db_save_images()
+    db_handler.db_save_clusters()
