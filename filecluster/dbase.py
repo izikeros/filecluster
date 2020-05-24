@@ -37,16 +37,16 @@ def delete_db_if_needed(config):
 
 
 def db_create_clusters(config):
-    if config.db_driver == 'dataframe':
+    if config.db_driver == Driver.DATAFRAME:
         db_create_clusters_df(config)
-    elif config.db_driver == 'sqlite':
+    elif config.db_driver == Driver.SQLITE:
         db_create_clusters_sqlite_table(config)
 
 
 def db_create_media(config):
-    if config.db_driver == 'dataframe':
+    if config.db_driver == Driver.DATAFRAME:
         db_create_media_df(config)
-    elif config.db_driver == 'sqlite':
+    elif config.db_driver == Driver.SQLITE:
         db_create_media_sqlite_table(config)
 
 
