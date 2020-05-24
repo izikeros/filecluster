@@ -1,17 +1,46 @@
+import logging
 import os
 from dataclasses import dataclass
 from datetime import timedelta
+from enum import Enum
 from pathlib import Path
 from typing import List
+
+logger = logging.getLogger(__name__)
+
 
 # === Configuration
 # generate thumbnail to be stored in pandas dataframe during the processing.
 # Might be used in notebook.
 # GENERATE_THUMBNAIL = False
+
 # in dev mode path are set to development datasets
+
 # delete database during the start - provide clean start for development mode
 # DELETE_DB = True
+
 # for more configuration options see: utils.get_development_config() and get_default_config()
+
+
+class Driver(Enum):
+    SQLITE = 1
+    DATAFRAME = 2
+
+
+class AssignDateToClusterMethod(Enum):
+    RANDOM = 1
+    MEDIAN = 2
+
+
+class ClusteringMethod(Enum):
+    TIME_GAP = 1
+
+
+class CopyMode(Enum):
+    COPY = 1
+    MOVE = 2
+    NOP = 3
+
 
 @dataclass
 class Config:
@@ -24,38 +53,29 @@ class Config:
     video_extensions: List[str]
     granularity_minutes: timedelta
     cluster_col: str
-    assign_date_to_clusters_method: str  # TODO: KS: 2020-05-22: enum
-    clustering_method: str  # TODO: KS: 2020-05-22: enum
-    mode: str  # TODO: KS: 2020-05-22: enum
-    db_driver: str  # TODO: KS: 2020-05-22: enum
+    assign_date_to_clusters_method: AssignDateToClusterMethod
+    clustering_method: ClusteringMethod
+    mode: CopyMode
+    db_driver: Driver
     generate_thumbnails: bool
     delete_db: bool
+
+    def __repr__(self):
+        repr = []
+        for p in self.__dataclass_fields__.keys():
+            repr.append(f'{p}:\t{self.__getattribute__(p)}')
+        return '\n'.join(repr)
 
 
 def get_default_config():
     # path to files to be clustered
 
-    # Configure inbox
-    if os.name == 'nt':
-        pth = 'h:\\incomming\\'
-    else:
-        pth = '/media/root/Foto/incomming/'
+    inbox_path, outbox_path = configure_inbox_outbox_paths()
+    db_pth = configure_db_path()
 
-    inbox_dir = 'inbox'
-    outbox_dir = 'inbox_clust'
-
-    inbox_path = os.path.join(pth, inbox_dir)
-    outbox_path = os.path.join(pth, outbox_dir)
-
-    # Configure database
-    if os.name == 'nt':
-        pth = 'h:\\zdjecia\\'
-    else:
-        pth = '/media/root/Foto/zdjecia/'
-
-    db_file = os.path.join(pth, 'filecluster_db.sqlite3')
-    db_file_clusters = os.path.join(pth, 'clusters.p')
-    db_file_media = os.path.join(pth, 'media.p')
+    db_file = os.path.join(db_pth, 'filecluster_db.sqlite3')
+    db_file_clusters = os.path.join(db_pth, 'clusters.p')
+    db_file_media = os.path.join(db_pth, 'media.p')
 
     # Filename extensions in scope of clustering
     image_extensions = ['.jpg', '.jpeg', '.dng', '.cr2']
@@ -68,11 +88,7 @@ def get_default_config():
     # Minimum gap that separate two events
     max_gap = timedelta(minutes=60)
 
-    # method that is used to group images, default: assume different events
-    # are separated by significant time gape (max_gap config parameter)
-    clustering_method = 'time_gap'
-
-    assign_date_to_clusters_method = 'random'
+    assign_date_to_clusters_method = AssignDateToClusterMethod.RANDOM
 
     conf_dict = {
         'in_dir_name': inbox_path,
@@ -85,9 +101,11 @@ def get_default_config():
         'granularity_minutes': max_gap,
         'cluster_col': 'cluster_id',
         'assign_date_to_clusters_method': assign_date_to_clusters_method,
-        'clustering_method': clustering_method,
-        'mode': 'move',  # move | copy | nop
-        'db_driver': 'sqlite',  # dataframe | sqlite
+        # method that is used to group images, default: assume different events
+        # are separated by significant time gape (max_gap config parameter)
+        'clustering_method': ClusteringMethod.TIME_GAP,
+        'mode': CopyMode.MOVE,
+        'db_driver': Driver.SQLITE,  # dataframe | sqlite
         'generate_thumbnails': False,
         'delete_db': True,
     }
@@ -95,21 +113,42 @@ def get_default_config():
     return config
 
 
+def configure_db_path():
+    # Configure database path
+    if os.name == 'nt':
+        db_pth = 'h:\\zdjecia\\'
+    else:
+        db_pth = '/media/root/Foto/zdjecia/'
+    return db_pth
+
+
+def configure_inbox_outbox_paths():
+    # Configure inbox and outbox paths
+    if os.name == 'nt':
+        pth = 'h:\\incomming\\'
+    else:
+        pth = '/media/root/Foto/incomming/'
+    inbox_dir = 'inbox'
+    outbox_dir = 'inbox_clust'
+    inbox_path = os.path.join(pth, inbox_dir)
+    outbox_path = os.path.join(pth, outbox_dir)
+    return inbox_path, outbox_path
+
+
 def get_development_config():
-    """ Configuration for development"""
-    print("Warning: Using development configuration")
+    """Configuration for development phase."""
+    logger.warning("Warning: Using development configuration")
 
     # get defaults
     config = get_default_config()
 
     # move/copy/nop
-    config.mode = 'copy'
+    config.mode = CopyMode.COPY
 
     # overwrite defaults with development specific params
     if os.name == 'nt':
         pth = 'h:\\incomming'
     else:
-        pth = '/home/izik/bulk/fc_data'
         pth = '/home/safjan/Pictures'
 
     inbox_dir = 'inbox_test_a'
