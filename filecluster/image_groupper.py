@@ -5,6 +5,7 @@ from shutil import copy2, move
 import pandas as pd
 
 from filecluster import utlis as ut
+from filecluster.configuration import CopyMode, AssignDateToClusterMethod
 from filecluster.dbase import get_new_cluster_id, db_connect
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ class ImageGroupper(object):
                     # update cluster range (start/end date)
 
     def add_tmp_cluster_id_to_files_in_data_frame(self):
+        # FIXME: KS: 2020-05-23: make getting new cluster id working for both sqlite and dataframe mode
         new_cluster_idx = get_new_cluster_id(db_connect(self.config.db_file))
 
         cluster = {'id': new_cluster_idx,
@@ -133,10 +135,11 @@ class ImageGroupper(object):
     def get_cluster_ids(self):
         return self.image_df['cluster_id'].unique()
 
-    def assign_representative_date_to_clusters(self, method='random'):
+    def assign_representative_date_to_clusters(self, method=AssignDateToClusterMethod.RANDOM):
         """ return date representing cluster
         """
-        if method == 'random':
+        date_string = ''
+        if method == AssignDateToClusterMethod.RANDOM:
             clusters = self.get_cluster_ids()
             for cluster in clusters:
                 mask = self.image_df['cluster_id'] == cluster
@@ -178,11 +181,11 @@ class ImageGroupper(object):
             file_name = row['file_name']
             src = os.path.join(pth_in, file_name)
             dst = os.path.join(pth_out, date_string, file_name)
-            if mode == 'copy':
+            if mode == CopyMode.COPY:
                 copy2(src, dst)
-            elif mode == 'move':
+            elif mode == CopyMode.MOVE:
                 move(src, dst)
-            elif mode == 'nop':
+            elif mode == CopyMode.NOP:
                 pass
             i_file += 1
             ut.print_progress(i_file, n_files, f'{mode}: ')
