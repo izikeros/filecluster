@@ -1,5 +1,8 @@
 import logging
 import os
+from functools import lru_cache
+from pathlib import Path
+from pprint import pprint
 
 import pandas as pd
 
@@ -120,6 +123,35 @@ class ImageReader(object):
     # def save_image_data_to_data_frame(self, list_of_rows):
     #     """Convert list of rows to pandas dataframe."""
     #     # save image data: name, path, date, hash to data frame
+    def check_import_for_duplicates_in_watch_folders(self, new_media_df):
+        logger.debug("Checking import for duplicates in watch folders (not implemented)")
+
+        lst = []
+        file_list_watch = None
+        for w in self.config.watch_folders:
+            file_list_watch = get_files_from_watch_folder(w)
+            l = [path for path in file_list_watch]
+            lst.extend(l)
+
+        watch_names = [path.name for path in lst]
+        new_names = new_media_df.file_name.values.tolist()
+        potential_dups = [f for f in new_names if f in watch_names]
+
+        # check size
+        confirmed_dups = []
+        keys_to_remove = []
+
+        for d in potential_dups:
+            nd = new_media_df[new_media_df.file_name == d]
+            wd = [path for path in file_list_watch if path.name == d]
+            n = nd['size'].values[0]
+            if n == os.path.getsize(wd[0]):
+                confirmed_dups.append(wd[0])
+                keys_to_remove.append(new_media_df.file_name.values[0])
+        print("Found duplicates based on filename and size:")
+        pprint(confirmed_dups)
+        new_media_df = new_media_df[~new_media_df.file_name.isin(keys_to_remove)]
+        return new_media_df
 
     def check_import_for_duplicates_in_existing_clusters(self, new_media_df):
         if self.image_df.empty:
@@ -135,8 +167,15 @@ class ImageReader(object):
             return None
 
 
+@lru_cache
+def get_files_from_watch_folder(w):
+    return Path(w).rglob('*.*')
+
+
 def check_on_updates_in_watch_folders(config):
+    """Running media scan in structured media repository."""
     # TODO: KS: 2020-10-28: implement
+    # TODO: KS: 2020-10-28: need another database or media will be sufficient?
     logger.info(f'Running media scan in {config.watch_folders} (not implemented yet)')
 
 
