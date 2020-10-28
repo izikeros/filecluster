@@ -66,13 +66,20 @@ def db_create_clusters_df(config):
 
 
 def db_create_media_df(config):
+    """Create media database file in location from the config.
+
+    NOTE: default config.db_file_media is created automatically in
+          configure_db_path() function.
+    """
     logger.debug('Check if need to create empty df for media')
     if not os.path.isfile(config.db_file_media):
         df = pd.DataFrame(columns=MEDIA_DF_COLUMNS)
         df.to_pickle(config.db_file_media)
         logger.info(f'Empty dataframe for media data created in: {config.db_file_media}')
+        return True
     else:
         logger.debug(f'Dataframe with media data {config.db_file_media} already exists')
+        return False
 
 
 def db_create_media_sqlite_table(configuration):
@@ -207,6 +214,10 @@ def db_connect(db_file):
 
 
 class SqliteHandler:
+    """Handler for sqlite database
+
+    see: https://stackabuse.com/a-sqlite-tutorial-with-python/
+    """
     def __init__(self):
         self.config = None
         self.image_df = None

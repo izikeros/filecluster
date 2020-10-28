@@ -18,6 +18,8 @@ def override_config_with_cli_params(config: Config, inbox_dir: str,
                                     db_driver: Driver,
                                     watch_dirs: List[str]) -> Config:
     """Use CLI arguments to override default configuration.
+    :param watch_dirs:
+    :param db_driver:
     :param config:
     :param inbox_dir:
     :param no_operation:

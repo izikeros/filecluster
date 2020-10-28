@@ -123,7 +123,7 @@ def configure_db_path() -> str:
     if os.name == 'nt':
         db_pth = 'h:\\zdjecia\\'
     else:
-        db_pth = '/media/root/Foto/zdjecia/'
+        db_pth = '/tmp/'
     return db_pth
 
 
