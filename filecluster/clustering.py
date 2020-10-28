@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def override_config_with_cli_params(config, inbox_dir, no_operation, output_dir, db_driver):
+def override_config_with_cli_params(config, inbox_dir, no_operation, output_dir, db_driver, watch_dirs):
     """Use CLI arguments to override default configuration.
     :param config:
     :param inbox_dir:
@@ -29,6 +29,8 @@ def override_config_with_cli_params(config, inbox_dir, no_operation, output_dir,
         config.mode = CopyMode.NOP
     if db_driver:
         config.db_driver = db_driver
+    if watch_dirs:
+        config.watch_folders = watch_dirs
     return config
 
 
