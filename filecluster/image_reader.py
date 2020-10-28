@@ -135,9 +135,11 @@ class ImageReader(object):
             return None
 
 
-def check_on_updates_in_watch_folders():
-    logger.info('Running media scan (not implemented yet)')
+def check_on_updates_in_watch_folders(config):
+    # TODO: KS: 2020-10-28: implement
+    logger.info(f'Running media scan in {config.watch_folders} (not implemented yet)')
 
 
 def check_if_media_files_from_db_exists():
+    # TODO: KS: 2020-10-28: implement
     logger.info('Running media scan (not implemented yet)')
