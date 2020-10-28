@@ -25,7 +25,7 @@ existing luster including parent directory (year).
 """
 import argparse
 import logging
-from typing import List
+from typing import List, Optional
 
 from filecluster.clustering import override_config_with_cli_params, set_db_paths_in_config, \
     get_media_info_from_imported_files
@@ -45,9 +45,9 @@ logger.setLevel(logging.DEBUG)
 def main(inbox_dir: str,
          output_dir: str,
          watch_dirs: List[str],
-         db_dir: str,
-         db_driver: str,
-         development_mode: str,
+         db_dir: Optional[str],
+         db_driver: Driver,
+         development_mode: bool,
          no_operation: bool = False):
     config = get_config(db_driver, development_mode, inbox_dir, no_operation,
                         output_dir, watch_dirs)
@@ -69,16 +69,21 @@ def main(inbox_dir: str,
     #  check if media captured by media db still exists on the disk
     check_if_media_files_from_db_exists()
 
-    # initialize image reader
+    # Configure image reader, initialize media database (if needed)
     image_reader = ImageReader(config, df_media)
 
     # read timestamps from imported pictures/recordings
     new_media_df = get_media_info_from_imported_files(image_reader)
 
+    # check if not duplicated with media in output clusters dir
     duplicates = image_reader.check_import_for_duplicates_in_existing_clusters(
         new_media_df)
 
-    # initialize media grouper
+    # check if not duplicated with watch folders (structured repository)
+    new_media_df = image_reader.check_import_for_duplicates_in_watch_folders(
+        new_media_df)
+
+    # configure media grouper, initialize internal dataframes
     image_groupper = ImageGroupper(
         configuration=config,
         image_df=image_reader.image_df,
@@ -112,8 +117,8 @@ def setup_directory_for_database(config, db_dir):
     return config
 
 
-def get_config(db_driver, development_mode, inbox_dir, no_operation,
-               output_dir, watch_dirs):
+def get_config(db_driver: Driver, development_mode, inbox_dir: str,
+               no_operation: bool, output_dir: str, watch_dirs: List[str]):
     """Get proper config, override with CLI params."""
     # get proper config
     if development_mode:
@@ -164,9 +169,16 @@ if __name__ == '__main__':
     # TODO: KS: 2020-10-28: add watch folder(s)
     args = parser.parse_args()
 
+    if isinstance(args.watch_dirs, str):
+        watch_dirs = [args.watch_dirs]
+    elif isinstance(args.watch_dirs, str):
+        watch_dirs = args.watch_dirs
+    else:
+        raise TypeError("watch_dirs should be a list")
+
     main(inbox_dir=args.inbox_dir,
          output_dir=args.output_dir,
-         watch_dirs=args.watch_dirs,
+         watch_dirs=watch_dirs,
          db_dir=None,
          db_driver=Driver[args.db_driver.upper()],
          development_mode=args.development_mode,
