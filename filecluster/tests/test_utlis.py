@@ -2,6 +2,7 @@ import hashlib
 
 import pytest
 
+from filecluster.configuration import get_default_config
 from filecluster.utlis import get_exif_date, is_supported_filetype, is_image, get_date_from_file, \
     create_folder_for_cluster, get_thumbnail, image_base64, image_formatter, hash_file
 
@@ -30,11 +31,11 @@ def test_is_supported_filetype_jpg_xyz():
     assert is_supported_filetype('img.jpg.xyz', EXT_IMG) is False
 
 
-def test_is_image__image():
+def test_is_image__jpg():
     assert is_image('img.jpg', EXT_IMG) is True
 
 
-def test_is_image__image():
+def test_is_image__not_recognized_image_type():
     assert is_image('img.xyz', EXT_IMG) is False
 
 
@@ -52,7 +53,8 @@ def test_get_exif_date():
 
 @pytest.mark.skip()
 def test_create_folder_for_cluster():
-    create_folder_for_cluster()
+    config = get_default_config()
+    create_folder_for_cluster(config=config,)
 
 
 def test_get_thumbnail():
