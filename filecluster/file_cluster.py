@@ -1,6 +1,28 @@
 #!/usr/bin/env python3
-# Copyright (c) 2017 Krystian Safjan
-# This software is released under the MIT License.
+"""Main module for image clustering.
+
+Development mode
+================
+- "copy" operation instead of "move" to protect source files.
+- "delete db" database is usually deleted to ensure "fresh" start
+
+inbox folder
+============
+Inbox - incoming media lands here.
+
+outbox folder
+============
+Generated clusters are created here. If matching cluster already exist in watch
+ folder
+
+watch folder
+============
+Folder with main, structured collection of media. It is watched and compared
+with potential newly created clusters - if corresponding cluster already exists
+in watch folder, the cluster folder in outbox should have the same name as
+existing luster including parent directory (year).
+
+"""
 import argparse
 import logging
 
