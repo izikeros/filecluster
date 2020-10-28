@@ -156,15 +156,15 @@ class ImageReader(object):
     def check_import_for_duplicates_in_existing_clusters(self, new_media_df):
         if self.image_df.empty:
             logger.debug('Media db empty. Skipping duplicate analysis.')
-            # TODO: KS: 2020-05-24: Consider checking for duplicates within import
+            # TODO: KS: 2020-05-24: Consider checking for duplicates within import (file size and hash based)
             return None
         else:
             logger.debug("Checking newly imported files against database")
-            # TODO: 1. check for duplicates: in newly imported files
+            # TODO: 1. check for duplicates: in newly imported files (file size and hash based)
             # TODO: 2. check for duplicates: newly imported files against database
             # TODO: mark duplicates if found any
             logger.warning("Duplicates check not implemented")
-            return None
+            return new_media_df
 
 
 @lru_cache
