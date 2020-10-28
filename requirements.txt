@@ -4,4 +4,3 @@ pandas
 Pillow
 python-dateutil
 pytz
-six

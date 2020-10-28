@@ -3,9 +3,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from filecluster.image_groupper import ImageGroupper
+from filecluster.configuration import CopyMode
+from filecluster.image_reader import cleanup_data_frame_timestamps
 
+log_fmt = '%(levelname).1s %(message)s'
+logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def override_config_with_cli_params(config, inbox_dir, no_operation, output_dir, db_driver):
@@ -16,12 +20,13 @@ def override_config_with_cli_params(config, inbox_dir, no_operation, output_dir,
     :param output_dir:
     :return:
     """
+    # TODO: KS: 2020-05-25: Consider using kwargs instead long list of input arguments
     if inbox_dir:
         config.in_dir_name = inbox_dir
     if output_dir:
         config.out_dir_name = output_dir
     if no_operation:
-        config.mode = 'nop'
+        config.mode = CopyMode.NOP
     if db_driver:
         config.db_driver = db_driver
     return config
@@ -34,34 +39,11 @@ def set_db_paths_in_config(config, db_dir):
     return config
 
 
-def read_timestamps_form_media_files(config, image_reader):
+def get_media_info_from_imported_files(image_reader):
     row_list = image_reader.get_data_from_files()
-
+    logger.debug(f"Read info from {len(row_list)} files.")
     # convert to data frame
     new_media_df = pd.DataFrame(row_list)
-    image_reader.cleanup_data_frame_timestamps()
+    new_media_df = cleanup_data_frame_timestamps(new_media_df)
+    return new_media_df
 
-    duplicates = image_reader.check_import_for_duplicates_in_existing_clusters(new_media_df)
-
-    # --- initialize media grouper
-    image_groupper = ImageGroupper(configuration=config,
-                                   image_df=image_reader.image_df)
-    return image_groupper
-
-
-def run_clustering_no_prior(config, image_groupper):
-    """Perform clustering."""
-    logger.info("Calculating gaps")
-    image_groupper.calculate_gaps(date_col='date', delta_col='date_delta')
-    # actual clustering takes place here:
-    cluster_list = image_groupper.add_tmp_cluster_id_to_files_in_data_frame()
-    image_groupper.save_cluster_data_to_data_frame(cluster_list)
-    image_groupper.assign_representative_date_to_clusters(
-        method=config.assign_date_to_clusters_method)
-    return image_groupper
-
-
-def run_clustering_with_prior(config, image_groupper):
-    """Add images to exising clusters or create new clusters if needed."""
-    logger.debug(f'Running clustering with existing clusters.')
-    return image_groupper

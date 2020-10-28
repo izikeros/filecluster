@@ -6,7 +6,10 @@ from enum import Enum
 from pathlib import Path
 from typing import List
 
+log_fmt = '%(levelname).1s %(message)s'
+logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 # === Configuration
@@ -51,7 +54,7 @@ class Config:
     db_file: Path
     image_extensions: List[str]
     video_extensions: List[str]
-    granularity_minutes: timedelta
+    time_granularity: timedelta
     cluster_col: str
     assign_date_to_clusters_method: AssignDateToClusterMethod
     clustering_method: ClusteringMethod
@@ -98,7 +101,7 @@ def get_default_config():
         'db_file': db_file,
         'image_extensions': image_extensions,
         'video_extensions': video_extensions,
-        'granularity_minutes': max_gap,
+        'time_granularity': max_gap,
         'cluster_col': 'cluster_id',
         'assign_date_to_clusters_method': assign_date_to_clusters_method,
         # method that is used to group images, default: assume different events

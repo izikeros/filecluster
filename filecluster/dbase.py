@@ -4,13 +4,18 @@ import sqlite3
 
 import pandas as pd
 
-from filecluster.configuration import Driver
+from filecluster.configuration import Driver, CopyMode
 
+log_fmt = '%(levelname).1s %(message)s'
+logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+MEDIA_DF_COLUMNS = ['file_name', 'm_date', 'c_date', 'exif_date', 'date', 'size', 'hash_value',
+                    'full_path', 'image', 'is_image']
 
-def delete_db_if_needed(config):
+
+def delete_dbs_if_needed(config):
     if config.delete_db:
         if config.db_driver == Driver.DATAFRAME:
             try:
@@ -36,7 +41,7 @@ def delete_db_if_needed(config):
             logger.error(f"Unknown driver: {config.db_driver}")
 
 
-def db_create_clusters(config):
+def read_or_create_db_clusters(config):
     if config.db_driver == Driver.DATAFRAME:
         db_create_clusters_df(config)
     elif config.db_driver == Driver.SQLITE:
@@ -51,25 +56,23 @@ def db_create_media(config):
 
 
 def db_create_clusters_df(config):
-    logger.info('Check if need to create empty df for clusters')
-    if not os.path.isfile(config.db_file_media):
+    logger.debug('Check if need to create empty df for clusters')
+    if not os.path.isfile(config.db_file_clusters):
         df = pd.DataFrame(columns=['id', 'start_date', 'end_date', 'median'])
-        df.to_pickle(config.db_file_media)
-        logger.info('Empty dataframe for cluster data created')
+        df.to_pickle(config.db_file_clusters)
+        logger.info(f'Empty dataframe for cluster data created in {config.db_file_clusters}')
     else:
-        logger.info('Dataframe with cluster data already exists')
+        logger.debug(f'Dataframe with cluster data {config.db_file_clusters} already exists')
 
 
 def db_create_media_df(config):
-    logger.info('Check if need to create empty df for media')
-    if not os.path.isfile(config.db_file_clusters):
-        df = pd.DataFrame(
-            columns=['file_name', 'm_date', 'c_date', 'exif_date', 'date', 'size', 'hash_value',
-                     'full_path', 'image', 'is_image'])
-        df.to_pickle(config.db_file)
-        logger.info('Empty dataframe for media data created')
+    logger.debug('Check if need to create empty df for media')
+    if not os.path.isfile(config.db_file_media):
+        df = pd.DataFrame(columns=MEDIA_DF_COLUMNS)
+        df.to_pickle(config.db_file_media)
+        logger.info(f'Empty dataframe for media data created in: {config.db_file_media}')
     else:
-        logger.info('Dataframe with media data already exists')
+        logger.debug(f'Dataframe with media data {config.db_file_media} already exists')
 
 
 def db_create_media_sqlite_table(configuration):
@@ -148,7 +151,7 @@ def db_create_clusters_sqlite_table(configuration):
             conn.close()
 
 
-def read_clusters_database(config=None):
+def read_or_create_clusters_database(config=None):
     logger.info('Trying to read clusters database')
     db_file_clusters = config.db_file_clusters
     try:
@@ -156,17 +159,19 @@ def read_clusters_database(config=None):
         df_clusters = pd.read_pickle(pkl_file)
     except FileNotFoundError:
         logger.info(f'File {db_file_clusters} not found. New one will be created.')
+        db_create_clusters_df(config)  # TODO: KS: 2020-05-24: add support for sqlite
         df_clusters = None
     return df_clusters
 
 
-def read_images_database(config):
+def read_or_create_media_database(config):
     logger.info('Trying to read media database')
     try:
         pkl_file = open(config.db_file_media, 'rb')
         media_df = pd.read_pickle(pkl_file)
     except FileNotFoundError:
         logger.info(f'File {config.db_file_media} not found. New one will be created.')
+        db_create_media(config)
         media_df = None
     return media_df
 
@@ -201,7 +206,7 @@ def db_connect(db_file):
     return connection
 
 
-class DbHandler:
+class SqliteHandler:
     def __init__(self):
         self.config = None
         self.image_df = None
@@ -283,7 +288,15 @@ class DbHandler:
 
 
 def save_media_and_cluster_info_to_database(image_groupper):
-    db_handler = DbHandler()
-    db_handler.init_with_image_handler(image_groupper)
-    db_handler.db_save_images()
-    db_handler.db_save_clusters()
+    if image_groupper.config.db_driver == Driver.SQLITE:
+        db_handler = SqliteHandler()
+        db_handler.init_with_image_handler(image_groupper)
+        db_handler.db_save_images()
+        db_handler.db_save_clusters()
+    else:
+        mode = image_groupper.config.mode
+        if mode != CopyMode.NOP:
+            pd.to_pickle(image_groupper.cluster_df, image_groupper.config.db_file_clusters)
+            pd.to_pickle(image_groupper.image_df, image_groupper.config.db_file_media)
+        else:
+            logger.debug("No update to media and cluster databases since 'nop' option is selected.")

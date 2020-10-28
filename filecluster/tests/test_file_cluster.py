@@ -2,7 +2,7 @@ import pytest
 
 from filecluster.file_cluster import main
 
-
+@pytest.mark.skip(reason='not implemented')
 def test_main_sqlite():
     main(inbox_dir='inbox_test_a_orig',
          output_dir='/tmp/output_dir',

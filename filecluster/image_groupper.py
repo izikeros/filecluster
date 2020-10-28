@@ -8,11 +8,37 @@ from filecluster import utlis as ut
 from filecluster.configuration import CopyMode, AssignDateToClusterMethod
 from filecluster.dbase import get_new_cluster_id, db_connect
 
+log_fmt = '%(levelname).1s %(message)s'
+logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+
+def update_cluster_info(delta_from_previous, max_time_delta, index, new_cluster_idx,
+                        list_new_clusters, start_date, end_date, cluster):
+    # check if new cluster encountered
+    if delta_from_previous > max_time_delta or index == 0:
+        new_cluster_idx += 1
+
+        # append previous cluster date to the list
+        if index > 0:
+            # add previous cluster info to the list of clusters
+            list_new_clusters.append(cluster)
+
+        # create record for new cluster
+        cluster = {'id': new_cluster_idx,
+                   'start_date': start_date,
+                   'end_date': None}
+    else:
+        cluster['start_date'] = start_date,
+
+    # update cluster stop date
+    cluster['end_date'] = end_date
+    return cluster, new_cluster_idx, list_new_clusters
 
 
 class ImageGroupper(object):
-    def __init__(self, configuration, image_df=None, cluster_df=None):
+    def __init__(self, configuration, image_df=None, df_clusters=None, new_media_df=None):
         # read the config
         self.config = configuration
 
@@ -21,8 +47,28 @@ class ImageGroupper(object):
             self.image_df = image_df
 
         # initialize cluster data frame (if provided)
-        if cluster_df is not None:
-            self.cluster_df = cluster_df
+        if df_clusters is not None:
+            self.df_clusters = df_clusters
+
+        # initialize imported media df
+        if new_media_df is not None:
+            self.new_media_df = new_media_df
+
+    def run_clustering(self):
+        """Perform clustering."""
+
+        # Try to assign media to existing clusters
+        self.assign_images_to_existing_clusters(active=False)
+
+        logger.info("Calculating gaps for creating new clusters")
+        self.calculate_gaps(date_col='date', delta_col='date_delta')
+
+        # create new clusters, assign media
+        cluster_list = self.add_cluster_id_to_files_in_data_frame()
+
+        self.save_cluster_data_to_data_frame(cluster_list)
+        self.assign_representative_date_to_clusters(
+            method=self.config.assign_date_to_clusters_method)
 
     def calculate_gaps(self, date_col, delta_col):
         """Calculate gaps between consecutive shots, save delta to dataframe
@@ -31,27 +77,35 @@ class ImageGroupper(object):
         selected 'delta' column
         """
         # sort by creation date
-        self.image_df.sort_values(by=date_col, ascending=True, inplace=True)
+        self.new_media_df.sort_values(by=date_col, ascending=True, inplace=True)
         # calculate breaks between the shoots
-        self.image_df[delta_col] = self.image_df[date_col].diff()
+        self.new_media_df[delta_col] = self.new_media_df[date_col].diff()
 
-    def assign_images_to_existing_clusters(self, date_start, date_end,
-                                           margin, conn):
-        # TODO: finalize implemantation
-        # --- check if image can be assigned to any of existing clusters
-        run_again = True
-        while run_again:
-            # iterate over and over since new cluster members might drag
-            # cluster boundaries that new images will fit now
-            run_again = False
+    def assign_images_to_existing_clusters(self, active):
+        """Check if image can be assigned to any of existing clusters."""
+        media_to_cluster = True
+
+        date_start = None
+        date_end = None
+        margin = self.config.time_granularity
+
+        # TODO: KS: 2020-05-25: consider quick assign first
+        #  (find closest cluster for each media and assign + update cluster info)
+        #  then run precise, multiple-run approach implemented below
+
+        # Loop over not clustered media, try to assign cluster,
+        # update cluster info and try again with remaining media.
+        # Note that after adding new media to cluster boundaries might change and
+        # new media might fit now
+        while media_to_cluster and active:
+            media_to_cluster = False
             # find images <existing_clusters_start, existing_clusters_end>
-            # see pandas Query:
-            # https://stackoverflow.com/questions/11869910/
-            for index, _row in self.image_df[
-                (self.image_df['cluster_id'].isnull() &
-                 self.image_df['date'] > date_start - margin &
-                 self.image_df['date'] < date_end + margin)].iterrows():
+            # see pandas Query: https://stackoverflow.com/questions/11869910/
+            not_clustered = self.image_df['cluster_id'].isnull()
+            not_too_old = self.image_df['date'] > date_start - margin
+            not_too_new = self.image_df['date'] < date_end + margin
 
+            for index, _row in self.image_df[not_clustered & not_too_old & not_too_new].iterrows():
                 # TODO: add query to the cluster
                 fit = None
                 # is in cluster range with margins:
@@ -59,69 +113,53 @@ class ImageGroupper(object):
                 # date > (date_start - margin) and
                 # date < (date_stop + margin)
                 if fit:
-                    run_again = True
+                    media_to_cluster = True
                     # add cluster info to image
                     # update cluster range (start/end date)
 
-    def add_tmp_cluster_id_to_files_in_data_frame(self):
-        # FIXME: KS: 2020-05-23: make getting new cluster id working for both sqlite and dataframe mode
-        new_cluster_idx = get_new_cluster_id(db_connect(self.config.db_file))
+    def add_cluster_id_to_files_in_data_frame(self):
+        try:
+            new_cluster_idx = get_new_cluster_id(db_connect(self.config.db_file))
+        except:
+            new_cluster_idx = 0
 
         cluster = {'id': new_cluster_idx,
                    'start_date': None,
-                   'stop_date': None}
+                   'end_date': None}
 
         list_new_clusters = []
 
-        max_time_delta = self.config.granularity_minutes
+        max_time_delta = self.config.time_granularity
 
-        n_files = len(self.image_df)
+        n_files = len(self.new_media_df)
         i_file = 0
 
-        # # TODO: uncomment when implemented
-        # if 0 == 1:
-        #     self.assign_images_to_existing_clusters(
-        #         date_start=existing_clusters_start,
-        #         date_end=existing_clusters_end,
-        #         margin=self.config['granularity_minutes'],
-        #         conn=conn)
-
+        # create new clusters for remaining media
         # new_images_df
         # df.loc[df['column_name'] == some_value]
-        for index, _row in self.image_df[
-            self.image_df['cluster_id'].isnull()].iterrows():
-            delta_from_previous = self.image_df.loc[index]['date_delta']
+        not_clusterd_map = self.new_media_df['cluster_id'].isnull()
+        for index, _row in self.new_media_df[not_clusterd_map].iterrows():
+            delta_from_previous = self.new_media_df.loc[index]['date_delta']
+            start_date = end_date = self.new_media_df.loc[index]['date']
 
-            # check if new cluster encountered
-            if delta_from_previous > max_time_delta or index == 0:
-                new_cluster_idx += 1
-
-                # append previous cluster date to the list
-                if index > 0:
-                    # add previous cluster info to the list of clusters
-                    list_new_clusters.append(cluster)
-
-                # create record for new cluster
-                cluster = {'id': new_cluster_idx,
-                           'start_date': self.image_df.loc[index]['date'],
-                           'end_date': None}
+            cluster, new_cluster_idx, list_new_clusters = update_cluster_info(delta_from_previous,
+                                                                              max_time_delta, index,
+                                                                              new_cluster_idx,
+                                                                              list_new_clusters,
+                                                                              start_date, end_date,
+                                                                              cluster)
 
             # assign cluster id to image
-            self.image_df.loc[index, 'cluster_id'] = new_cluster_idx
-
-            # update cluster stop date
-            cluster['end_date'] = self.image_df.loc[index]['date']
+            self.new_media_df.loc[index, 'cluster_id'] = new_cluster_idx
 
             i_file += 1
             ut.print_progress(i_file, n_files, 'clustering: ')
 
-        # save last cluster (TODO: check border cases: one file,
-        # one cluster, no-files,...)
+        # save last cluster (TODO: check border cases: one file, one cluster, no-files,...)
         list_new_clusters.append(cluster)
 
         print("")
-        print("{num_clusters} clusters identified".format(
-            num_clusters=new_cluster_idx))
+        print("{num_clusters} clusters identified".format(num_clusters=new_cluster_idx))
 
         return list_new_clusters
 
@@ -130,10 +168,10 @@ class ImageGroupper(object):
         self.cluster_df = pd.DataFrame(row_list)
 
     def get_num_of_clusters_in_df(self):
-        return self.image_df['cluster_id'].value_counts()
+        return self.new_media_df['cluster_id'].value_counts()
 
     def get_cluster_ids(self):
-        return self.image_df['cluster_id'].unique()
+        return self.new_media_df['cluster_id'].unique()
 
     def assign_representative_date_to_clusters(self, method=AssignDateToClusterMethod.RANDOM):
         """ return date representing cluster
@@ -142,8 +180,8 @@ class ImageGroupper(object):
         if method == AssignDateToClusterMethod.RANDOM:
             clusters = self.get_cluster_ids()
             for cluster in clusters:
-                mask = self.image_df['cluster_id'] == cluster
-                df = self.image_df.loc[mask]
+                mask = self.new_media_df['cluster_id'] == cluster
+                df = self.new_media_df.loc[mask]
 
                 exif_date = df.sample(n=1)['date']
                 exif_date = exif_date.values[0]
@@ -160,7 +198,7 @@ class ImageGroupper(object):
                     'IC_{ic}'.format(ic=image_count),
                     'VC_{vc}'.format(vc=video_count)])
 
-                self.image_df.loc[mask, 'date_string'] = date_string
+                self.new_media_df.loc[mask, 'date_string'] = date_string
         return date_string
 
     def move_files_to_cluster_folder(self):

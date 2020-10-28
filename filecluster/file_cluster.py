@@ -5,11 +5,13 @@ import argparse
 import logging
 
 from filecluster.clustering import override_config_with_cli_params, set_db_paths_in_config, \
-    read_timestamps_form_media_files, run_clustering_no_prior
-from filecluster.configuration import get_development_config, get_default_config, Driver
-from filecluster.dbase import delete_db_if_needed, db_create_clusters, db_create_media, \
-    save_media_and_cluster_info_to_database, read_images_database, read_clusters_database
-from filecluster.image_reader import run_media_scan_on_watch_folders, ImageReader
+    get_media_info_from_imported_files
+from filecluster.configuration import get_development_config, get_default_config, Driver, CopyMode
+from filecluster.dbase import delete_dbs_if_needed, read_or_create_db_clusters, \
+    save_media_and_cluster_info_to_database, read_or_create_media_database
+from filecluster.image_groupper import ImageGroupper
+from filecluster.image_reader import check_on_updates_in_watch_folders, ImageReader, \
+    check_if_media_files_from_db_exists
 
 log_fmt = '%(levelname).1s %(message)s'
 logging.basicConfig(format=log_fmt)
@@ -32,33 +34,46 @@ def main(inbox_dir, output_dir, db_dir, db_driver, development_mode, no_operatio
     config = set_db_paths_in_config(config, db_dir)
 
     logger.debug(config)
-    # create databases with schema
-    delete_db_if_needed(config)
-    db_create_media(config)
-    db_create_clusters(config)
 
-    df_media = read_images_database(config)
-    run_media_scan_on_watch_folders()
+    # delete dbs (option for development)
+    delete_dbs_if_needed(config)
+
+    # read or create media database
+    df_media = read_or_create_media_database(config)
+
+    # read or create cluster database
+    df_clusters = read_or_create_db_clusters(config)
+
+    check_on_updates_in_watch_folders()
+    check_if_media_files_from_db_exists()
 
     # initialize image reader
     image_reader = ImageReader(config, df_media)
 
-    # Read timestamps from imported pictures/recordings
-    image_groupper = read_timestamps_form_media_files(config, image_reader)
+    # read timestamps from imported pictures/recordings
+    new_media_df = get_media_info_from_imported_files(image_reader)
 
-    # Read clusters from database
-    df_clusters = read_clusters_database()  # To be implemented
+    duplicates = image_reader.check_import_for_duplicates_in_existing_clusters(new_media_df)
+
+    # initialize media grouper
+    image_groupper = ImageGroupper(configuration=config,
+                                   image_df=image_reader.image_df,
+                                   df_clusters=df_clusters,
+                                   new_media_df=new_media_df,
+                                   )
 
     # Run clustering
-    if df_clusters is None:
-        image_groupper = run_clustering_no_prior(config, image_groupper)
-    else:
-        image_groupper = run_clustering_with_prior(config, image_groupper)
+    image_groupper.run_clustering()
+
+    # FIXME: KS: 2020-05-25: Merge new media and images_df
+    image_groupper.image_df = image_groupper.new_media_df
 
     # Physically move or copy files to folders
     mode = image_groupper.config.mode
-    if mode != 'nop':
+    if mode != CopyMode.NOP:
         image_groupper.move_files_to_cluster_folder()
+    else:
+        logger.debug("No copy/move operation performed since 'nop' option selected.")
 
     # Save media and cluster info to database
     save_media_and_cluster_info_to_database(image_groupper)

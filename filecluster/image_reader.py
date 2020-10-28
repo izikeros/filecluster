@@ -5,14 +5,43 @@ import pandas as pd
 
 import filecluster.utlis as ut
 
+log_fmt = '%(levelname).1s %(message)s'
+logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+
+def cleanup_data_frame_timestamps(image_df):
+    """Get timestamp from exif (primary) or m_date. Drop not needed date cols."""
+    logger.debug("Cleaning-up timestamps in imported media.")
+    # use exif date as base
+    image_df['date'] = image_df['exif_date']
+    # unless is missing - then use modification date:
+    image_df['date'] = image_df['date'].fillna(image_df['m_date'])
+
+    # infer date format  from strings
+    image_df['date'] = pd.to_datetime(image_df['date'], infer_datetime_format=True)
+
+    image_df.drop(['m_date', 'c_date', 'exif_date'], axis=1, inplace=True)
+    # image_df['m_date'] = pd.to_datetime(image_df['m_date'], infer_datetime_format=True)
+    # image_df['c_date'] = pd.to_datetime(image_df['c_date'], infer_datetime_format=True)
+    # image_df['exif_date'] = pd.to_datetime(image_df['exif_date'], infer_datetime_format=True)
+    return image_df
 
 
 class ImageReader(object):
-    def __init__(self, config):
+    def __init__(self, config, image_df=None):
         # read the config
         self.config = config
-        self.image_df = pd.DataFrame
+
+        # initialize media database with existing media dataframe or cereate empty dataframe
+        if image_df is None:
+            logger.debug("Initializing empty media dataframe in ImageReader")
+            self.image_df = pd.DataFrame
+        else:
+            logger.debug(
+                f"Initializing media dataframe in ImageReader with provided df. Num records: {len(image_df)}")
+            self.image_df = image_df
 
     def get_data_from_files(self):
         """return files data as list of rows (each row represented by dict)
@@ -88,37 +117,27 @@ class ImageReader(object):
         print("")
         return list_of_rows
 
-    def save_image_data_to_data_frame(self, list_of_rows):
-        """Convert list of rows to pandas dataframe."""
-        # save image data: name, path, date, hash to data frame
-        self.image_df = pd.DataFrame(list_of_rows)
+    # def save_image_data_to_data_frame(self, list_of_rows):
+    #     """Convert list of rows to pandas dataframe."""
+    #     # save image data: name, path, date, hash to data frame
 
-    def cleanup_data_frame_timestamps(self):
-        """Decide on which timestamp use as representative for file."""
-
-        # use exif date as base
-        self.image_df['date'] = self.image_df['exif_date']
-        # unless is missing - then use modification date:
-        self.image_df['date'] = self.image_df['date'].fillna(
-            self.image_df['m_date'])
-
-        # infer dataformat  from strings
-        self.image_df['date'] = pd.to_datetime(self.image_df['date'],
-                                               infer_datetime_format=True)
-        self.image_df['m_date'] = pd.to_datetime(self.image_df['m_date'],
-                                                 infer_datetime_format=True)
-        self.image_df['c_date'] = pd.to_datetime(self.image_df['c_date'],
-                                                 infer_datetime_format=True)
-        self.image_df['exif_date'] = pd.to_datetime(self.image_df['exif_date'],
-                                                    infer_datetime_format=True)
-
-    def check_import_for_duplicates_in_existing_clusters(self):
-        print("(TODO): checking newly imported files against database")
-
-        # TODO: 1. check for duplicates: in newly imported files
-        # TODO: 2. check for duplicates: newly imported files against database
-        # TODO: mark duplicates if found any
+    def check_import_for_duplicates_in_existing_clusters(self, new_media_df):
+        if self.image_df.empty:
+            logger.debug('Media db empty. Skipping duplicate analysis.')
+            # TODO: KS: 2020-05-24: Consider checking for duplicates within import
+            return None
+        else:
+            logger.debug("Checking newly imported files against database")
+            # TODO: 1. check for duplicates: in newly imported files
+            # TODO: 2. check for duplicates: newly imported files against database
+            # TODO: mark duplicates if found any
+            logger.warning("Duplicates check not implemented")
+            return None
 
 
-def run_media_scan():
+def check_on_updates_in_watch_folders():
+    logger.info('Running media scan (not implemented yet)')
+
+
+def check_if_media_files_from_db_exists():
     logger.info('Running media scan (not implemented yet)')

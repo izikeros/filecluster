@@ -2,19 +2,24 @@
 # https://opensource.org/licenses/MIT
 
 import base64
-from typing import List
-
-import exifread
 import hashlib
 import logging
 import os
 import sys
 import time
-from PIL import Image
-from datetime import datetime, timedelta
+from datetime import datetime
 from io import BytesIO
+from typing import List
 
+import exifread
+from PIL import Image
+
+from filecluster.configuration import CopyMode
+
+log_fmt = '%(levelname).1s %(message)s'
+logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 # TODO: optimize this parameter for speed
 block_size_for_hashing = 4096 * 32
@@ -68,7 +73,7 @@ def get_exif_date(path_name):
 
 def create_folder_for_cluster(config, date_string, mode):
     """Create destination folder that for all pictures from the cluster."""
-    if mode != 'nop':
+    if mode != CopyMode.NOP:
         pth = config.out_dir_name
         dir_name = os.path.join(pth, date_string)
         try:
