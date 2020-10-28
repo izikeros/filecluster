@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 log_fmt = '%(levelname).1s %(message)s'
 logging.basicConfig(format=log_fmt)
@@ -49,6 +49,7 @@ class CopyMode(Enum):
 class Config:
     in_dir_name: Path
     out_dir_name: Path
+    watch_folders: List[str]
     db_file_clusters: Path
     db_file_media: Path
     db_file: Path
@@ -70,7 +71,7 @@ class Config:
         return '\n'.join(repr)
 
 
-def get_default_config():
+def get_default_config() -> Config:
     # path to files to be clustered
 
     inbox_path, outbox_path = configure_inbox_outbox_paths()
@@ -111,12 +112,13 @@ def get_default_config():
         'db_driver': Driver.SQLITE,  # dataframe | sqlite
         'generate_thumbnails': False,
         'delete_db': True,
+        'watch_folders': ''
     }
     config = Config(**conf_dict)
     return config
 
 
-def configure_db_path():
+def configure_db_path() -> str:
     # Configure database path
     if os.name == 'nt':
         db_pth = 'h:\\zdjecia\\'
@@ -125,7 +127,7 @@ def configure_db_path():
     return db_pth
 
 
-def configure_inbox_outbox_paths():
+def configure_inbox_outbox_paths() -> Tuple[str, str]:
     # Configure inbox and outbox paths
     if os.name == 'nt':
         pth = 'h:\\incomming\\'
@@ -138,7 +140,16 @@ def configure_inbox_outbox_paths():
     return inbox_path, outbox_path
 
 
-def get_development_config():
+def configure_watch_folder_paths() -> List:
+    # Configure inbox and outbox paths
+    if os.name == 'nt':
+        pth = ['h:\\zdjecia\\']
+    else:
+        pth = ['/media/root/Foto/zdjecia/']
+    return pth
+
+
+def get_development_config() -> Config:
     """Configuration for development phase."""
     logger.warning("Warning: Using development configuration")
 
