@@ -11,7 +11,6 @@ logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
 # === Configuration
 # generate thumbnail to be stored in pandas dataframe during the processing.
 # Might be used in notebook.
@@ -23,6 +22,36 @@ logger.setLevel(logging.DEBUG)
 # DELETE_DB = True
 
 # for more configuration options see: utils.get_development_config() and get_default_config()
+
+# Databases paths and filenames
+DB_FILE_SQLITE3 = 'filecluster_db.sqlite3'
+DB_FILE_CLUSTERS_PICKLE = 'clusters.p'
+DB_FILE_MEDIA_PICKLE = 'media.p'
+
+DB_PATH_WINDOWS = 'h:\\zdjecia\\'
+DB_PATH_LINUX = '/tmp/'
+CLUSTER_COLUMN_IN_CLUSTER_DB = 'cluster_id'
+DELETE_DB = True
+
+# Filename extensions in scope of clustering
+IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.dng', '.cr2']
+VIDEO_EXTENSIONS = ['.mp4', '.3gp', 'mov']
+
+# Locations for media: Inbox/Outbox/Library
+INBOX_PATH_WINDOWS = 'h:\\incomming\\'
+INBOX_PATH_WINDOWS_DEV = 'h:\\incomming'
+
+INBOX_PATH_LINUX = '/media/root/Foto/incomming/'
+INBOX_PATH_LINUX_DEV = '/home/safjan/Pictures'
+
+INBOX_DIR = 'inbox'
+INBOX_DIR_DEV = 'inbox_test_a'
+OUTBOX_DIR = 'inbox_clust'
+OUTBOX_DIR_DEV = 'inbox_clust_test'
+
+LIBRARY_WINDOWS = ['h:\\zdjecia\\']
+LIBRARY_LINUX = ['/media/root/Foto/zdjecia/']
+WATCH_FOLDERS_LIST = ''
 
 
 class Driver(Enum):
@@ -47,6 +76,14 @@ class CopyMode(Enum):
 
 @dataclass
 class Config:
+    """Dataclass for keeping configuration parameters.
+
+
+    - `in_dir_name` - Name of the input directory. Inbox where new media to be
+    discovered
+
+    - 'out_dir_name' - Name of output directory where cluster directories are located/
+    """
     in_dir_name: Path
     out_dir_name: Path
     watch_folders: List[str]
@@ -65,35 +102,36 @@ class Config:
     delete_db: bool
 
     def __repr__(self):
-        repr = []
+        rep = []
         for p in self.__dataclass_fields__.keys():
-            repr.append(f'{p}:\t{self.__getattribute__(p)}')
-        return '\n'.join(repr)
+            rep.append(f'{p}:\t{self.__getattribute__(p)}')
+        return '\n'.join(rep)
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __setitem__(self, key, value):
+        return setattr(self, key, value)
 
 
 def get_default_config() -> Config:
-    # path to files to be clustered
+    """Provide default configuration that can be further modified."""
 
+    # path to files to be clustered
     inbox_path, outbox_path = configure_inbox_outbox_paths()
     db_pth = configure_db_path()
-
-    db_file = os.path.join(db_pth, 'filecluster_db.sqlite3')
-    db_file_clusters = os.path.join(db_pth, 'clusters.p')
-    db_file_media = os.path.join(db_pth, 'media.p')
-
-    # Filename extensions in scope of clustering
-    image_extensions = ['.jpg', '.jpeg', '.dng', '.cr2']
-    video_extensions = ['.mp4', '.3gp', 'mov']
+    db_file = os.path.join(db_pth, DB_FILE_SQLITE3)
+    db_file_clusters = os.path.join(db_pth, DB_FILE_CLUSTERS_PICKLE)
+    db_file_media = os.path.join(db_pth, DB_FILE_MEDIA_PICKLE)
 
     # ensure extensions are lowercase
-    image_extensions = [ext.lower() for ext in image_extensions]
-    video_extensions = [ext.lower() for ext in video_extensions]
+    image_extensions = [ext.lower() for ext in IMAGE_EXTENSIONS]
+    video_extensions = [ext.lower() for ext in VIDEO_EXTENSIONS]
 
     # Minimum gap that separate two events
     max_gap = timedelta(minutes=60)
 
     assign_date_to_clusters_method = AssignDateToClusterMethod.RANDOM
-
     conf_dict = {
         'in_dir_name': inbox_path,
         'out_dir_name': outbox_path,
@@ -103,54 +141,61 @@ def get_default_config() -> Config:
         'image_extensions': image_extensions,
         'video_extensions': video_extensions,
         'time_granularity': max_gap,
-        'cluster_col': 'cluster_id',
+        'cluster_col': CLUSTER_COLUMN_IN_CLUSTER_DB,
         'assign_date_to_clusters_method': assign_date_to_clusters_method,
         # method that is used to group images, default: assume different events
         # are separated by significant time gape (max_gap config parameter)
         'clustering_method': ClusteringMethod.TIME_GAP,
         'mode': CopyMode.MOVE,
-        'db_driver': Driver.SQLITE,  # dataframe | sqlite
+        'db_driver':
+        Driver.SQLITE,  # driver for db_file, can be: dataframe | sqlite
         'generate_thumbnails': False,
-        'delete_db': True,
-        'watch_folders': ''
+        'delete_db': DELETE_DB,
+        'watch_folders': WATCH_FOLDERS_LIST
     }
     config = Config(**conf_dict)
     return config
 
 
 def configure_db_path() -> str:
-    # Configure database path
+    """Configure database path depending on detected operating system."""
     if os.name == 'nt':
-        db_pth = 'h:\\zdjecia\\'
+        db_pth = DB_PATH_WINDOWS
     else:
-        db_pth = '/tmp/'
+        db_pth = DB_PATH_LINUX
     return db_pth
 
 
 def configure_inbox_outbox_paths() -> Tuple[str, str]:
-    # Configure inbox and outbox paths
+    """Configure inbox and outbox paths depending on detected operating system."""
     if os.name == 'nt':
-        pth = 'h:\\incomming\\'
+        pth = INBOX_PATH_WINDOWS
     else:
-        pth = '/media/root/Foto/incomming/'
-    inbox_dir = 'inbox'
-    outbox_dir = 'inbox_clust'
-    inbox_path = os.path.join(pth, inbox_dir)
-    outbox_path = os.path.join(pth, outbox_dir)
+        pth = INBOX_PATH_LINUX
+    inbox_path = os.path.join(pth, INBOX_DIR)
+    outbox_path = os.path.join(pth, OUTBOX_DIR)
     return inbox_path, outbox_path
 
 
 def configure_watch_folder_paths() -> List:
-    # Configure inbox and outbox paths
+    """Configure watch folder path depending on os.
+
+    Watch folder is a location of official folder with media.
+     This is your media library."""
     if os.name == 'nt':
-        pth = ['h:\\zdjecia\\']
+        pth = LIBRARY_WINDOWS
     else:
-        pth = ['/media/root/Foto/zdjecia/']
+        pth = LIBRARY_LINUX
     return pth
 
 
 def get_development_config() -> Config:
-    """Configuration for development phase."""
+    """Configuration for development phase.
+    Key features of development mode:
+
+    - use copy operation instead of move (source files remain in their original locations)
+
+    """
     logger.warning("Warning: Using development configuration")
 
     # get defaults
@@ -161,17 +206,53 @@ def get_development_config() -> Config:
 
     # overwrite defaults with development specific params
     if os.name == 'nt':
-        pth = 'h:\\incomming'
+        pth = INBOX_PATH_WINDOWS_DEV
     else:
-        pth = '/home/safjan/Pictures'
+        pth = INBOX_PATH_LINUX_DEV
 
-    inbox_dir = 'inbox_test_a'
-    outbox_dir = 'inbox_clust_test'
+    config.in_dir_name = os.path.join(pth, INBOX_DIR_DEV)
+    config.out_dir_name = os.path.join(pth, OUTBOX_DIR_DEV)
 
-    config.in_dir_name = os.path.join(pth, inbox_dir)
-    config.out_dir_name = os.path.join(pth, outbox_dir)
+    config.db_file = os.path.join(pth, DB_FILE_SQLITE3)
+    config.db_file_media = os.path.join(pth, DB_FILE_MEDIA_PICKLE)
+    config.db_file_clusters = os.path.join(pth, DB_FILE_CLUSTERS_PICKLE)
+    return config
 
-    config.db_file = os.path.join(pth, 'filecluster_db.sqlite3')
-    config.db_file_media = os.path.join(pth, 'media.p')
-    config.db_file_clusters = os.path.join(pth, 'clusters.p')
+
+def override_config_with_cli_params(config: Config, inbox_dir: str,
+                                    no_operation: bool, output_dir: str,
+                                    db_driver: Driver,
+                                    watch_dir_list: List[str]) -> Config:
+    """Use CLI arguments to override default configuration.
+    :param watch_dir_list:
+    :param db_driver:
+    :param config:
+    :param inbox_dir:
+    :param no_operation:
+    :param output_dir:
+    :return:
+    """
+    # TODO: KS: 2020-05-25: Consider using kwargs instead of long list of input arguments
+    if inbox_dir:
+        config.in_dir_name = inbox_dir
+    if output_dir:
+        config.out_dir_name = output_dir
+    if no_operation:
+        config.mode = CopyMode.NOP
+    if db_driver:
+        config.db_driver = db_driver
+    if watch_dir_list:
+        config.watch_folders = watch_dir_list
+    return config
+
+
+def set_db_paths_in_config(config, db_dir):
+    """Set database paths in the config provided as input."""
+    config.db_file = Path(db_dir) / DB_FILE_SQLITE3
+    config.db_file_clusters = Path(
+        db_dir
+    ) / DB_FILE_CLUSTERS_PICKLE  # TODO: KS: 2020-05-23: do not use picke (use csv for accessibility?)
+    config.db_file_media = Path(
+        db_dir
+    ) / DB_FILE_MEDIA_PICKLE  # TODO: KS: 2020-05-23: do not use picke (use csv for accessibility?)
     return config
