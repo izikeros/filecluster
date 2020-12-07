@@ -1,7 +1,7 @@
 import pytest
 
-from filecluster.clustering import override_config_with_cli_params
-from filecluster.configuration import get_default_config, CopyMode, Driver
+from filecluster.configuration import get_default_config, CopyMode, Driver, \
+    override_config_with_cli_params
 from filecluster.file_cluster import main
 
 
@@ -13,7 +13,7 @@ def test_main_sqlite():
          db_driver=Driver['sqlite'.upper()],
          development_mode=True,
          no_operation=False,
-         watch_dirs=[''])
+         watch_dir_list=[''])
 
 
 def test_main_dataframe():
@@ -23,7 +23,7 @@ def test_main_dataframe():
          db_driver=Driver['dataframe'.upper()],
          development_mode=True,
          no_operation=False,
-         watch_dirs=[''])
+         watch_dir_list=[''])
 
 
 def test_override_config_with_cli_params():
@@ -34,7 +34,7 @@ def test_override_config_with_cli_params():
         no_operation=True,
         output_dir='bbb',
         db_driver=Driver['sqlite'.upper()],
-        watch_dirs=['/home/user/Pictures']
+        watch_dir_list=['/home/user/Pictures']
     )
     assert nc.in_dir_name == 'aaa'
     assert nc.mode == CopyMode.NOP

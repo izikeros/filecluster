@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def update_cluster_info(delta_from_previous, max_time_delta, index, new_cluster_idx,
-                        list_new_clusters, start_date, end_date, cluster):
+def update_cluster_info(delta_from_previous, max_time_delta, index,
+                        new_cluster_idx, list_new_clusters, start_date,
+                        end_date, cluster):
     # check if new cluster encountered
     if delta_from_previous > max_time_delta or index == 0:
         new_cluster_idx += 1
@@ -26,9 +27,11 @@ def update_cluster_info(delta_from_previous, max_time_delta, index, new_cluster_
             list_new_clusters.append(cluster)
 
         # create record for new cluster
-        cluster = {'id': new_cluster_idx,
-                   'start_date': start_date,
-                   'end_date': None}
+        cluster = {
+            'id': new_cluster_idx,
+            'start_date': start_date,
+            'end_date': None
+        }
     else:
         cluster['start_date'] = start_date,
 
@@ -38,7 +41,11 @@ def update_cluster_info(delta_from_previous, max_time_delta, index, new_cluster_
 
 
 class ImageGroupper(object):
-    def __init__(self, configuration, image_df=None, df_clusters=None, new_media_df=None):
+    def __init__(self,
+                 configuration,
+                 image_df=None,
+                 df_clusters=None,
+                 new_media_df=None):
         # read the config
         self.config = configuration
 
@@ -77,7 +84,9 @@ class ImageGroupper(object):
         selected 'delta' column
         """
         # sort by creation date
-        self.new_media_df.sort_values(by=date_col, ascending=True, inplace=True)
+        self.new_media_df.sort_values(by=date_col,
+                                      ascending=True,
+                                      inplace=True)
         # calculate breaks between the shoots
         self.new_media_df[delta_col] = self.new_media_df[date_col].diff()
 
@@ -105,7 +114,8 @@ class ImageGroupper(object):
             not_too_old = self.image_df['date'] > date_start - margin
             not_too_new = self.image_df['date'] < date_end + margin
 
-            for index, _row in self.image_df[not_clustered & not_too_old & not_too_new].iterrows():
+            for index, _row in self.image_df[not_clustered & not_too_old
+                                             & not_too_new].iterrows():
                 # TODO: add query to the cluster
                 fit = None
                 # is in cluster range with margins:
@@ -119,13 +129,12 @@ class ImageGroupper(object):
 
     def add_cluster_id_to_files_in_data_frame(self):
         try:
-            new_cluster_idx = get_new_cluster_id(db_connect(self.config.db_file))
+            new_cluster_idx = get_new_cluster_id(
+                db_connect(self.config.db_file))
         except:
             new_cluster_idx = 0
 
-        cluster = {'id': new_cluster_idx,
-                   'start_date': None,
-                   'end_date': None}
+        cluster = {'id': new_cluster_idx, 'start_date': None, 'end_date': None}
 
         list_new_clusters = []
 
@@ -142,12 +151,9 @@ class ImageGroupper(object):
             delta_from_previous = self.new_media_df.loc[index]['date_delta']
             start_date = end_date = self.new_media_df.loc[index]['date']
 
-            cluster, new_cluster_idx, list_new_clusters = update_cluster_info(delta_from_previous,
-                                                                              max_time_delta, index,
-                                                                              new_cluster_idx,
-                                                                              list_new_clusters,
-                                                                              start_date, end_date,
-                                                                              cluster)
+            cluster, new_cluster_idx, list_new_clusters = update_cluster_info(
+                delta_from_previous, max_time_delta, index, new_cluster_idx,
+                list_new_clusters, start_date, end_date, cluster)
 
             # assign cluster id to image
             self.new_media_df.loc[index, 'cluster_id'] = new_cluster_idx
@@ -159,7 +165,8 @@ class ImageGroupper(object):
         list_new_clusters.append(cluster)
 
         print("")
-        print("{num_clusters} clusters identified".format(num_clusters=new_cluster_idx))
+        print("{num_clusters} clusters identified".format(
+            num_clusters=new_cluster_idx))
 
         return list_new_clusters
 
@@ -173,7 +180,8 @@ class ImageGroupper(object):
     def get_cluster_ids(self):
         return self.new_media_df['cluster_id'].unique()
 
-    def assign_representative_date_to_clusters(self, method=AssignDateToClusterMethod.RANDOM):
+    def assign_representative_date_to_clusters(
+            self, method=AssignDateToClusterMethod.RANDOM):
         """ return date representing cluster
         """
         date_string = ''
@@ -193,10 +201,9 @@ class ImageGroupper(object):
                 video_count = df.loc[df['is_image'] == False].shape[0]
 
                 date_string = "_".join([
-                    date_str,
-                    time_str,
-                    'IC_{ic}'.format(ic=image_count),
-                    'VC_{vc}'.format(vc=video_count)])
+                    date_str, time_str, 'IC_{ic}'.format(ic=image_count),
+                    'VC_{vc}'.format(vc=video_count)
+                ])
 
                 self.new_media_df.loc[mask, 'date_string'] = date_string
         return date_string

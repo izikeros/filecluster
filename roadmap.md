@@ -1,8 +1,8 @@
 ## APPEND functionality
 
-Add new photos to the repository that already cover time when photos were taken. Usually case for late adding photos from iphone
- when photos from the other 'family media devices' were already downloaded 
- and groupped by event
+Add new photos to the repository that already cover time when photos were taken.
+Usually case for late adding photos from iphone when photos from the other 
+'family media devices' were already downloaded and groupped by event.
  
 * ISSUES:
     - Option 1 (prefered): 
@@ -49,5 +49,3 @@ from phone
     * detect Natalia's selfies
     * detect photo series (similar shots) (low resolution comparison?)
     * learn which is best photo (representative photo)
-    
-        

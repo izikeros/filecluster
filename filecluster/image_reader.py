@@ -3,6 +3,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from pprint import pprint
+from typing import List
 
 import pandas as pd
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def cleanup_data_frame_timestamps(image_df):
+def remove_not_used_timestamp_columns(image_df):
     """Get timestamp from exif (primary) or m_date. Drop not needed date cols."""
     logger.debug("Cleaning-up timestamps in imported media.")
     # use exif date as base
@@ -23,7 +24,8 @@ def cleanup_data_frame_timestamps(image_df):
     image_df['date'] = image_df['date'].fillna(image_df['m_date'])
 
     # infer date format  from strings
-    image_df['date'] = pd.to_datetime(image_df['date'], infer_datetime_format=True)
+    image_df['date'] = pd.to_datetime(image_df['date'],
+                                      infer_datetime_format=True)
 
     image_df.drop(['m_date', 'c_date', 'exif_date'], axis=1, inplace=True)
     # image_df['m_date'] = pd.to_datetime(image_df['m_date'], infer_datetime_format=True)
@@ -43,59 +45,57 @@ class ImageReader(object):
             self.image_df = pd.DataFrame
         else:
             logger.debug(
-                f"Initializing media dataframe in ImageReader with provided df. Num records: {len(image_df)}")
+                f"Initializing media dataframe in ImageReader with provided df. Num records: {len(image_df)}"
+            )
             self.image_df = image_df
 
-    def get_data_from_files(self):
-        """return files data as list of rows (each row represented by dict)
+    def get_data_from_files(self) -> List[dict]:
+        """Recursively read exif data from files gived in path provided in config
 
-        :param pth: path to inbox directory with files (pictures, video)
-        :type pth: basestring
-        :param ext: list of filename extensions taken into account
-        :type ext: list
-        :return: dataframe with all information
-        :rtype: pandas dataframe
+        :return: list of rows with all information
+        :rtype: List of rows
         """
-
-        def _add_new_row():
+        def _initialize_row_dict():
             """generate single row based on values defined in outer method"""
             thumbnail = None
             if self.config.generate_thumbnails:
                 thumbnail = ut.get_thumbnail(path_name)
 
             # define structure of images dataframe and fill with data
-            row = {'file_name': fn,
-                   'm_date': m_time,
-                   'c_date': c_time,
-                   'exif_date': exif_date,
-                   'date': date,
-                   'size': file_size,
-                   'hash_value': hash_value,
-                   'full_path': path_name,
-                   'image': thumbnail,
-                   'is_image': is_img,
-                   'cluster_id': cluster_id,
-                   'duplicate_to_ids': duplicate_to_ids
-                   }
+            row = {
+                'file_name': fn,
+                'm_date': m_time,
+                'c_date': c_time,
+                'exif_date': exif_date,
+                'date': date,
+                'size': file_size,
+                'hash_value': hash_value,
+                'full_path': path_name,
+                'image': thumbnail,
+                'is_image': is_img,
+                'cluster_id': cluster_id,
+                'duplicate_to_ids': duplicate_to_ids
+            }
             return row
 
         list_of_rows = []
-        pth = self.config.in_dir_name
+        in_dir_name = self.config.in_dir_name
         ext = self.config.image_extensions + self.config.video_extensions
 
-        print(f"Reading data from: {pth}")
-        list_dir = os.listdir(pth)
+        print(f"Reading data from: {in_dir_name}")
+        list_dir = os.listdir(in_dir_name)
         n_files = len(list_dir)
-        for i_file, fn in enumerate(os.listdir(pth)):
+        image_extensions = self.config.image_extensions
+        for i_file, fn in enumerate(os.listdir(in_dir_name)):
             if ut.is_supported_filetype(fn, ext):
                 # full path + file name
-                path_name = os.path.join(pth, fn)
+                path_name = os.path.join(in_dir_name, fn)
 
                 # get modification, creation and exif dates
                 m_time, c_time, exif_date = ut.get_date_from_file(path_name)
 
                 # determine if media file is image or other type
-                is_img = ut.is_image(path_name, self.config.image_extensions)
+                is_img = ut.is_image(path_name, image_extensions)
 
                 # file size
                 file_size = os.path.getsize(path_name)
@@ -113,7 +113,7 @@ class ImageReader(object):
                 duplicate_to_ids = []
 
                 # generate new row using data obtained above
-                new_row = _add_new_row()
+                new_row = _initialize_row_dict()
 
                 list_of_rows.append(new_row)
             ut.print_progress(i_file, n_files - 1, 'reading files: ')
@@ -123,8 +123,11 @@ class ImageReader(object):
     # def save_image_data_to_data_frame(self, list_of_rows):
     #     """Convert list of rows to pandas dataframe."""
     #     # save image data: name, path, date, hash to data frame
+
     def check_import_for_duplicates_in_watch_folders(self, new_media_df):
-        logger.debug("Checking import for duplicates in watch folders (not implemented)")
+        logger.debug(
+            "Checking import for duplicates in watch folders (not implemented)"
+        )
 
         lst = []
         file_list_watch = None
@@ -150,7 +153,8 @@ class ImageReader(object):
                 keys_to_remove.append(new_media_df.file_name.values[0])
         print("Found duplicates based on filename and size:")
         pprint(confirmed_dups)
-        new_media_df = new_media_df[~new_media_df.file_name.isin(keys_to_remove)]
+        new_media_df = new_media_df[~new_media_df.file_name.isin(keys_to_remove
+                                                                 )]
         return new_media_df
 
     def check_import_for_duplicates_in_existing_clusters(self, new_media_df):
@@ -176,9 +180,20 @@ def check_on_updates_in_watch_folders(config):
     """Running media scan in structured media repository."""
     # TODO: KS: 2020-10-28: implement
     # TODO: KS: 2020-10-28: need another database or media will be sufficient?
-    logger.info(f'Running media scan in {config.watch_folders} (not implemented yet)')
+    logger.info(
+        f'Running media scan in {config.watch_folders} (not implemented yet)')
 
 
 def check_if_media_files_from_db_exists():
     # TODO: KS: 2020-10-28: implement
     logger.info('Running media scan (not implemented yet)')
+
+
+def get_media_info_from_imported_files(image_reader):
+    """Read data from files, return media info in dataframe."""
+    row_list = image_reader.get_data_from_files()
+    logger.debug(f"Read info from {len(row_list)} files.")
+    # convert list of rows to data frame
+    new_media_df = pd.DataFrame(row_list)
+    new_media_df = remove_not_used_timestamp_columns(new_media_df)
+    return new_media_df
