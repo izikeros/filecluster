@@ -11,18 +11,6 @@ logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# === Configuration
-# generate thumbnail to be stored in pandas dataframe during the processing.
-# Might be used in notebook.
-# GENERATE_THUMBNAIL = False
-
-# in dev mode path are set to development datasets
-
-# delete database during the start - provide clean start for development mode
-# DELETE_DB = True
-
-# for more configuration options see: utils.get_development_config() and get_default_config()
-
 # Databases paths and filenames
 DB_FILE_SQLITE3 = 'filecluster_db.sqlite3'
 DB_FILE_CLUSTERS_PICKLE = 'clusters.p'
@@ -31,7 +19,7 @@ DB_FILE_MEDIA_PICKLE = 'media.p'
 DB_PATH_WINDOWS = 'h:\\zdjecia\\'
 DB_PATH_LINUX = '/tmp/'
 CLUSTER_COLUMN_IN_CLUSTER_DB = 'cluster_id'
-DELETE_DB = True
+DELETE_DB = True  # delete database during the start - provide clean start for development mode
 
 # Filename extensions in scope of clustering
 IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.dng', '.cr2']
@@ -46,12 +34,15 @@ INBOX_PATH_LINUX_DEV = '/home/safjan/Pictures'
 
 INBOX_DIR = 'inbox'
 INBOX_DIR_DEV = 'inbox_test_a'
+
 OUTBOX_DIR = 'inbox_clust'
 OUTBOX_DIR_DEV = 'inbox_clust_test'
 
 LIBRARY_WINDOWS = ['h:\\zdjecia\\']
 LIBRARY_LINUX = ['/media/root/Foto/zdjecia/']
 WATCH_FOLDERS_LIST = ''
+
+GENERATE_THUMBNAILS = False  # generate thumbnail to be stored in pandas dataframe during the processing. Might be used in notebook.
 
 
 class Driver(Enum):
@@ -114,6 +105,62 @@ class Config:
         return setattr(self, key, value)
 
 
+def configure_db_path() -> str:
+    """Configure database path depending on detected operating system."""
+    if os.name == 'nt':
+        db_pth = DB_PATH_WINDOWS
+    else:
+        db_pth = DB_PATH_LINUX
+    return db_pth
+
+
+def configure_inbox_outbox_paths() -> Tuple[str, str]:
+    """Configure inbox and outbox paths depending on detected operating system."""
+    if os.name == 'nt':
+        pth = INBOX_PATH_WINDOWS
+    else:
+        pth = INBOX_PATH_LINUX
+    inbox_path = os.path.join(pth, INBOX_DIR)
+    outbox_path = os.path.join(pth, OUTBOX_DIR)
+    return inbox_path, outbox_path
+
+
+def configure_watch_folder_paths() -> List:
+    """Configure watch folder path depending on os.
+
+    Watch folder is a location of official folder with media.
+     This is your media library."""
+    if os.name == 'nt':
+        pth = LIBRARY_WINDOWS
+    else:
+        pth = LIBRARY_LINUX
+    return pth
+
+
+def setup_directory_for_database(config: Config, db_dir: Path):
+    """Setup common directory for storing databases."""
+    if not db_dir:
+        # if db dir not provided - pus db files in output directory
+        db_dir = config.out_dir_name
+
+    config.db_file = Path(db_dir) / DB_FILE_SQLITE3
+    # TODO: KS: 2020-05-23: do not use picke (use csv for accessibility? )
+    #   pickle do not have problems with escaping
+    config.db_file_clusters = Path(db_dir) / DB_FILE_CLUSTERS_PICKLE
+    config.db_file_media = Path(db_dir) / DB_FILE_MEDIA_PICKLE
+    return config
+
+
+def get_proper_mode_config(is_development_mode: bool) -> Config:
+    """Get config for development or production mode."""
+    # get proper config
+    if is_development_mode:
+        config = get_development_config()
+    else:
+        config = get_default_config()
+    return config
+
+
 def get_default_config() -> Config:
     """Provide default configuration that can be further modified."""
 
@@ -148,8 +195,8 @@ def get_default_config() -> Config:
         'clustering_method': ClusteringMethod.TIME_GAP,
         'mode': CopyMode.MOVE,
         'db_driver':
-        Driver.SQLITE,  # driver for db_file, can be: dataframe | sqlite
-        'generate_thumbnails': False,
+            Driver.SQLITE,  # driver for db_file, can be: dataframe | sqlite
+        'generate_thumbnails': GENERATE_THUMBNAILS,
         'delete_db': DELETE_DB,
         'watch_folders': WATCH_FOLDERS_LIST
     }
@@ -157,44 +204,12 @@ def get_default_config() -> Config:
     return config
 
 
-def configure_db_path() -> str:
-    """Configure database path depending on detected operating system."""
-    if os.name == 'nt':
-        db_pth = DB_PATH_WINDOWS
-    else:
-        db_pth = DB_PATH_LINUX
-    return db_pth
-
-
-def configure_inbox_outbox_paths() -> Tuple[str, str]:
-    """Configure inbox and outbox paths depending on detected operating system."""
-    if os.name == 'nt':
-        pth = INBOX_PATH_WINDOWS
-    else:
-        pth = INBOX_PATH_LINUX
-    inbox_path = os.path.join(pth, INBOX_DIR)
-    outbox_path = os.path.join(pth, OUTBOX_DIR)
-    return inbox_path, outbox_path
-
-
-def configure_watch_folder_paths() -> List:
-    """Configure watch folder path depending on os.
-
-    Watch folder is a location of official folder with media.
-     This is your media library."""
-    if os.name == 'nt':
-        pth = LIBRARY_WINDOWS
-    else:
-        pth = LIBRARY_LINUX
-    return pth
-
-
 def get_development_config() -> Config:
     """Configuration for development phase.
     Key features of development mode:
 
     - use copy operation instead of move (source files remain in their original locations)
-
+    - use different paths than in the production (for DBs and in/out media folders)
     """
     logger.warning("Warning: Using development configuration")
 
@@ -232,7 +247,6 @@ def override_config_with_cli_params(config: Config, inbox_dir: str,
     :param output_dir:
     :return:
     """
-    # TODO: KS: 2020-05-25: Consider using kwargs instead of long list of input arguments
     if inbox_dir:
         config.in_dir_name = inbox_dir
     if output_dir:
@@ -243,16 +257,4 @@ def override_config_with_cli_params(config: Config, inbox_dir: str,
         config.db_driver = db_driver
     if watch_dir_list:
         config.watch_folders = watch_dir_list
-    return config
-
-
-def set_db_paths_in_config(config, db_dir):
-    """Set database paths in the config provided as input."""
-    config.db_file = Path(db_dir) / DB_FILE_SQLITE3
-    config.db_file_clusters = Path(
-        db_dir
-    ) / DB_FILE_CLUSTERS_PICKLE  # TODO: KS: 2020-05-23: do not use picke (use csv for accessibility?)
-    config.db_file_media = Path(
-        db_dir
-    ) / DB_FILE_MEDIA_PICKLE  # TODO: KS: 2020-05-23: do not use picke (use csv for accessibility?)
     return config

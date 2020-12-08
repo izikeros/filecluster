@@ -4,8 +4,8 @@ import argparse
 import logging
 from typing import List, Optional
 
-from filecluster.configuration import get_development_config, get_default_config, Driver, CopyMode, \
-    override_config_with_cli_params, set_db_paths_in_config
+from filecluster.configuration import Driver, CopyMode, \
+    setup_directory_for_database, override_config_with_cli_params, get_proper_mode_config
 from filecluster.dbase import delete_dbs_if_needed, read_or_create_db_clusters, \
     save_media_and_cluster_info_to_database, read_or_create_media_database
 from filecluster.image_groupper import ImageGroupper
@@ -25,8 +25,17 @@ def main(inbox_dir: str,
          db_driver: Driver,
          development_mode: bool,
          no_operation: bool = False):
-    config = get_config(db_driver, development_mode, inbox_dir, no_operation,
-                        output_dir, watch_dir_list)
+    # get proper config
+    config = get_proper_mode_config(development_mode)
+
+    # override config with CLI params
+    config = override_config_with_cli_params(config=config,
+                                             inbox_dir=inbox_dir,
+                                             no_operation=no_operation,
+                                             output_dir=output_dir,
+                                             db_driver=db_driver,
+                                             watch_dir_list=watch_dir_list)
+
     config = setup_directory_for_database(config, db_dir)
     logger.debug(config)
 
@@ -83,31 +92,6 @@ def main(inbox_dir: str,
 
     # Save media and cluster info to database
     save_media_and_cluster_info_to_database(image_groupper)
-
-
-def setup_directory_for_database(config, db_dir):
-    # setup directory for storing databases
-    if not db_dir:
-        db_dir = config.out_dir_name
-    config = set_db_paths_in_config(config, db_dir)
-    return config
-
-
-def get_config(db_driver: Driver, development_mode, inbox_dir: str,
-               no_operation: bool, output_dir: str, watch_dir_list: List[str]):
-    """Get proper config, override with CLI params."""
-    # get proper config
-    if development_mode:
-        config = get_development_config()
-    else:
-        config = get_default_config()
-    config = override_config_with_cli_params(config=config,
-                                             inbox_dir=inbox_dir,
-                                             no_operation=no_operation,
-                                             output_dir=output_dir,
-                                             db_driver=db_driver,
-                                             watch_dir_list=watch_dir_list)
-    return config
 
 
 if __name__ == '__main__':
