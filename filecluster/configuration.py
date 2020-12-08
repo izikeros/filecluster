@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 log_fmt = '%(levelname).1s %(message)s'
 logging.basicConfig(format=log_fmt)
@@ -39,8 +39,9 @@ OUTBOX_DIR = 'inbox_clust'
 OUTBOX_DIR_DEV = 'inbox_clust_test'
 
 LIBRARY_WINDOWS = ['h:\\zdjecia\\']
+LIBRARY_WINDOWS_DEV = ['']
 LIBRARY_LINUX = ['/media/root/Foto/zdjecia/']
-WATCH_FOLDERS_LIST = ['']
+LIBRARY_LINUX_DEV = ['zdjecia']
 
 GENERATE_THUMBNAILS = False  # generate thumbnail to be stored in pandas dataframe during the processing. Might be used in notebook.
 
@@ -114,15 +115,22 @@ def configure_db_path() -> str:
     return db_pth
 
 
-def configure_inbox_outbox_paths() -> Tuple[str, str]:
-    """Configure inbox and outbox paths depending on detected operating system."""
+def configure_paths_for_this_os() -> Tuple[str, str, List[str]]:
+    """Configure production paths depending on detected operating system.
+
+    Paths to configure:
+    - inbox,
+    - outbox
+    - library."""
     if os.name == 'nt':
         pth = INBOX_PATH_WINDOWS
+        library_paths = LIBRARY_WINDOWS
     else:
         pth = INBOX_PATH_LINUX
+        library_paths = LIBRARY_LINUX
     inbox_path = os.path.join(pth, INBOX_DIR)
     outbox_path = os.path.join(pth, OUTBOX_DIR)
-    return inbox_path, outbox_path
+    return inbox_path, outbox_path, library_paths
 
 
 def configure_watch_folder_paths() -> List:
@@ -137,17 +145,16 @@ def configure_watch_folder_paths() -> List:
     return pth
 
 
-def setup_directory_for_database(config: Config, db_dir: str):
+def setup_directory_for_database(config: Config, db_dir: Optional[str]):
     """Setup common directory for storing databases."""
     if not db_dir:
         # if db dir not provided - pus db files in output directory
         db_dir = config.out_dir_name
 
-    # config.db_file = Path(db_dir) / DB_FILE_SQLITE3
     # TODO: KS: 2020-05-23: do not use picke (use csv for accessibility? )
     #   pickle do not have problems with escaping
-    config.db_file_clusters = Path(db_dir) / DB_FILE_CLUSTERS_PICKLE
-    config.db_file_media = Path(db_dir) / DB_FILE_MEDIA_PICKLE
+    config.db_file_clusters = str(Path(db_dir) / DB_FILE_CLUSTERS_PICKLE)
+    config.db_file_media = str(Path(db_dir) / DB_FILE_MEDIA_PICKLE)
     return config
 
 
@@ -165,7 +172,7 @@ def get_default_config() -> Config:
     """Provide default configuration that can be further modified."""
 
     # path to files to be clustered
-    inbox_path, outbox_path = configure_inbox_outbox_paths()
+    inbox_path, outbox_path, library_paths = configure_paths_for_this_os()
     db_pth = configure_db_path()
     # db_file = os.path.join(db_pth, DB_FILE_SQLITE3)
     db_file_clusters = os.path.join(db_pth, DB_FILE_CLUSTERS_PICKLE)
@@ -198,7 +205,7 @@ def get_default_config() -> Config:
             Driver.DATAFRAME,  # driver for db_file, can be: dataframe | sqlite
         'generate_thumbnails': GENERATE_THUMBNAILS,
         'delete_db': DELETE_DB,
-        'watch_folders': WATCH_FOLDERS_LIST
+        'watch_folders': library_paths
     }
     config = Config(**conf_dict)
     return config

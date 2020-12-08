@@ -54,7 +54,7 @@ class ImageReader(object):
             self.image_df = image_df
 
     def get_data_from_files_as_list_of_rows(self) -> List[dict]:
-        """Recursively read exif data from files gived in path provided in config
+        """Recursively read exif data from files given in path provided in config
 
         :return: list of rows with all information
         :rtype: List of rows
@@ -129,45 +129,7 @@ class ImageReader(object):
     #     """Convert list of rows to pandas dataframe."""
     #     # save image data: name, path, date, hash to data frame
 
-    def check_import_for_duplicates_in_watch_folders(self, new_media_df: Media)->Media:
-        """Check if imported files are not in the library already, if so - skip them."""
-        logger.debug(
-            "Checking import for duplicates in watch folders (not implemented)"
-        )
 
-        lst = []
-        file_list_watch = None
-        if not any(self.config.watch_folders):
-            logger.debug("No library folder defined. Skipping duplicate search.")
-            return new_media_df
-
-        for w in self.config.watch_folders:
-            file_list_watch = get_files_from_watch_folder(w)
-            path_list = [path for path in file_list_watch]
-            lst.extend(path_list)
-
-        watch_names = [path.name for path in lst]
-        new_names = new_media_df.file_name.values.tolist()
-        potential_dups = [f for f in new_names if f in watch_names]
-
-        # verify potential dups using size comparison
-        confirmed_dups = []
-        keys_to_remove = []
-
-        for d in potential_dups:
-            nd = new_media_df[new_media_df.file_name == d]
-            wd = [path for path in file_list_watch if path.name == d]
-            n = nd['size'].values[0]
-            if n == os.path.getsize(wd[0]):
-                confirmed_dups.append(wd[0])
-                keys_to_remove.append(new_media_df.file_name.values[0])
-        print("Found duplicates based on filename and size:")
-        pprint(confirmed_dups)
-
-        # remove confirmed duplicated from the import batch
-        new_media_df = new_media_df[~new_media_df.file_name.isin(keys_to_remove
-                                                                 )]
-        return new_media_df
 
     def check_import_for_duplicates_in_existing_clusters(self, new_media_df: Media):
         if self.image_df.empty:
@@ -182,6 +144,45 @@ class ImageReader(object):
             logger.warning("Duplicates check not implemented")
             return new_media_df
 
+def check_import_for_duplicates_in_watch_folders(watch_folders, new_media_df: Media)->Media:
+    """Check if imported files are not in the library already, if so - skip them."""
+    logger.debug(
+        "Checking import for duplicates in watch folders (not implemented)"
+    )
+
+    lst = []
+    file_list_watch = None
+    if not any(watch_folders):
+        logger.debug("No library folder defined. Skipping duplicate search.")
+        return new_media_df
+
+    for w in watch_folders:
+        file_list_watch = get_files_from_watch_folder(w)
+        path_list = [path for path in file_list_watch]
+        lst.extend(path_list)
+
+    watch_names = [path.name for path in lst]
+    new_names = new_media_df.file_name.values.tolist()
+    potential_dups = [f for f in new_names if f in watch_names]
+
+    # verify potential dups using size comparison
+    confirmed_dups = []
+    keys_to_remove = []
+
+    for d in potential_dups:
+        nd = new_media_df[new_media_df.file_name == d]
+        wd = [path for path in file_list_watch if path.name == d]
+        n = nd['size'].values[0]
+        if n == os.path.getsize(wd[0]):
+            confirmed_dups.append(wd[0])
+            keys_to_remove.append(new_media_df.file_name.values[0])
+    print("Found duplicates based on filename and size:")
+    pprint(confirmed_dups)
+
+    # remove confirmed duplicated from the import batch
+    new_media_df = new_media_df[~new_media_df.file_name.isin(keys_to_remove
+                                                             )]
+    return new_media_df
 
 @lru_cache
 def get_files_from_watch_folder(w: str):
@@ -189,7 +190,7 @@ def get_files_from_watch_folder(w: str):
 
 
 def check_on_updates_in_watch_folders(config: Config):
-    """Running media scan in structured media repository."""
+    """Running media scan in library."""
     # TODO: KS: 2020-10-28: implement
     # TODO: KS: 2020-10-28: need another database or media will be sufficient?
     logger.info(
