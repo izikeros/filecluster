@@ -5,8 +5,8 @@ from shutil import copy2, move
 import pandas as pd
 
 from filecluster import utlis as ut
-from filecluster.configuration import CopyMode, AssignDateToClusterMethod
-from filecluster.dbase import get_new_cluster_id, db_connect
+from filecluster.configuration import CopyMode, AssignDateToClusterMethod, Driver
+from filecluster.dbase import get_new_cluster_id_from_dataframe
 
 log_fmt = '%(levelname).1s %(message)s'
 logging.basicConfig(format=log_fmt)
@@ -129,8 +129,12 @@ class ImageGroupper(object):
 
     def add_cluster_id_to_files_in_data_frame(self):
         try:
-            new_cluster_idx = get_new_cluster_id(
-                db_connect(self.config.db_file))
+            if self.config.db_driver == Driver.DATAFRAME:
+                new_cluster_idx = get_new_cluster_id_from_dataframe(self.config)
+            else:
+                raise TypeError('Other drivers than Dataframe not supported')
+                # new_cluster_idx = get_new_cluster_id_from_dataframe(
+                #     db_connect(self.config.db_file))
         except:
             new_cluster_idx = 0
 

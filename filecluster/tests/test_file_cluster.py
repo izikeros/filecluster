@@ -7,23 +7,15 @@ from filecluster.file_cluster import main
 
 @pytest.mark.skip(reason='not implemented')
 def test_main_sqlite():
-    main(inbox_dir='inbox_test_a_orig',
-         output_dir='/tmp/output_dir',
-         db_dir='/tmp/',
-         db_driver=Driver['sqlite'.upper()],
-         development_mode=True,
-         no_operation=False,
-         watch_dir_list=[''])
+    main(inbox_dir='inbox_test_a_orig', output_dir='/tmp/output_dir', watch_dir_list=[''],
+         db_dir_str='/tmp/', db_driver=Driver['sqlite'.upper()], development_mode=True,
+         no_operation=False)
 
 
 def test_main_dataframe():
-    main(inbox_dir='inbox_test_a_orig',
-         output_dir='/tmp/output_dir',
-         db_dir='/tmp/',
-         db_driver=Driver['dataframe'.upper()],
-         development_mode=True,
-         no_operation=False,
-         watch_dir_list=[''])
+    main(inbox_dir='inbox_test_a_orig', output_dir='/tmp/output_dir', watch_dir_list=[''],
+         db_dir_str='/tmp/', db_driver=Driver['dataframe'.upper()], development_mode=True,
+         no_operation=False)
 
 
 def test_override_config_with_cli_params():

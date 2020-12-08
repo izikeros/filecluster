@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 # Databases paths and filenames
-DB_FILE_SQLITE3 = 'filecluster_db.sqlite3'
+# DB_FILE_SQLITE3 = 'filecluster_db.sqlite3'
 DB_FILE_CLUSTERS_PICKLE = 'clusters.p'
 DB_FILE_MEDIA_PICKLE = 'media.p'
 
@@ -40,7 +40,7 @@ OUTBOX_DIR_DEV = 'inbox_clust_test'
 
 LIBRARY_WINDOWS = ['h:\\zdjecia\\']
 LIBRARY_LINUX = ['/media/root/Foto/zdjecia/']
-WATCH_FOLDERS_LIST = ''
+WATCH_FOLDERS_LIST = ['']
 
 GENERATE_THUMBNAILS = False  # generate thumbnail to be stored in pandas dataframe during the processing. Might be used in notebook.
 
@@ -80,7 +80,7 @@ class Config:
     watch_folders: List[str]
     db_file_clusters: Path
     db_file_media: Path
-    db_file: Path
+    # db_file: Path
     image_extensions: List[str]
     video_extensions: List[str]
     time_granularity: timedelta
@@ -137,13 +137,13 @@ def configure_watch_folder_paths() -> List:
     return pth
 
 
-def setup_directory_for_database(config: Config, db_dir: Path):
+def setup_directory_for_database(config: Config, db_dir: str):
     """Setup common directory for storing databases."""
     if not db_dir:
         # if db dir not provided - pus db files in output directory
         db_dir = config.out_dir_name
 
-    config.db_file = Path(db_dir) / DB_FILE_SQLITE3
+    # config.db_file = Path(db_dir) / DB_FILE_SQLITE3
     # TODO: KS: 2020-05-23: do not use picke (use csv for accessibility? )
     #   pickle do not have problems with escaping
     config.db_file_clusters = Path(db_dir) / DB_FILE_CLUSTERS_PICKLE
@@ -167,7 +167,7 @@ def get_default_config() -> Config:
     # path to files to be clustered
     inbox_path, outbox_path = configure_inbox_outbox_paths()
     db_pth = configure_db_path()
-    db_file = os.path.join(db_pth, DB_FILE_SQLITE3)
+    # db_file = os.path.join(db_pth, DB_FILE_SQLITE3)
     db_file_clusters = os.path.join(db_pth, DB_FILE_CLUSTERS_PICKLE)
     db_file_media = os.path.join(db_pth, DB_FILE_MEDIA_PICKLE)
 
@@ -184,7 +184,7 @@ def get_default_config() -> Config:
         'out_dir_name': outbox_path,
         'db_file_clusters': db_file_clusters,
         'db_file_media': db_file_media,
-        'db_file': db_file,
+        # 'db_file': db_file,
         'image_extensions': image_extensions,
         'video_extensions': video_extensions,
         'time_granularity': max_gap,
@@ -195,7 +195,7 @@ def get_default_config() -> Config:
         'clustering_method': ClusteringMethod.TIME_GAP,
         'mode': CopyMode.MOVE,
         'db_driver':
-            Driver.SQLITE,  # driver for db_file, can be: dataframe | sqlite
+            Driver.DATAFRAME,  # driver for db_file, can be: dataframe | sqlite
         'generate_thumbnails': GENERATE_THUMBNAILS,
         'delete_db': DELETE_DB,
         'watch_folders': WATCH_FOLDERS_LIST
@@ -228,7 +228,7 @@ def get_development_config() -> Config:
     config.in_dir_name = os.path.join(pth, INBOX_DIR_DEV)
     config.out_dir_name = os.path.join(pth, OUTBOX_DIR_DEV)
 
-    config.db_file = os.path.join(pth, DB_FILE_SQLITE3)
+    # config.db_file = os.path.join(pth, DB_FILE_SQLITE3)
     config.db_file_media = os.path.join(pth, DB_FILE_MEDIA_PICKLE)
     config.db_file_clusters = os.path.join(pth, DB_FILE_CLUSTERS_PICKLE)
     return config

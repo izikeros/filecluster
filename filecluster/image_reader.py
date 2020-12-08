@@ -3,11 +3,13 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from pprint import pprint
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 
 import filecluster.utlis as ut
+from filecluster.configuration import Config
+from filecluster.types import Media
 
 log_fmt = '%(levelname).1s %(message)s'
 logging.basicConfig(format=log_fmt)
@@ -15,14 +17,16 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def remove_not_used_timestamp_columns(image_df):
-    """Get timestamp from exif (primary) or m_date. Drop not needed date cols."""
+def remove_not_used_timestamp_columns(image_df: Media) -> Media:
+    """Get timestamp from exif (primary) or m_date. Drop not needed date cols.
+
+    Prepare single timestamp out of few available."""
+
     logger.debug("Cleaning-up timestamps in imported media.")
     # use exif date as base
     image_df['date'] = image_df['exif_date']
     # unless is missing - then use modification date:
     image_df['date'] = image_df['date'].fillna(image_df['m_date'])
-
     # infer date format  from strings
     image_df['date'] = pd.to_datetime(image_df['date'],
                                       infer_datetime_format=True)
@@ -35,26 +39,27 @@ def remove_not_used_timestamp_columns(image_df):
 
 
 class ImageReader(object):
-    def __init__(self, config, image_df=None):
+    def __init__(self, config: Config, image_df: Optional[Media] = None):
         # read the config
         self.config = config
 
         # initialize media database with existing media dataframe or cereate empty dataframe
         if image_df is None:
             logger.debug("Initializing empty media dataframe in ImageReader")
-            self.image_df = pd.DataFrame
+            self.image_df = Media(pd.DataFrame())
         else:
             logger.debug(
                 f"Initializing media dataframe in ImageReader with provided df. Num records: {len(image_df)}"
             )
             self.image_df = image_df
 
-    def get_data_from_files(self) -> List[dict]:
+    def get_data_from_files_as_list_of_rows(self) -> List[dict]:
         """Recursively read exif data from files gived in path provided in config
 
         :return: list of rows with all information
         :rtype: List of rows
         """
+
         def _initialize_row_dict():
             """generate single row based on values defined in outer method"""
             thumbnail = None
@@ -124,23 +129,28 @@ class ImageReader(object):
     #     """Convert list of rows to pandas dataframe."""
     #     # save image data: name, path, date, hash to data frame
 
-    def check_import_for_duplicates_in_watch_folders(self, new_media_df):
+    def check_import_for_duplicates_in_watch_folders(self, new_media_df: Media)->Media:
+        """Check if imported files are not in the library already, if so - skip them."""
         logger.debug(
             "Checking import for duplicates in watch folders (not implemented)"
         )
 
         lst = []
         file_list_watch = None
+        if not any(self.config.watch_folders):
+            logger.debug("No library folder defined. Skipping duplicate search.")
+            return new_media_df
+
         for w in self.config.watch_folders:
             file_list_watch = get_files_from_watch_folder(w)
-            l = [path for path in file_list_watch]
-            lst.extend(l)
+            path_list = [path for path in file_list_watch]
+            lst.extend(path_list)
 
         watch_names = [path.name for path in lst]
         new_names = new_media_df.file_name.values.tolist()
         potential_dups = [f for f in new_names if f in watch_names]
 
-        # check size
+        # verify potential dups using size comparison
         confirmed_dups = []
         keys_to_remove = []
 
@@ -153,11 +163,13 @@ class ImageReader(object):
                 keys_to_remove.append(new_media_df.file_name.values[0])
         print("Found duplicates based on filename and size:")
         pprint(confirmed_dups)
+
+        # remove confirmed duplicated from the import batch
         new_media_df = new_media_df[~new_media_df.file_name.isin(keys_to_remove
                                                                  )]
         return new_media_df
 
-    def check_import_for_duplicates_in_existing_clusters(self, new_media_df):
+    def check_import_for_duplicates_in_existing_clusters(self, new_media_df: Media):
         if self.image_df.empty:
             logger.debug('Media db empty. Skipping duplicate analysis.')
             # TODO: KS: 2020-05-24: Consider checking for duplicates within import (file size and hash based)
@@ -172,11 +184,11 @@ class ImageReader(object):
 
 
 @lru_cache
-def get_files_from_watch_folder(w):
+def get_files_from_watch_folder(w: str):
     return Path(w).rglob('*.*')
 
 
-def check_on_updates_in_watch_folders(config):
+def check_on_updates_in_watch_folders(config: Config):
     """Running media scan in structured media repository."""
     # TODO: KS: 2020-10-28: implement
     # TODO: KS: 2020-10-28: need another database or media will be sufficient?
@@ -189,11 +201,11 @@ def check_if_media_files_from_db_exists():
     logger.info('Running media scan (not implemented yet)')
 
 
-def get_media_info_from_imported_files(image_reader):
+def get_media_info_from_inbox_files(image_reader: ImageReader) -> Media:
     """Read data from files, return media info in dataframe."""
-    row_list = image_reader.get_data_from_files()
+    row_list = image_reader.get_data_from_files_as_list_of_rows()
     logger.debug(f"Read info from {len(row_list)} files.")
     # convert list of rows to data frame
-    new_media_df = pd.DataFrame(row_list)
+    new_media_df = Media(pd.DataFrame(row_list))
     new_media_df = remove_not_used_timestamp_columns(new_media_df)
     return new_media_df

@@ -10,7 +10,7 @@ from filecluster.dbase import delete_dbs_if_needed, read_or_create_db_clusters, 
     save_media_and_cluster_info_to_database, read_or_create_media_database
 from filecluster.image_groupper import ImageGroupper
 from filecluster.image_reader import check_on_updates_in_watch_folders, ImageReader, \
-    check_if_media_files_from_db_exists, get_media_info_from_imported_files
+    check_if_media_files_from_db_exists, get_media_info_from_inbox_files
 
 log_fmt = '%(levelname).1s %(message)s'
 logging.basicConfig(format=log_fmt)
@@ -21,7 +21,7 @@ logger.setLevel(logging.DEBUG)
 def main(inbox_dir: str,
          output_dir: str,
          watch_dir_list: List[str],
-         db_dir: Optional[str],
+         db_dir_str: Optional[str],
          db_driver: Driver,
          development_mode: bool,
          no_operation: bool = False):
@@ -36,7 +36,7 @@ def main(inbox_dir: str,
                                              db_driver=db_driver,
                                              watch_dir_list=watch_dir_list)
 
-    config = setup_directory_for_database(config, db_dir)
+    config = setup_directory_for_database(config, db_dir_str)
     logger.debug(config)
 
     # delete DBs (option for development)
@@ -48,19 +48,20 @@ def main(inbox_dir: str,
     # read or create cluster database (to store cluster descriptions)
     df_clusters = read_or_create_db_clusters(config)
 
-    #  check if watch folders contains files that are not in media database
+    #  check if watch folders contains files that are not in library
     check_on_updates_in_watch_folders(config)
 
-    #  check if media captured by media db still exists on the disk
+    #  Not implemented: check if media captured by media db still exists on the disk
     check_if_media_files_from_db_exists()
 
     # Configure image reader, initialize media database (if needed)
     image_reader = ImageReader(config, df_media)
 
     # read timestamps from imported pictures/recordings
-    new_media_df = get_media_info_from_imported_files(image_reader)
+    new_media_df = get_media_info_from_inbox_files(image_reader)
 
     # check if not duplicated with media in output clusters dir
+    # Not implemented yet
     duplicates = image_reader.check_import_for_duplicates_in_existing_clusters(
         new_media_df)
 
@@ -136,10 +137,6 @@ if __name__ == '__main__':
     else:
         raise TypeError("watch_dirs should be a list")
 
-    main(inbox_dir=args.inbox_dir,
-         output_dir=args.output_dir,
-         watch_dir_list=watch_dirs,
-         db_dir=None,
-         db_driver=Driver[args.db_driver.upper()],
-         development_mode=args.development_mode,
-         no_operation=args.no_operation)
+    main(inbox_dir=args.inbox_dir, output_dir=args.output_dir, watch_dir_list=watch_dirs,
+         db_dir_str=None, db_driver=Driver[args.db_driver.upper()],
+         development_mode=args.development_mode, no_operation=args.no_operation)
