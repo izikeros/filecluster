@@ -130,7 +130,7 @@ class ImageGroupper(object):
     def add_cluster_id_to_files_in_data_frame(self):
         try:
             if self.config.db_driver == Driver.DATAFRAME:
-                new_cluster_idx = get_new_cluster_id_from_dataframe(self.config)
+                new_cluster_idx = get_new_cluster_id_from_dataframe()
             else:
                 raise TypeError('Other drivers than Dataframe not supported')
                 # new_cluster_idx = get_new_cluster_id_from_dataframe(

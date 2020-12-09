@@ -155,7 +155,7 @@ def db_create_media_sqlite_table(configuration):
 
         # Commit the change
         conn.commit()
-        logger.info("Media database created/opened")
+        logger.info("MediaDataframe database created/opened")
     # Catch the exception
     except Exception as e:
         # Roll back any change if something goes wrong

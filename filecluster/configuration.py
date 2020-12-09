@@ -70,7 +70,6 @@ class CopyMode(Enum):
 class Config:
     """Dataclass for keeping configuration parameters.
 
-
     - `in_dir_name` - Name of the input directory. Inbox where new media to be
     discovered
 
@@ -211,7 +210,7 @@ def get_default_config() -> Config:
     return config
 
 
-def get_development_config() -> Config:
+def get_development_config(os_name=os.name) -> Config:
     """Configuration for development phase.
     Key features of development mode:
 
@@ -227,7 +226,7 @@ def get_development_config() -> Config:
     config.mode = CopyMode.COPY
 
     # overwrite defaults with development specific params
-    if os.name == 'nt':
+    if os_name == 'nt':
         pth = INBOX_PATH_WINDOWS_DEV
     else:
         pth = INBOX_PATH_LINUX_DEV
@@ -238,6 +237,12 @@ def get_development_config() -> Config:
     # config.db_file = os.path.join(pth, DB_FILE_SQLITE3)
     config.db_file_media = os.path.join(pth, DB_FILE_MEDIA_PICKLE)
     config.db_file_clusters = os.path.join(pth, DB_FILE_CLUSTERS_PICKLE)
+
+    if os_name == 'nt':
+        config.watch_folders = LIBRARY_WINDOWS_DEV
+    else:
+        config.watch_folders = LIBRARY_LINUX_DEV
+
     return config
 
 

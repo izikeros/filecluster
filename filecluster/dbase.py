@@ -1,3 +1,4 @@
+"""Module for handling operations on both databases: media and clusters."""
 import logging
 import os
 
@@ -50,7 +51,7 @@ def db_create_clusters_df(config: Config):
     logger.debug('Check if need to create empty df for clusters')
     if not os.path.isfile(config.db_file_clusters):
         df = pd.DataFrame(columns=['id', 'start_date', 'end_date', 'median'])
-        df.to_pickle(config.db_file_clusters)
+        df.to_pickle(str(config.db_file_clusters))
         logger.info(
             f'Empty dataframe for cluster data created in {config.db_file_clusters}'
         )
@@ -69,7 +70,7 @@ def db_create_media_df(config: Config):
     logger.debug('Check if need to create empty df for media')
     if not os.path.isfile(config.db_file_media):
         df = pd.DataFrame(columns=MEDIA_DF_COLUMNS)
-        df.to_pickle(config.db_file_media)
+        df.to_pickle(str(config.db_file_media))
         logger.info(
             f'Empty dataframe for media data created in: {config.db_file_media}'
         )

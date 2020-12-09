@@ -1,5 +1,6 @@
+"""Custom type definitions to be used in filecluster package."""
 from typing import NewType
 import pandas as pd
 
-Media = NewType('Images', pd.DataFrame)
-Clusters = NewType('Clusters', pd.DataFrame)
+MediaDataframe = NewType('Images', pd.DataFrame)
+ClustersDataframe = NewType('ClustersDataframe', pd.DataFrame)

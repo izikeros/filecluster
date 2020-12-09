@@ -10,8 +10,7 @@ from filecluster.dbase import delete_dbs_if_needed, read_or_create_db_clusters, 
     save_media_and_cluster_info_to_database, read_or_create_media_database
 from filecluster.image_groupper import ImageGroupper
 from filecluster.image_reader import check_on_updates_in_watch_folders, ImageReader, \
-    check_if_media_files_from_db_exists, get_media_info_from_inbox_files, \
-    check_import_for_duplicates_in_watch_folders
+    check_if_media_files_from_db_exists, check_import_for_duplicates_in_watch_folders
 
 log_fmt = '%(levelname).1s %(message)s'
 logging.basicConfig(format=log_fmt)
@@ -59,19 +58,19 @@ def main(inbox_dir: str,
     image_reader = ImageReader(config, df_media)
 
     # read timestamps from imported pictures/recordings
-    new_media_df = get_media_info_from_inbox_files(image_reader)
+    image_reader.get_media_info_from_inbox_files()
 
     # check if not duplicated with media in output clusters dir
     # Not implemented yet
     duplicates = image_reader.check_import_for_duplicates_in_existing_clusters(
-        new_media_df)
+        image_reader.image_df)
 
     # check if not duplicated with watch folders (structured repository)
     new_media_df = check_import_for_duplicates_in_watch_folders(config.watch_folders,
-                                                                new_media_df)
+                                                                image_reader.image_df)
 
     # configure media grouper, initialize internal dataframes
-    image_groupper = ImageGroupper(
+    image_grouper = ImageGroupper(
         configuration=config,
         image_df=image_reader.image_df,
         df_clusters=df_clusters,
@@ -79,21 +78,21 @@ def main(inbox_dir: str,
     )
 
     # Run clustering
-    image_groupper.run_clustering()
+    image_grouper.run_clustering()
 
     # FIXME: KS: 2020-05-25: Merge new media and images_df
-    image_groupper.image_df = image_groupper.new_media_df
+    image_grouper.image_df = image_grouper.new_media_df
 
     # Physically move or copy files to folders
-    mode = image_groupper.config.mode
+    mode = image_grouper.config.mode
     if mode != CopyMode.NOP:
-        image_groupper.move_files_to_cluster_folder()
+        image_grouper.move_files_to_cluster_folder()
     else:
         logger.debug(
             "No copy/move operation performed since 'nop' option selected.")
 
     # Save media and cluster info to database
-    save_media_and_cluster_info_to_database(image_groupper)
+    save_media_and_cluster_info_to_database(image_grouper)
 
 
 if __name__ == '__main__':
