@@ -115,7 +115,7 @@ def save_media_and_cluster_info_to_database(image_groupper):
         if mode != CopyMode.NOP:
             pd.to_pickle(image_groupper.cluster_df,
                          image_groupper.config.db_file_clusters)
-            pd.to_pickle(image_groupper.image_df,
+            pd.to_pickle(image_groupper.media_df,
                          image_groupper.config.db_file_media)
         else:
             logger.debug(

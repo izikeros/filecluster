@@ -36,7 +36,7 @@ class TestImageReader:
 
     def test_get_media_info_from_inbox_files(self):
         self.imreader.get_media_info_from_inbox_files()
-        assert len(self.imreader.image_df) > 0
+        assert len(self.imreader.media_df) > 0
 
 
 def test_metadata__intializes():

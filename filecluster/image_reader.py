@@ -103,20 +103,20 @@ def prepare_new_row_with_meta(fn, image_extensions, in_dir_name, meta):
 class ImageReader(object):
     def __init__(self,
                  config: Config,
-                 image_df: Optional[MediaDataframe] = None):
+                 media_df: Optional[MediaDataframe] = None):
         """Initialize media database with existing media dataframe or create empty one."""
 
         # read the config
         self.config = config
 
-        if image_df is None:
+        if media_df is None:
             logger.debug("Initializing empty media dataframe in ImageReader")
-            self.image_df = MediaDataframe(pd.DataFrame())
+            self.media_df = MediaDataframe(pd.DataFrame())
         else:
             logger.debug(
-                f"Initializing media dataframe in ImageReader with provided df. Num records: {len(image_df)}"
+                f"Initializing media dataframe in ImageReader with provided df. Num records: {len(media_df)}"
             )
-            self.image_df = image_df
+            self.media_df = media_df
 
     def get_data_from_files_as_list_of_rows(self) -> List[dict]:
         """Recursively read exif data from files given in path provided in config
@@ -149,13 +149,13 @@ class ImageReader(object):
         row_list = self.get_data_from_files_as_list_of_rows()
         logger.debug(f"Read info from {len(row_list)} files.")
         # convert list of rows to data frame
-        new_media_df = MediaDataframe(pd.DataFrame(row_list))
-        new_media_df = multiple_timestamps_to_one(new_media_df)
-        self.image_df = new_media_df
+        inbox_media_df = MediaDataframe(pd.DataFrame(row_list))
+        inbox_media_df = multiple_timestamps_to_one(inbox_media_df)
+        self.media_df = inbox_media_df
 
     def check_import_for_duplicates_in_existing_clusters(
-            self, new_media_df: MediaDataframe):
-        if self.image_df.empty:
+            self, inbox_media_df: MediaDataframe):
+        if self.media_df.empty:
             logger.debug(
                 'MediaDataframe db empty. Skipping duplicate analysis.')
             # TODO: KS: 2020-05-24: Consider checking for duplicates within import (file size and hash based)
@@ -166,11 +166,11 @@ class ImageReader(object):
             # TODO: 2. check for duplicates: newly imported files against database
             # TODO: mark duplicates if found any
             logger.warning("Duplicates check not implemented")
-            return new_media_df
+            return inbox_media_df
 
 
 def check_import_for_duplicates_in_watch_folders(
-        watch_folders, new_media_df: MediaDataframe) -> MediaDataframe:
+        watch_folders, inbox_media_df: MediaDataframe) -> MediaDataframe:
     """Check if imported files are not in the library already, if so - skip them."""
     logger.debug(
         "Checking import for duplicates in watch folders (not implemented)")
@@ -179,7 +179,7 @@ def check_import_for_duplicates_in_watch_folders(
     file_list_watch = None
     if not any(watch_folders):
         logger.debug("No library folder defined. Skipping duplicate search.")
-        return new_media_df
+        return inbox_media_df
 
     for w in watch_folders:
         file_list_watch = get_files_from_watch_folder(w)
@@ -187,7 +187,7 @@ def check_import_for_duplicates_in_watch_folders(
         lst.extend(path_list)
 
     watch_names = [path.name for path in lst]
-    new_names = new_media_df.file_name.values.tolist()
+    new_names = inbox_media_df.file_name.values.tolist()
     potential_dups = [f for f in new_names if f in watch_names]
 
     # verify potential dups using size comparison
@@ -195,18 +195,18 @@ def check_import_for_duplicates_in_watch_folders(
     keys_to_remove = []
 
     for d in potential_dups:
-        nd = new_media_df[new_media_df.file_name == d]
+        nd = inbox_media_df[inbox_media_df.file_name == d]
         wd = [path for path in file_list_watch if path.name == d]
         n = nd['size'].values[0]
         if n == os.path.getsize(wd[0]):
             confirmed_dups.append(wd[0])
-            keys_to_remove.append(new_media_df.file_name.values[0])
+            keys_to_remove.append(inbox_media_df.file_name.values[0])
     print("Found duplicates based on filename and size:")
     pprint(confirmed_dups)
 
     # remove confirmed duplicated from the import batch
-    new_media_df = new_media_df[~new_media_df.file_name.isin(keys_to_remove)]
-    return new_media_df
+    inbox_media_df = inbox_media_df[~inbox_media_df.file_name.isin(keys_to_remove)]
+    return inbox_media_df
 
 
 @lru_cache

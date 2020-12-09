@@ -68,7 +68,7 @@ def test_image_base64():
 
 
 def test_image_formatter():
-    image_formatter(im=IMG_PTH)
+    image_formatter(im_base64=IMG_PTH)
 
 
 def test_hash_file():

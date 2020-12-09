@@ -51,7 +51,7 @@ class SqliteHandler:
 
     def init_with_image_handler(self, image_handler):
         self.config = image_handler.config
-        self.image_df = image_handler.image_df
+        self.image_df = image_handler.media_df
         self.cluster_df = image_handler.cluster_df
 
     def db_connect(self):

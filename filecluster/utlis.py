@@ -30,6 +30,7 @@ def is_supported_filetype(file_name: str, ext_list: List[str]):
 
 
 def is_image(file_name, ext_list_image):
+    """Determine if file is image based on known file name extensions."""
     ext_list_lower = [ext.lower() for ext in ext_list_image]
     fn_lower = file_name.lower()
     is_image = fn_lower.endswith(tuple(ext_list_lower))
@@ -80,13 +81,15 @@ def create_folder_for_cluster(config, date_string, mode):
             logger.error(err)
 
 
-def get_thumbnail(path):
+def get_thumbnail(path, width=150, height=150):
+    """Read image and create thumbnail of given size."""
     i = Image.open(path)
-    i.thumbnail((150, 150), Image.LANCZOS)
+    i.thumbnail((width, height), Image.LANCZOS)
     return i
 
 
 def image_base64(img):
+    """Return image as base64."""
     if isinstance(img, str):
         img = get_thumbnail(img)
     with BytesIO() as buffer:
@@ -94,9 +97,10 @@ def image_base64(img):
         return base64.b64encode(buffer.getvalue()).decode()
 
 
-def image_formatter(im):
+def image_formatter(im_base64):
+    """HTML template to display base64 image"""
     return '<img src="data:image/jpeg;base64,{image_tn}">'.format(
-        image_tn=image_base64(im))
+        image_tn=image_base64(im_base64))
 
 
 # Print iterations progress

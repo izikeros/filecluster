@@ -18,8 +18,3 @@ def test_save_media_and_cluster_info_to_database():
 @pytest.mark.skip(reason='not implemented')
 def test_read_timestamps_form_media_files():
     assert False
-
-
-@pytest.mark.skip(reason='not implemented')
-def test_run_clustering():
-    assert False

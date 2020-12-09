@@ -8,7 +8,7 @@ from filecluster.configuration import Driver, CopyMode, \
     setup_directory_for_database, override_config_with_cli_params, get_proper_mode_config
 from filecluster.dbase import delete_dbs_if_needed, read_or_create_db_clusters, \
     save_media_and_cluster_info_to_database, read_or_create_media_database
-from filecluster.image_groupper import ImageGroupper
+from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import check_on_updates_in_watch_folders, ImageReader, \
     check_if_media_files_from_db_exists, check_import_for_duplicates_in_watch_folders
 
@@ -63,25 +63,21 @@ def main(inbox_dir: str,
     # check if not duplicated with media in output clusters dir
     # Not implemented yet
     duplicates = image_reader.check_import_for_duplicates_in_existing_clusters(
-        image_reader.image_df)
+        image_reader.media_df)
 
     # check if not duplicated with watch folders (structured repository)
-    new_media_df = check_import_for_duplicates_in_watch_folders(config.watch_folders,
-                                                                image_reader.image_df)
+    inbox_media_df = check_import_for_duplicates_in_watch_folders(config.watch_folders,
+                                                                image_reader.media_df)
 
     # configure media grouper, initialize internal dataframes
-    image_grouper = ImageGroupper(
-        configuration=config,
-        image_df=image_reader.image_df,
-        df_clusters=df_clusters,
-        new_media_df=new_media_df,
-    )
+    image_grouper = ImageGrouper(configuration=config, media_df=image_reader.media_df,
+                                 df_clusters=df_clusters, inbox_media_df=inbox_media_df)
 
     # Run clustering
     image_grouper.run_clustering()
 
     # FIXME: KS: 2020-05-25: Merge new media and images_df
-    image_grouper.image_df = image_grouper.new_media_df
+    image_grouper.image_df = image_grouper.inbox_media_df
 
     # Physically move or copy files to folders
     mode = image_grouper.config.mode
