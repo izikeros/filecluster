@@ -3,44 +3,53 @@ import hashlib
 import pytest
 
 from filecluster.configuration import get_default_config, CopyMode
-from filecluster.utlis import get_exif_date, is_supported_filetype, is_image, get_date_from_file, \
-    create_folder_for_cluster, get_thumbnail, image_base64, image_formatter, hash_file
+from filecluster.utlis import (
+    get_exif_date,
+    is_supported_filetype,
+    is_image,
+    get_date_from_file,
+    create_folder_for_cluster,
+    get_thumbnail,
+    image_base64,
+    image_formatter,
+    hash_file,
+)
 
-EXT_IMG = ['.jpg', '.CR2']
-EXT_VID = ['.mp4', '.3gp']
-IMG_PTH = 'inbox_test_a_orig/20181117_121813.jpg'
+EXT_IMG = [".jpg", ".CR2"]
+EXT_VID = [".mp4", ".3gp"]
+IMG_PTH = "inbox_test_a_orig/20181117_121813.jpg"
 
 
 def test_is_supported_filetype_jpg_lower_case():
-    assert is_supported_filetype('img.jpg', EXT_IMG) is True
+    assert is_supported_filetype("img.jpg", EXT_IMG) is True
 
 
 def test_is_supported_filetype_jpg_upper_case():
-    assert is_supported_filetype('img.JPG', EXT_IMG) is True
+    assert is_supported_filetype("img.JPG", EXT_IMG) is True
 
 
 def test_is_supported_filetype_cr2():
-    assert is_supported_filetype('img.cr2', EXT_IMG) is True
+    assert is_supported_filetype("img.cr2", EXT_IMG) is True
 
 
 def test_is_supported_filetype_xyz():
-    assert is_supported_filetype('img.xyz', EXT_IMG) is False
+    assert is_supported_filetype("img.xyz", EXT_IMG) is False
 
 
 def test_is_supported_filetype_jpg_xyz():
-    assert is_supported_filetype('img.jpg.xyz', EXT_IMG) is False
+    assert is_supported_filetype("img.jpg.xyz", EXT_IMG) is False
 
 
 def test_is_image__jpg():
-    assert is_image('img.jpg', EXT_IMG) is True
+    assert is_image("img.jpg", EXT_IMG) is True
 
 
 def test_is_image__not_recognized_image_type():
-    assert is_image('img.xyz', EXT_IMG) is False
+    assert is_image("img.xyz", EXT_IMG) is False
 
 
 def test_is_image__video():
-    assert is_image('img.mov', EXT_IMG) is False
+    assert is_image("img.mov", EXT_IMG) is False
 
 
 def test_get_date_from_file():
@@ -54,9 +63,9 @@ def test_get_exif_date():
 @pytest.mark.skip()
 def test_create_folder_for_cluster():
     config = get_default_config()
-    create_folder_for_cluster(config=config,
-                              date_string='[2020_11_21]',
-                              mode=CopyMode.NOP)
+    create_folder_for_cluster(
+        config=config, date_string="[2020_11_21]", mode=CopyMode.NOP
+    )
 
 
 def test_get_thumbnail():

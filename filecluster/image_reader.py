@@ -11,7 +11,7 @@ import filecluster.utlis as ut
 from filecluster.configuration import Config
 from filecluster.types import MediaDataframe
 
-log_fmt = '%(levelname).1s %(message)s'
+log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -19,15 +19,15 @@ logger.setLevel(logging.DEBUG)
 
 class Metadata:
     def __init__(self):
-        self.file_name: str = ''
-        self.path_name: str = ''
-        self.m_time: str = ''
-        self.c_time: str = ''
-        self.exif_date: str = ''
-        self.date: str = ''
+        self.file_name: str = ""
+        self.path_name: str = ""
+        self.m_time: str = ""
+        self.c_time: str = ""
+        self.exif_date: str = ""
+        self.date: str = ""
         self.file_size: int = 0
         self.hash_value: int = 0
-        self.full_path: str = ''
+        self.full_path: str = ""
         self.image: int = 0
         self.is_image: bool = True
         self.cluster_id: int = 0
@@ -41,14 +41,13 @@ def multiple_timestamps_to_one(image_df: MediaDataframe) -> MediaDataframe:
 
     logger.debug("Cleaning-up timestamps in imported media.")
     # use exif date as base
-    image_df['date'] = image_df['exif_date']
+    image_df["date"] = image_df["exif_date"]
     # unless is missing - then use modification date:
-    image_df['date'] = image_df['date'].fillna(image_df['m_date'])
+    image_df["date"] = image_df["date"].fillna(image_df["m_date"])
     # infer date format  from strings
-    image_df['date'] = pd.to_datetime(image_df['date'],
-                                      infer_datetime_format=True)
+    image_df["date"] = pd.to_datetime(image_df["date"], infer_datetime_format=True)
 
-    image_df.drop(['m_date', 'c_date', 'exif_date'], axis=1, inplace=True)
+    image_df.drop(["m_date", "c_date", "exif_date"], axis=1, inplace=True)
     return image_df
 
 
@@ -60,18 +59,18 @@ def initialize_row_dict(meta: Metadata):
 
     # define structure of images dataframe and fill with data
     row = {
-        'file_name': meta.file_name,
-        'm_date': meta.m_time,
-        'c_date': meta.c_time,
-        'exif_date': meta.exif_date,
-        'date': meta.date,
-        'size': meta.file_size,
-        'hash_value': meta.hash_value,
-        'full_path': meta.full_path,
-        'image': meta.image,
-        'is_image': thumbnail,
-        'cluster_id': meta.cluster_id,
-        'duplicate_to_ids': meta.duplicate_to_ids
+        "file_name": meta.file_name,
+        "m_date": meta.m_time,
+        "c_date": meta.c_time,
+        "exif_date": meta.exif_date,
+        "date": meta.date,
+        "size": meta.file_size,
+        "hash_value": meta.hash_value,
+        "full_path": meta.full_path,
+        "image": meta.image,
+        "is_image": thumbnail,
+        "cluster_id": meta.cluster_id,
+        "duplicate_to_ids": meta.duplicate_to_ids,
     }
     return row
 
@@ -101,9 +100,7 @@ def prepare_new_row_with_meta(fn, image_extensions, in_dir_name, meta):
 
 
 class ImageReader(object):
-    def __init__(self,
-                 config: Config,
-                 media_df: Optional[MediaDataframe] = None):
+    def __init__(self, config: Config, media_df: Optional[MediaDataframe] = None):
         """Initialize media database with existing media dataframe or create empty one."""
 
         # read the config
@@ -113,9 +110,8 @@ class ImageReader(object):
             logger.debug("Initializing empty media dataframe in ImageReader")
             self.media_df = MediaDataframe(pd.DataFrame())
         else:
-            logger.debug(
-                f"Initializing media dataframe in ImageReader with provided df. Num records: {len(media_df)}"
-            )
+            msg = "Initializing media dataframe in ImageReader with provided df."
+            logger.debug(msg + f"Num records: {len(media_df)}")
             self.media_df = media_df
 
     def get_data_from_files_as_list_of_rows(self) -> List[dict]:
@@ -136,11 +132,12 @@ class ImageReader(object):
         meta = Metadata()
         for i_file, fn in enumerate(os.listdir(in_dir_name)):
             if ut.is_supported_filetype(fn, ext):
-                new_row = prepare_new_row_with_meta(fn, image_extensions,
-                                                    in_dir_name, meta)
+                new_row = prepare_new_row_with_meta(
+                    fn, image_extensions, in_dir_name, meta
+                )
 
                 list_of_rows.append(new_row)
-            ut.print_progress(i_file, n_files - 1, 'reading files: ')
+            ut.print_progress(i_file, n_files - 1, "reading files: ")
         print("")
         return list_of_rows
 
@@ -154,10 +151,10 @@ class ImageReader(object):
         self.media_df = inbox_media_df
 
     def check_import_for_duplicates_in_existing_clusters(
-            self, inbox_media_df: MediaDataframe):
+        self, inbox_media_df: MediaDataframe
+    ):
         if self.media_df.empty:
-            logger.debug(
-                'MediaDataframe db empty. Skipping duplicate analysis.')
+            logger.debug("MediaDataframe db empty. Skipping duplicate analysis.")
             # TODO: KS: 2020-05-24: Consider checking for duplicates within import (file size and hash based)
             return None
         else:
@@ -170,10 +167,10 @@ class ImageReader(object):
 
 
 def check_import_for_duplicates_in_watch_folders(
-        watch_folders, inbox_media_df: MediaDataframe) -> MediaDataframe:
+    watch_folders, inbox_media_df: MediaDataframe
+) -> MediaDataframe:
     """Check if imported files are not in the library already, if so - skip them."""
-    logger.debug(
-        "Checking import for duplicates in watch folders (not implemented)")
+    logger.debug("Checking import for duplicates in watch folders (not implemented)")
 
     lst = []
     file_list_watch = None
@@ -197,7 +194,7 @@ def check_import_for_duplicates_in_watch_folders(
     for d in potential_dups:
         nd = inbox_media_df[inbox_media_df.file_name == d]
         wd = [path for path in file_list_watch if path.name == d]
-        n = nd['size'].values[0]
+        n = nd["size"].values[0]
         if n == os.path.getsize(wd[0]):
             confirmed_dups.append(wd[0])
             keys_to_remove.append(inbox_media_df.file_name.values[0])
@@ -211,17 +208,16 @@ def check_import_for_duplicates_in_watch_folders(
 
 @lru_cache
 def get_files_from_watch_folder(w: str):
-    return Path(w).rglob('*.*')
+    return Path(w).rglob("*.*")
 
 
 def check_on_updates_in_watch_folders(config: Config):
     """Running media scan in library."""
     # TODO: KS: 2020-10-28: implement
     # TODO: KS: 2020-10-28: need another database or media will be sufficient?
-    logger.info(
-        f'Running media scan in {config.watch_folders} (not implemented yet)')
+    logger.info(f"Running media scan in {config.watch_folders} (not implemented yet)")
 
 
 def check_if_media_files_from_db_exists():
     # TODO: KS: 2020-10-28: implement
-    logger.info('Running media scan (not implemented yet)')
+    logger.info("Running media scan (not implemented yet)")

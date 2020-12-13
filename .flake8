@@ -1,0 +1,59 @@
+[flake8]
+;[T003] use of Django-style assert statement found (instead of regular assert): assertTrue
+;[M502] test definition not marked with test_type
+;[N802] function name 'setUpTestData' should be lowercase
+;[N806] variable 'NUM_DIGITS' in function should be lowercase
+;[F405] xyz may be undefined, or defined from star imports
+;[T001] print found.
+;[D100] Missing docstring in public module
+;[D101] Missing docstring in public class (e.g. Models' Meta)
+;[D102] Missing docstring in public method
+;[D103] Missing docstring in public function
+;[D104] Missing docstring in public package
+;[D105] Missing docstring in magic method
+;[D107] Missing docstring in __init__
+
+; this should be not excluded in more mature version
+;[D103] Missing docstring in public function
+
+ignore = T003, M502, N802, N806, F405, T001, D101, D102, D104, D105, D107
+
+#select = B
+
+exclude =
+    .tox,
+    .git,
+    *staticfiles*,
+    locale,
+    docs,
+    tools,
+    venv,
+    *migrations*,
+    *.pyc,
+    .git,
+    __pycache__,
+    test_*.py
+;enable docstrings for tests eventually
+
+max-line-length = 100
+
+;Set the maximum allowed McCabe complexity value for a block of code.
+max-complexity = 10
+
+;Select the formatter used to display errors to the user.
+format = pylint
+
+;display source code lines that violate rules
+show_source = False
+
+;count violations by type
+statistics = False
+
+;total count of violations
+count = True
+
+pytest_mark2 = name=test_type,
+               value_regex=(integration)|(unit),
+
+
+

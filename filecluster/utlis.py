@@ -13,7 +13,7 @@ from PIL import Image
 
 from filecluster.configuration import CopyMode
 
-log_fmt = '%(levelname).1s %(message)s'
+log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -50,19 +50,19 @@ def get_exif_date(path_name):
     """Return exif date or none."""
 
     # Open image file for reading (binary mode)
-    img_file = open(path_name, 'rb')
+    img_file = open(path_name, "rb")
 
     # Return Exif tags
-    tags = exifread.process_file(img_file,
-                                 details=False,
-                                 stop_tag='EXIF DateTimeOriginal')
+    tags = exifread.process_file(
+        img_file, details=False, stop_tag="EXIF DateTimeOriginal"
+    )
 
     try:
-        exif_date_str = tags['EXIF DateTimeOriginal'].values
+        exif_date_str = tags["EXIF DateTimeOriginal"].values
         try:
-            exif_date = datetime.strptime(exif_date_str, '%Y:%m:%d %H:%M:%S')
+            exif_date = datetime.strptime(exif_date_str, "%Y:%m:%d %H:%M:%S")
         except ValueError:
-            logger.error(f'Invalid date for file: {path_name}. Setting: None')
+            logger.error(f"Invalid date for file: {path_name}. Setting: None")
             exif_date = None
     except KeyError:
         exif_date = None
@@ -93,25 +93,21 @@ def image_base64(img):
     if isinstance(img, str):
         img = get_thumbnail(img)
     with BytesIO() as buffer:
-        img.save(buffer, 'jpeg')
+        img.save(buffer, "jpeg")
         return base64.b64encode(buffer.getvalue()).decode()
 
 
 def image_formatter(im_base64):
     """HTML template to display base64 image"""
     return '<img src="data:image/jpeg;base64,{image_tn}">'.format(
-        image_tn=image_base64(im_base64))
+        image_tn=image_base64(im_base64)
+    )
 
 
 # Print iterations progress
 # from: https://gist.github.com/aubricus/f91fb55dc6ba5557fbab06119420dd6a
 # TODO: KS: 2020-04-17: Consider using tqdm instead
-def print_progress(iteration,
-                   total,
-                   prefix='',
-                   suffix='',
-                   decimals=1,
-                   bar_length=100):
+def print_progress(iteration, total, prefix="", suffix="", decimals=1, bar_length=100):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -127,13 +123,12 @@ def print_progress(iteration,
     str_format = "{0:." + str(decimals) + "f}"
     percents = str_format.format(100 * (iteration / float(total)))
     filled_length = int(round(bar_length * iteration / float(total)))
-    bar = '█' * filled_length + '-' * (bar_length - filled_length)
+    bar = "█" * filled_length + "-" * (bar_length - filled_length)
 
-    sys.stdout.write('\r%s |%s| %s%s %s' %
-                     (prefix, bar, percents, '%', suffix)),
+    sys.stdout.write("\r%s |%s| %s%s %s" % (prefix, bar, percents, "%", suffix)),
 
     if iteration == total:
-        sys.stdout.write('\n')
+        sys.stdout.write("\n")
     sys.stdout.flush()
 
 

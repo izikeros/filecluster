@@ -6,44 +6,48 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Tuple, Optional
 
-log_fmt = '%(levelname).1s %(message)s'
+log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 # Databases paths and filenames
 # DB_FILE_SQLITE3 = 'filecluster_db.sqlite3'
-DB_FILE_CLUSTERS_PICKLE = 'clusters.p'
-DB_FILE_MEDIA_PICKLE = 'media.p'
+DB_FILE_CLUSTERS_PICKLE = "clusters.p"
+DB_FILE_MEDIA_PICKLE = "media.p"
 
-DB_PATH_WINDOWS = 'h:\\zdjecia\\'
-DB_PATH_LINUX = '/tmp/'
-CLUSTER_COLUMN_IN_CLUSTER_DB = 'cluster_id'
-DELETE_DB = True  # delete database during the start - provide clean start for development mode
+DB_PATH_WINDOWS = "h:\\zdjecia\\"
+DB_PATH_LINUX = "/tmp/"
+CLUSTER_COLUMN_IN_CLUSTER_DB = "cluster_id"
+DELETE_DB = (
+    True  # delete database during the start - provide clean start for development mode
+)
 
 # Filename extensions in scope of clustering
-IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.dng', '.cr2']
-VIDEO_EXTENSIONS = ['.mp4', '.3gp', 'mov']
+IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".dng", ".cr2"]
+VIDEO_EXTENSIONS = [".mp4", ".3gp", "mov"]
 
 # Locations for media: Inbox/Outbox/Library
-INBOX_PATH_WINDOWS = 'h:\\incomming\\'
-INBOX_PATH_WINDOWS_DEV = 'h:\\incomming'
+INBOX_PATH_WINDOWS = "h:\\incomming\\"
+INBOX_PATH_WINDOWS_DEV = "h:\\incomming"
 
-INBOX_PATH_LINUX = '/media/root/Foto/incomming/'
-INBOX_PATH_LINUX_DEV = '/home/safjan/Pictures'
+INBOX_PATH_LINUX = "/media/root/Foto/incomming/"
+INBOX_PATH_LINUX_DEV = "/home/safjan/Pictures"
 
-INBOX_DIR = 'inbox'
-INBOX_DIR_DEV = 'inbox_test_a'
+INBOX_DIR = "inbox"
+INBOX_DIR_DEV = "inbox_test_a"
 
-OUTBOX_DIR = 'inbox_clust'
-OUTBOX_DIR_DEV = 'inbox_clust_test'
+OUTBOX_DIR = "inbox_clust"
+OUTBOX_DIR_DEV = "inbox_clust_test"
 
-LIBRARY_WINDOWS = ['h:\\zdjecia\\']
-LIBRARY_WINDOWS_DEV = ['']
-LIBRARY_LINUX = ['/media/root/Foto/zdjecia/']
-LIBRARY_LINUX_DEV = ['zdjecia']
+LIBRARY_WINDOWS = ["h:\\zdjecia\\"]
+LIBRARY_WINDOWS_DEV = [""]
+LIBRARY_LINUX = ["/media/root/Foto/zdjecia/"]
+LIBRARY_LINUX_DEV = ["zdjecia"]
 
-GENERATE_THUMBNAILS = False  # generate thumbnail to be stored in pandas dataframe during the processing. Might be used in notebook.
+# generate thumbnail to be stored in pandas dataframe during the processing.
+#   Might be used in notebook.
+GENERATE_THUMBNAILS = False
 
 
 class Driver(Enum):
@@ -75,6 +79,7 @@ class Config:
 
     - 'out_dir_name' - Name of output directory where cluster directories are located/
     """
+
     in_dir_name: Path
     out_dir_name: Path
     watch_folders: List[str]
@@ -95,8 +100,8 @@ class Config:
     def __repr__(self):
         rep = []
         for p in self.__dataclass_fields__.keys():
-            rep.append(f'{p}:\t{self.__getattribute__(p)}')
-        return '\n'.join(rep)
+            rep.append(f"{p}:\t{self.__getattribute__(p)}")
+        return "\n".join(rep)
 
     def __getitem__(self, key):
         return getattr(self, key)
@@ -107,7 +112,7 @@ class Config:
 
 def configure_db_path() -> str:
     """Configure database path depending on detected operating system."""
-    if os.name == 'nt':
+    if os.name == "nt":
         db_pth = DB_PATH_WINDOWS
     else:
         db_pth = DB_PATH_LINUX
@@ -121,7 +126,7 @@ def configure_paths_for_this_os() -> Tuple[str, str, List[str]]:
     - inbox,
     - outbox
     - library."""
-    if os.name == 'nt':
+    if os.name == "nt":
         pth = INBOX_PATH_WINDOWS
         library_paths = LIBRARY_WINDOWS
     else:
@@ -137,7 +142,7 @@ def configure_watch_folder_paths() -> List:
 
     Watch folder is a location of official folder with media.
      This is your media library."""
-    if os.name == 'nt':
+    if os.name == "nt":
         pth = LIBRARY_WINDOWS
     else:
         pth = LIBRARY_LINUX
@@ -186,25 +191,24 @@ def get_default_config() -> Config:
 
     assign_date_to_clusters_method = AssignDateToClusterMethod.RANDOM
     conf_dict = {
-        'in_dir_name': inbox_path,
-        'out_dir_name': outbox_path,
-        'db_file_clusters': db_file_clusters,
-        'db_file_media': db_file_media,
+        "in_dir_name": inbox_path,
+        "out_dir_name": outbox_path,
+        "db_file_clusters": db_file_clusters,
+        "db_file_media": db_file_media,
         # 'db_file': db_file,
-        'image_extensions': image_extensions,
-        'video_extensions': video_extensions,
-        'time_granularity': max_gap,
-        'cluster_col': CLUSTER_COLUMN_IN_CLUSTER_DB,
-        'assign_date_to_clusters_method': assign_date_to_clusters_method,
+        "image_extensions": image_extensions,
+        "video_extensions": video_extensions,
+        "time_granularity": max_gap,
+        "cluster_col": CLUSTER_COLUMN_IN_CLUSTER_DB,
+        "assign_date_to_clusters_method": assign_date_to_clusters_method,
         # method that is used to group images, default: assume different events
         # are separated by significant time gape (max_gap config parameter)
-        'clustering_method': ClusteringMethod.TIME_GAP,
-        'mode': CopyMode.MOVE,
-        'db_driver':
-            Driver.DATAFRAME,  # driver for db_file, can be: dataframe | sqlite
-        'generate_thumbnails': GENERATE_THUMBNAILS,
-        'delete_db': DELETE_DB,
-        'watch_folders': library_paths
+        "clustering_method": ClusteringMethod.TIME_GAP,
+        "mode": CopyMode.MOVE,
+        "db_driver": Driver.DATAFRAME,  # driver for db_file, can be: dataframe | sqlite
+        "generate_thumbnails": GENERATE_THUMBNAILS,
+        "delete_db": DELETE_DB,
+        "watch_folders": library_paths,
     }
     config = Config(**conf_dict)
     return config
@@ -226,7 +230,7 @@ def get_development_config(os_name=os.name) -> Config:
     config.mode = CopyMode.COPY
 
     # overwrite defaults with development specific params
-    if os_name == 'nt':
+    if os_name == "nt":
         pth = INBOX_PATH_WINDOWS_DEV
     else:
         pth = INBOX_PATH_LINUX_DEV
@@ -238,7 +242,7 @@ def get_development_config(os_name=os.name) -> Config:
     config.db_file_media = os.path.join(pth, DB_FILE_MEDIA_PICKLE)
     config.db_file_clusters = os.path.join(pth, DB_FILE_CLUSTERS_PICKLE)
 
-    if os_name == 'nt':
+    if os_name == "nt":
         config.watch_folders = LIBRARY_WINDOWS_DEV
     else:
         config.watch_folders = LIBRARY_LINUX_DEV
@@ -246,10 +250,14 @@ def get_development_config(os_name=os.name) -> Config:
     return config
 
 
-def override_config_with_cli_params(config: Config, inbox_dir: str,
-                                    no_operation: bool, output_dir: str,
-                                    db_driver: Driver,
-                                    watch_dir_list: List[str]) -> Config:
+def override_config_with_cli_params(
+    config: Config,
+    inbox_dir: str,
+    no_operation: bool,
+    output_dir: str,
+    db_driver: Driver,
+    watch_dir_list: List[str],
+) -> Config:
     """Use CLI arguments to override default configuration.
     :param watch_dir_list:
     :param db_driver:

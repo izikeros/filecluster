@@ -2,5 +2,5 @@
 from typing import NewType
 import pandas as pd
 
-MediaDataframe = NewType('Images', pd.DataFrame)
-ClustersDataframe = NewType('ClustersDataframe', pd.DataFrame)
+MediaDataframe = NewType("Images", pd.DataFrame)
+ClustersDataframe = NewType("ClustersDataframe", pd.DataFrame)

@@ -3,14 +3,14 @@ import logging
 import os
 import sqlite3
 
-log_fmt = '%(levelname).1s %(message)s'
+log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 def get_new_cluster_id_from_sqlite(conn):
-    """Add tmp cluster id information to each file
-    """
+    """Add tmp cluster id information to each file"""
 
     # Hint on reading date: http://numericalexpert.com/blog/sqlite_blob_time/
     # set cursor to start?
@@ -43,6 +43,7 @@ class SqliteHandler:
 
     see: https://stackabuse.com/a-sqlite-tutorial-with-python/
     """
+
     def __init__(self):
         self.config = None
         self.image_df = None
@@ -68,49 +69,60 @@ class SqliteHandler:
     def db_save_images(self):
         """Save media information into database.
 
-         Existing records will be replaced by new."""
+        Existing records will be replaced by new."""
         connection = self.db_connect()
 
         # TODO: consider insert or ignore
-        query = '''INSERT OR REPLACE INTO media (file_name, date, size, 
+        query = """INSERT OR REPLACE INTO media (file_name, date, size, 
         hash_value, full_path, image, is_image) 
-        VALUES (?,?,?,?,?,?,?);'''
+        VALUES (?,?,?,?,?,?,?);"""
 
         # get number of rows before importing new media
-        num_before = self.db_get_table_rowcount('media')
+        num_before = self.db_get_table_rowcount("media")
 
         # see: # https://stackoverflow.com/questions/23574614/appending
         # -pandas-dataframe-to
         # # -sqlite-table-by-primary-key
         connection.executemany(
-            query, self.image_df[[
-                'file_name', 'date', 'size', 'hash_value', 'full_path',
-                'image', 'is_image'
-            ]].to_records(index=False))
+            query,
+            self.image_df[
+                [
+                    "file_name",
+                    "date",
+                    "size",
+                    "hash_value",
+                    "full_path",
+                    "image",
+                    "is_image",
+                ]
+            ].to_records(index=False),
+        )
         connection.commit()
 
         # get number of rows after importing new media
-        num_after = self.db_get_table_rowcount('media')
-        print(f"DB save:\t{num_after - num_before} image rows added, before: "
-              f"{num_before}, "
-              f"after: {num_after}")
+        num_after = self.db_get_table_rowcount("media")
+        print(
+            f"DB save:\t{num_after - num_before} image rows added, before: "
+            f"{num_before}, "
+            f"after: {num_after}"
+        )
 
     def db_save_clusters(self):
         """Export data frame with media information into database. Existing
         records will be replaced by new."""
         connection = self.db_connect()
 
-        cluster_table_name = 'clusters'
+        cluster_table_name = "clusters"
         # TODO: consider insert or ignore
-        query = f'''INSERT OR REPLACE INTO {cluster_table_name} (id, 
-        start_date, end_date) VALUES (?,?,?);'''
+        query = f"""INSERT OR REPLACE INTO {cluster_table_name} (id, 
+        start_date, end_date) VALUES (?,?,?);"""
 
         # get number of rows before importing new media
         num_before = self.db_get_table_rowcount(cluster_table_name)
 
         # see: # https://stackoverflow.com/questions/23574614/appending
         # -pandas-dataframe-to-sqlite-table-by-primary-key
-        new_df = self.cluster_df[['id', 'start_date', 'end_date']].copy()
+        new_df = self.cluster_df[["id", "start_date", "end_date"]].copy()
         new_df.id = new_df.id.astype(float)
         # temporal workaround
         connection.executemany(query, new_df.to_records(index=False))
@@ -121,7 +133,9 @@ class SqliteHandler:
         print(
             f"DB save:\t{num_after - num_before} cluster rows added, before: "
             f"{num_before}, "
-            f"after: {num_after}")
+            f"after: {num_after}"
+        )
+
 
 def db_create_media_sqlite_table(configuration):
     # TODO: remove when development will be done
@@ -141,17 +155,19 @@ def db_create_media_sqlite_table(configuration):
         # Check if table users does not exist and create it
 
         # table for individual media files
-        cursor.execute('''CREATE TABLE IF NOT EXISTS media(
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS media(
                              file_name TEXT(256) PRIMARY KEY,
-                             m_date DATETIME, 
-                             c_date DATETIME, 
-                             exif_date DATETIME, 
-                             date DATETIME, 
+                             m_date DATETIME,
+                             c_date DATETIME,
+                             exif_date DATETIME,
+                             date DATETIME,
                              size INTEGER,
                              hash_value TEXT,
                              full_path TEXT,
                              image BLOB,
-                             is_image INTEGER)''')
+                             is_image INTEGER)"""
+        )
 
         # Commit the change
         conn.commit()
@@ -179,11 +195,13 @@ def db_create_clusters_sqlite_table(configuration):
         # Check if table users does not exist and create it
 
         # table with cluster information
-        cursor.execute('''CREATE TABLE IF NOT EXISTS clusters(
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS clusters(
                           id INTEGER PRIMARY KEY,
                           start_date DATETIME,
                           end_date DATETIME,
-                          median DATETIME)''')
+                          median DATETIME)"""
+        )
         # Commit the change
         conn.commit()
         logger.info("Cluster database created/opened")
@@ -204,6 +222,7 @@ def save_sql_dbs(image_groupper):
     db_handler.init_with_image_handler(image_groupper)
     db_handler.db_save_images()
     db_handler.db_save_clusters()
+
 
 def delete_sql_db(config):
     if os.path.isfile(config.db_file):

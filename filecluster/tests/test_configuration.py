@@ -1,7 +1,16 @@
-from filecluster.configuration import get_default_config, Config, configure_db_path, \
-    configure_watch_folder_paths, setup_directory_for_database, \
-    get_proper_mode_config, get_development_config, override_config_with_cli_params, Driver, \
-    CopyMode, configure_paths_for_this_os
+from filecluster.configuration import (
+    get_default_config,
+    Config,
+    configure_db_path,
+    configure_watch_folder_paths,
+    setup_directory_for_database,
+    get_proper_mode_config,
+    get_development_config,
+    override_config_with_cli_params,
+    Driver,
+    CopyMode,
+    configure_paths_for_this_os,
+)
 
 
 def test_get_default_config():
@@ -19,7 +28,7 @@ def test_configure_watch_folder_paths__runs():
 
 def test_setup_directory_for_database__dir_provided():
     config = get_default_config()
-    dir_name = 'my_dir'
+    dir_name = "my_dir"
     config_after = setup_directory_for_database(config, db_dir=dir_name)
     assert dir_name in config_after.db_file_media
     assert dir_name in config_after.db_file_clusters
@@ -48,17 +57,17 @@ def test_override_config_with_cli_params():
     config = get_default_config()
     nc = override_config_with_cli_params(
         config=config,
-        inbox_dir='aaa',
+        inbox_dir="aaa",
         no_operation=True,
-        output_dir='bbb',
-        db_driver=Driver['dataframe'.upper()],
-        watch_dir_list=['/home/user/Pictures']
+        output_dir="bbb",
+        db_driver=Driver["dataframe".upper()],
+        watch_dir_list=["/home/user/Pictures"],
     )
-    assert nc.in_dir_name == 'aaa'
+    assert nc.in_dir_name == "aaa"
     assert nc.mode == CopyMode.NOP
-    assert nc.out_dir_name == 'bbb'
+    assert nc.out_dir_name == "bbb"
     assert nc.db_driver == Driver.DATAFRAME
-    assert nc.watch_folders[0] == '/home/user/Pictures'
+    assert nc.watch_folders[0] == "/home/user/Pictures"
 
 
 def test_configure_paths_for_this_os__runs():

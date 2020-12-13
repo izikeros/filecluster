@@ -1,4 +1,4 @@
-"""Image and video clustering.
+"""Image and video clustering by the event time.
 
 The goal of this package is to help with organization of the multimedia
  (photos and videos) by the event and date.
