@@ -221,3 +221,33 @@ def check_on_updates_in_watch_folders(config: Config):
 def check_if_media_files_from_db_exists():
     # TODO: KS: 2020-10-28: implement
     logger.info("Running media scan (not implemented yet)")
+
+
+def configure_im_reader(in_dir_name):
+    conf = get_default_config()
+    # modify config
+    conf.__setattr__('in_dir_name', in_dir_name)
+    conf.__setattr__('out_dir_name', '')
+    conf.__setattr__('mode', CopyMode.NOP)
+    conf.__setattr__('db_driver', Driver.DATAFRAME)
+    conf.__setattr__('delete_db', False)
+    return conf
+
+
+def get_media_df(conf):
+    im_reader = ImageReader(config=conf)
+    row_list = im_reader.get_data_from_files_as_list_of_rows()
+    df = MediaDataFrame(pd.DataFrame(row_list))
+    return multiple_timestamps_to_one(df)
+
+
+def get_media_stats(df, time_granularity):
+    date_min = df.date.min()
+    date_max = df.date.max()
+
+    df = df[['file_name', 'date']].copy()
+    df['date_int'] = df['date'].apply(lambda x: x.value / 10 ** 9)
+    df = df.sort_values('date_int')
+    df['delta'] = df.date_int.diff()
+    is_normal = not (any(df.delta.values > time_granularity))
+    return (date_min, date_max, is_normal)

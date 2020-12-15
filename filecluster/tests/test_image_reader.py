@@ -4,15 +4,16 @@ import pandas as pd
 import pytest
 
 from filecluster.configuration import get_default_config, get_development_config
+from filecluster.filecluster_types import MediaDataFrame
 from filecluster.image_reader import (
     ImageReader,
     Metadata,
     multiple_timestamps_to_one,
     initialize_row_dict,
     prepare_new_row_with_meta,
-    get_files_from_watch_folder,
+    get_files_from_watch_folder, configure_im_reader, get_media_df, get_media_stats,
 )
-from filecluster.types import MediaDataframe
+
 
 TEST_INBOX_DIR = "inbox_test_a"
 
@@ -49,7 +50,7 @@ def test_metadata__intializes():
 
 
 def test_multiple_timestamps_to_one():
-    df = MediaDataframe(pd.DataFrame({"exif_date": [], "c_date": [], "m_date": []}))
+    df = MediaDataFrame(pd.DataFrame({"exif_date": [], "c_date": [], "m_date": []}))
     df = multiple_timestamps_to_one(df)
     assert len(df.columns) == 1 and df.columns[0] == "date"
 
@@ -78,3 +79,10 @@ def test_get_files_from_watch_folder():
     watch_folder = config.watch_folders[0]
     f_list = get_files_from_watch_folder(watch_folder)
     assert len(list(f_list)) > 0
+
+def test_dir_scanner():
+    conf = configure_im_reader(in_dir_name='inbox_test_a')
+    media_df = get_media_df(conf)
+    time_granularity = int(conf.time_granularity.total_seconds())
+    media_stats = get_media_stats(media_df, time_granularity)
+    pass
