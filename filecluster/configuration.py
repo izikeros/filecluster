@@ -157,6 +157,7 @@ def setup_directory_for_database(config: Config, db_dir: Optional[str]):
 
     # TODO: KS: 2020-05-23: do not use picke (use csv for accessibility? )
     #   pickle do not have problems with escaping
+    # TODO: KS: 2020-12-15: use list of cluster dbs (one per library)
     config.db_file_clusters = str(Path(db_dir) / DB_FILE_CLUSTERS_PICKLE)
     config.db_file_media = str(Path(db_dir) / DB_FILE_MEDIA_PICKLE)
     return config
