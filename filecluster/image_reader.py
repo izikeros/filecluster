@@ -8,8 +8,8 @@ from typing import List, Optional
 import pandas as pd
 
 import filecluster.utlis as ut
-from filecluster.configuration import Config
-from filecluster.types import MediaDataframe
+from filecluster.configuration import Config, get_default_config, CopyMode, Driver
+from filecluster.filecluster_types import MediaDataFrame
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -34,7 +34,7 @@ class Metadata:
         self.duplicate_to_ids: List[int] = [0]
 
 
-def multiple_timestamps_to_one(image_df: MediaDataframe) -> MediaDataframe:
+def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
     """Get timestamp from exif (primary) or m_date. Drop not needed date cols.
 
     Prepare single timestamp out of few available."""
@@ -100,7 +100,7 @@ def prepare_new_row_with_meta(fn, image_extensions, in_dir_name, meta):
 
 
 class ImageReader(object):
-    def __init__(self, config: Config, media_df: Optional[MediaDataframe] = None):
+    def __init__(self, config: Config, media_df: Optional[MediaDataFrame] = None):
         """Initialize media database with existing media dataframe or create empty one."""
 
         # read the config
@@ -108,7 +108,7 @@ class ImageReader(object):
 
         if media_df is None:
             logger.debug("Initializing empty media dataframe in ImageReader")
-            self.media_df = MediaDataframe(pd.DataFrame())
+            self.media_df = MediaDataFrame(pd.DataFrame())
         else:
             msg = "Initializing media dataframe in ImageReader with provided df."
             logger.debug(msg + f"Num records: {len(media_df)}")
@@ -146,15 +146,15 @@ class ImageReader(object):
         row_list = self.get_data_from_files_as_list_of_rows()
         logger.debug(f"Read info from {len(row_list)} files.")
         # convert list of rows to data frame
-        inbox_media_df = MediaDataframe(pd.DataFrame(row_list))
+        inbox_media_df = MediaDataFrame(pd.DataFrame(row_list))
         inbox_media_df = multiple_timestamps_to_one(inbox_media_df)
         self.media_df = inbox_media_df
 
     def check_import_for_duplicates_in_existing_clusters(
-        self, inbox_media_df: MediaDataframe
+            self, inbox_media_df: MediaDataFrame
     ):
         if self.media_df.empty:
-            logger.debug("MediaDataframe db empty. Skipping duplicate analysis.")
+            logger.debug("MediaDataFrame db empty. Skipping duplicate analysis.")
             # TODO: KS: 2020-05-24: Consider checking for duplicates within import (file size and hash based)
             return None
         else:
@@ -167,8 +167,8 @@ class ImageReader(object):
 
 
 def check_import_for_duplicates_in_watch_folders(
-    watch_folders, inbox_media_df: MediaDataframe
-) -> MediaDataframe:
+        watch_folders, inbox_media_df: MediaDataFrame
+) -> MediaDataFrame:
     """Check if imported files are not in the library already, if so - skip them."""
     logger.debug("Checking import for duplicates in watch folders (not implemented)")
 
