@@ -6,26 +6,21 @@ from typing import List, Optional
 
 from filecluster import version
 from filecluster.configuration import (
-    Driver,
     CopyMode,
-    setup_directory_for_database,
     override_config_with_cli_params,
     get_proper_mode_config,
 )
 from filecluster.dbase import (
-    delete_dbs_if_needed,
-    read_or_create_db_clusters,
-    save_media_and_cluster_info_to_database,
-    read_or_create_media_database,
+    get_existing_clusters_info,
 )
 from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import (
-    check_on_updates_in_watch_folders,
     ImageReader,
-    check_if_media_files_from_db_exists,
-    check_import_for_duplicates_in_watch_folders,
+    mark_inbox_duplicates_vs_watch_folders,
 )
 
+# TODO: KS: 2020-12-17: There are copies of config in the classes.
+#  In extreme case various configs can be modified in different way.
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
@@ -33,15 +28,33 @@ logger.setLevel(logging.DEBUG)
 
 
 def main(
-    inbox_dir: str,
-    output_dir: str,
-    watch_dir_list: List[str],
-    db_dir_str: Optional[str],
-    db_driver: Driver,
-    development_mode: bool,
-    no_operation: bool = False,
+    inbox_dir: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    watch_dir_list: Optional[List[str]] = None,
+    development_mode: Optional[bool] = None,
+    no_operation: Optional[bool] = None,
+    force_deep_scan: Optional[bool] = None,
+    drop_duplicates: Optional[bool] = None,
+    use_existing_clusters: Optional[bool] = None,
 ):
-    # get proper config
+    """Main function to run clustering.
+
+    Input args are default parameters to override and all are optional.
+
+    Args:
+        inbox_dir:
+        output_dir:
+        watch_dir_list:
+        development_mode:
+        no_operation:
+        force_deep_scan:
+        drop_duplicates:
+        use_existing_clusters:
+
+    Returns:
+
+    """
+    # get development or production config
     config = get_proper_mode_config(development_mode)
 
     # override config with CLI params
@@ -50,67 +63,56 @@ def main(
         inbox_dir=inbox_dir,
         no_operation=no_operation,
         output_dir=output_dir,
-        db_driver=db_driver,
         watch_dir_list=watch_dir_list,
+        force_deep_scan=force_deep_scan,
+        drop_duplicates=drop_duplicates,
+        use_existing_clusters=use_existing_clusters,
     )
 
-    config = setup_directory_for_database(config, db_dir_str)
-    logger.debug(config)
+    # read cluster info from clusters in libraries (or empty dataframe)
+    df_clusters = get_existing_clusters_info(config)
 
-    # delete DBs (option for development)
-    delete_dbs_if_needed(config)
-
-    # read or create media database (to store exif data)
-    df_media = read_or_create_media_database(config)
-
-    # read or create cluster database (to store cluster descriptions)
-    df_clusters = read_or_create_db_clusters(config)
-
-    #  check if watch folders contains files that are not in library
-    check_on_updates_in_watch_folders(config)
-
-    #  Not implemented: check if media captured by media db still exists on the disk
-    check_if_media_files_from_db_exists()
-
-    # Configure image reader, initialize media database (if needed)
-    image_reader = ImageReader(config, df_media)
+    # Configure image reader, initialize media database
+    image_reader = ImageReader(config)
 
     # read timestamps from imported pictures/recordings
     image_reader.get_media_info_from_inbox_files()
 
-    # check if not duplicated with media in output clusters dir
-    # Not implemented yet
-    duplicates = image_reader.check_import_for_duplicates_in_existing_clusters(
-        image_reader.media_df
-    )
-
-    # check if not duplicated with watch folders (structured repository)
-    inbox_media_df = check_import_for_duplicates_in_watch_folders(
-        config.watch_folders, image_reader.media_df
+    # skip inbox files duplicated with watch folders (if feature enabled)
+    # TODO: KS: 2020-12-19: remove from inbox df (current implementation) or keep but annotate
+    inbox_media_df, dups = mark_inbox_duplicates_vs_watch_folders(
+        config.watch_folders,
+        image_reader.media_df,
+        config.skip_duplicated_existing_in_libs,
     )
 
     # configure media grouper, initialize internal dataframes
     image_grouper = ImageGrouper(
         configuration=config,
-        media_df=image_reader.media_df,
         df_clusters=df_clusters,
         inbox_media_df=inbox_media_df,
     )
 
-    # Run clustering
+    if config.assign_to_clusters_existing_in_libs:
+        # try assign media items to clusters already existing in the library
+        assigned = image_grouper.assign_to_existing_clusters()
+
+    # Calculate gaps for non-clustered items
     logger.info("Calculating gaps for creating new clusters")
     image_grouper.calculate_gaps()
 
     # create new clusters, assign media
-    cluster_list = image_grouper.add_cluster_id_to_files_in_data_frame()
+    cluster_list = image_grouper.run_clustering()
 
-    image_grouper.save_cluster_data_to_data_frame(cluster_list)
-    image_grouper.assign_representative_date_to_clusters(
-        method=image_grouper.config.assign_date_to_clusters_method
+    image_grouper.add_new_cluster_data_to_data_frame(cluster_list)
+    image_grouper.assign_target_folder_name_to_clusters(
+        method=config.assign_date_to_clusters_method
     )
+    # left-merge clusters to media_df
+    image_grouper.add_cluster_info_from_clusters_to_media()
 
-    # FIXME: KS: 2020-05-25: Merge new media and images_df
-    image_grouper.image_df = image_grouper.inbox_media_df
+    # add target dir for duplicates
+    image_grouper.add_target_dir_for_duplicates()
 
     # Physically move or copy files to folders
     mode = image_grouper.config.mode
@@ -118,9 +120,6 @@ def main(
         image_grouper.move_files_to_cluster_folder()
     else:
         logger.debug("No copy/move operation performed since 'nop' option selected.")
-
-    # Save media and cluster info to database
-    save_media_and_cluster_info_to_database(image_grouper)
 
 
 if __name__ == "__main__":
@@ -132,8 +131,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-w",
-        "--watch-dirs",
+        "--watch-dir",
         help="directories with structured media (official media repository)",
+        action="append",
     )
     parser.add_argument(
         "-d",
@@ -156,9 +156,29 @@ if __name__ == "__main__":
         default=False,
     )
     parser.add_argument(
+        "-f",
+        "--force-deep-scan",
+        help="Force recalculate cluster info for each existing cluster.",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-d",
+        "--drop-duplicates",
+        help="",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-c",
+        "--use-existing-clusters",
+        help="",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "--version", action="version", version=f"%(prog)s {version.__version__}"
     )
-    # TODO: KS: 2020-10-28: add watch folder(s)
     args = parser.parse_args()
 
     if isinstance(args.watch_dirs, str):
@@ -172,8 +192,9 @@ if __name__ == "__main__":
         inbox_dir=args.inbox_dir,
         output_dir=args.output_dir,
         watch_dir_list=watch_dirs,
-        db_dir_str=None,
-        db_driver=Driver[args.db_driver.upper()],
         development_mode=args.development_mode,
         no_operation=args.no_operation,
+        force_deep_scan=args.force_deep_scan,
+        drop_duplicates=args.drop_duplicates,
+        use_existing_clusters=args.use_existing_clusters,
     )

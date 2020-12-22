@@ -70,7 +70,6 @@ layout = [
     [sg.Submit(button_text="Run", tooltip="Click to start clustering"), sg.Cancel()],
 ]
 
-
 window = sg.Window(
     "Everything bagel", layout, default_element_size=(40, 1), grab_anywhere=False
 )

@@ -15,16 +15,9 @@ from filecluster.cluster_scaner import (
     fast_scandir,
     identify_folder_types,
     is_event,
-    INI_FILENAME,
 )
+from filecluster.configuration import INI_FILENAME
 from filecluster.image_reader import configure_im_reader, get_media_df, get_media_stats
-
-# Usage of the clustering information
-# from datetime import datetime
-# img_time_str = "2018-10-26 18:35:08"
-# img_time = datetime.strptime(img_time_str, "%Y-%m-%d %H:%M:%S")  # 06-12
-# candidate_clusters = df[(df.start <= img_time) & (df.stop >= img_time)]
-
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -32,12 +25,12 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def scan_library_dir(library_path: str, force_deep_scan=False):
-    """Scan folder.
+def scan_library_dir(library_path: str, force_deep_scan=False) -> pd.DataFrame:
+    """Scan folder for cluster info and return dataframe with clusters.
 
     Args:
         library_path:
-        quick_mode:
+        force_deep_scan:
 
     Returns:
         None
@@ -64,7 +57,11 @@ def scan_library_dir(library_path: str, force_deep_scan=False):
             time_granularity = int(conf.time_granularity.total_seconds())
             media_stats = get_media_stats(media_df, time_granularity)
             cluster_ini = initialize_cluster_info_dict(
-                start=media_stats[0], stop=media_stats[1], is_continous=media_stats[2]
+                start=media_stats["date_min"],
+                stop=media_stats["date_max"],
+                is_continous=media_stats["is_normal"],
+                median=media_stats["date_median"],
+                file_count=media_stats["file_count"],
             )
             save_cluster_ini(cluster_ini, pth)
         # read existing ini
@@ -74,7 +71,9 @@ def scan_library_dir(library_path: str, force_deep_scan=False):
         ds.append(d)
 
     df = pd.DataFrame(ds)
-    df.to_csv(Path(library_path) / ".clusters.csv", index=False)
+    df["target_path"] = None
+    df["new_file_count"] = None
+    return df
 
 
 if __name__ == "__main__":
@@ -102,4 +101,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     libs = args.library
     for lib in libs:
-        scan_library_dir(library_path=lib, force_deep_scan=args.force_recalc)
+        _ = scan_library_dir(library_path=lib, force_deep_scan=args.force_recalc)

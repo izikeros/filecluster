@@ -1,14 +1,18 @@
 import logging
 import os
-from functools import lru_cache
 from pathlib import Path
-from pprint import pprint
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import pandas as pd
 
 import filecluster.utlis as ut
-from filecluster.configuration import Config, get_default_config, CopyMode, Driver
+from filecluster.configuration import (
+    Config,
+    get_default_config,
+    CopyMode,
+    Driver,
+    Status,
+)
 from filecluster.filecluster_types import MediaDataFrame
 
 log_fmt = "%(levelname).1s %(message)s"
@@ -27,11 +31,12 @@ class Metadata:
         self.date: str = ""
         self.file_size: int = 0
         self.hash_value: int = 0
-        self.full_path: str = ""
         self.image: int = 0
         self.is_image: bool = True
         self.cluster_id: int = 0
-        self.duplicate_to_ids: List[int] = [0]
+        self.status: Status = Status.UNKNOWN
+        self.duplicated_to: List[str] = []
+        self.duplicated_cluster: List[str] = []
 
 
 def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
@@ -53,9 +58,6 @@ def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
 
 def initialize_row_dict(meta: Metadata):
     """generate single row based on values defined in outer method"""
-    thumbnail = None
-    # if generate_thumbnails:
-    #     thumbnail = ut.get_thumbnail(path_name)
 
     # define structure of images dataframe and fill with data
     row = {
@@ -66,11 +68,11 @@ def initialize_row_dict(meta: Metadata):
         "date": meta.date,
         "size": meta.file_size,
         "hash_value": meta.hash_value,
-        "full_path": meta.full_path,
-        "image": meta.image,
-        "is_image": thumbnail,
+        "is_image": meta.is_image,
         "cluster_id": meta.cluster_id,
-        "duplicate_to_ids": meta.duplicate_to_ids,
+        "status": meta.status,
+        "duplicated_to": meta.duplicated_to,
+        "duplicated_cluster": meta.duplicated_cluster,
     }
     return row
 
@@ -92,8 +94,11 @@ def prepare_new_row_with_meta(fn, image_extensions, in_dir_name, meta):
     meta.date = None  # to be filled in later
     # placeholder for assignment to cluster
     meta.cluster_id = None
-    # placeholder for storing info on this file duplicates
-    meta.duplicate_to_ids = []
+    # status
+    meta.status = Status.UNKNOWN
+    # duplication info
+    meta.duplicated_to = []
+    meta.duplicated_cluster = []
     # generate new row using data obtained above
     new_row = initialize_row_dict(meta)
     return new_row
@@ -151,7 +156,7 @@ class ImageReader(object):
         self.media_df = inbox_media_df
 
     def check_import_for_duplicates_in_existing_clusters(
-            self, inbox_media_df: MediaDataFrame
+        self, inbox_media_df: MediaDataFrame
     ):
         if self.media_df.empty:
             logger.debug("MediaDataFrame db empty. Skipping duplicate analysis.")
@@ -166,56 +171,81 @@ class ImageReader(object):
             return inbox_media_df
 
 
-def check_import_for_duplicates_in_watch_folders(
-        watch_folders, inbox_media_df: MediaDataFrame
-) -> MediaDataFrame:
+def mark_inbox_duplicates_vs_watch_folders(
+    watch_folders: List[str],
+    inbox_media_df: MediaDataFrame,
+    skip_duplicated_existing_in_libs,
+) -> Tuple[MediaDataFrame, List[str]]:
     """Check if imported files are not in the library already, if so - skip them."""
-    logger.debug("Checking import for duplicates in watch folders (not implemented)")
+    if not skip_duplicated_existing_in_libs:
+        return inbox_media_df, []
+    else:
+        logger.debug("Checking import for duplicates in watch folders")
 
-    lst = []
-    file_list_watch = None
     if not any(watch_folders):
         logger.debug("No library folder defined. Skipping duplicate search.")
-        return inbox_media_df
+        return inbox_media_df, []
 
-    for w in watch_folders:
-        file_list_watch = get_files_from_watch_folder(w)
-        path_list = [path for path in file_list_watch]
-        lst.extend(path_list)
+    # get files in library
+    watch_names, lst = get_watch_folders_files_path(watch_folders)
 
-    watch_names = [path.name for path in lst]
+    # get files in inbox
     new_names = inbox_media_df.file_name.values.tolist()
+
+    # commons - list of new names that apear in watch folders
     potential_dups = [f for f in new_names if f in watch_names]
 
     # verify potential dups using size comparison
-    confirmed_dups = []
-    keys_to_remove = []
+    file_already_in_library = []
+    keys_to_remove_from_inbox_import = []
 
-    for d in potential_dups:
-        nd = inbox_media_df[inbox_media_df.file_name == d]
-        wd = [path for path in file_list_watch if path.name == d]
-        n = nd["size"].values[0]
-        if n == os.path.getsize(wd[0]):
-            confirmed_dups.append(wd[0])
-            keys_to_remove.append(inbox_media_df.file_name.values[0])
-    print("Found duplicates based on filename and size:")
-    pprint(confirmed_dups)
+    for potential_duplicate in potential_dups:
+        # get inbox item info
+        inbox_item = inbox_media_df[inbox_media_df.file_name == potential_duplicate]
 
-    # remove confirmed duplicated from the import batch
-    inbox_media_df = inbox_media_df[~inbox_media_df.file_name.isin(keys_to_remove)]
-    return inbox_media_df
+        # get matching watch folder items
+        lib_items = [path for path in lst if path.name == potential_duplicate]
+        inbox_item_size = inbox_item["size"].values[0]
+
+        for lib_item in lib_items:
+            if inbox_item_size == os.path.getsize(lib_item):
+                file_already_in_library.append(lib_item)
+                in_file_name = inbox_item.file_name.values[0]
+                keys_to_remove_from_inbox_import.append(in_file_name)
+                logger.debug(
+                    f"For inbox file {in_file_name} there is duplicate already in library: {lib_item}"
+                )
+
+    # # remove confirmed duplicated from the import batch
+    # inbox_media_df = inbox_media_df[
+    #     ~inbox_media_df.file_name.isin(keys_to_remove_from_inbox_import)
+    # ]
+
+    # mark confirmed duplicates in import batch
+    sel_dups = inbox_media_df.file_name.isin(keys_to_remove_from_inbox_import)
+    for idx, _row in inbox_media_df[sel_dups].iterrows():
+        inbox_media_df.status[idx] = Status.DUPLICATE
+        dups_patch = list(filter(lambda x: _row.file_name in str(x), lst))
+        dups_str = [str(x) for x in dups_patch]
+        dups_clust = [x.parts[-2] for x in dups_patch]
+        inbox_media_df.duplicated_to[idx] = dups_str
+        inbox_media_df.duplicated_cluster[idx] = dups_clust
+    return inbox_media_df, keys_to_remove_from_inbox_import
 
 
-@lru_cache
-def get_files_from_watch_folder(w: str):
-    return Path(w).rglob("*.*")
+def get_watch_folders_files_path(watch_folders):
+    lst = []
+    for w in watch_folders:
+        file_list_watch = get_files_from_folder(w)
+        path_list = [path for path in file_list_watch]
+        lst.extend(path_list)
+    watch_names = [path.name for path in lst]
+    return watch_names, lst
 
 
-def check_on_updates_in_watch_folders(config: Config):
-    """Running media scan in library."""
-    # TODO: KS: 2020-10-28: implement
-    # TODO: KS: 2020-10-28: need another database or media will be sufficient?
-    logger.info(f"Running media scan in {config.watch_folders} (not implemented yet)")
+# @lru_cache
+def get_files_from_folder(folder: str):
+    return Path(folder).rglob("*.*")
 
 
 def check_if_media_files_from_db_exists():
@@ -226,11 +256,11 @@ def check_if_media_files_from_db_exists():
 def configure_im_reader(in_dir_name):
     conf = get_default_config()
     # modify config
-    conf.__setattr__('in_dir_name', in_dir_name)
-    conf.__setattr__('out_dir_name', '')
-    conf.__setattr__('mode', CopyMode.NOP)
-    conf.__setattr__('db_driver', Driver.DATAFRAME)
-    conf.__setattr__('delete_db', False)
+    conf.__setattr__("in_dir_name", in_dir_name)
+    conf.__setattr__("out_dir_name", "")
+    conf.__setattr__("mode", CopyMode.NOP)
+    conf.__setattr__("db_driver", Driver.DATAFRAME)
+    conf.__setattr__("delete_db", False)
     return conf
 
 
@@ -241,13 +271,23 @@ def get_media_df(conf):
     return multiple_timestamps_to_one(df)
 
 
-def get_media_stats(df, time_granularity):
+def get_media_stats(df: pd.DataFrame, time_granularity: int) -> dict:
     date_min = df.date.min()
     date_max = df.date.max()
+    date_median = df.iloc[int(len(df) / 2)].date
 
-    df = df[['file_name', 'date']].copy()
-    df['date_int'] = df['date'].apply(lambda x: x.value / 10 ** 9)
-    df = df.sort_values('date_int')
-    df['delta'] = df.date_int.diff()
+    df = df[["file_name", "date"]].copy()
+    df["date_int"] = df["date"].apply(lambda x: x.value / 10 ** 9)
+    df = df.sort_values("date_int")
+    df["delta"] = df.date_int.diff()
     is_normal = not (any(df.delta.values > time_granularity))
-    return (date_min, date_max, is_normal)
+    if not isinstance(is_normal, bool):
+        pass
+    file_count = len(df)
+    return {
+        "date_min": date_min,
+        "date_max": date_max,
+        "date_median": date_median,
+        "is_normal": is_normal,
+        "file_count": file_count,
+    }
