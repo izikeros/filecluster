@@ -4,18 +4,23 @@ import re
 from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
-# standard filename for cluster info file to be placed in cluster directory
-INI_FILENAME: str = ".cluster.ini"
+from filecluster.configuration import INI_FILENAME
 
 
 def initialize_cluster_info_dict(
-    start: str, stop: str, is_continous: bool
+    start: str,
+    stop: str,
+    is_continous: bool,
+    median: Optional[int] = None,
+    file_count: Optional[int] = None,
 ) -> ConfigParser:
     """Return dictionary that store information on cluster existing on the disk.
 
     Args:
+      median:
+      file_count:
       start:        Cluster start datetime
       stop:         Cluster end datetime
       is_continous: Indicate if there are not gaps (larger than allowed) in the cluster
@@ -25,9 +30,11 @@ def initialize_cluster_info_dict(
     """
     cluster_ini = ConfigParser()
     cluster_ini["Range"] = {}
-    cluster_ini["Range"]["start"] = str(start)
-    cluster_ini["Range"]["stop"] = str(stop)
+    cluster_ini["Range"]["start_date"] = str(start)
+    cluster_ini["Range"]["end_date"] = str(stop)
     cluster_ini["Range"]["is_continous"] = str(is_continous)
+    cluster_ini["Range"]["median"] = str(median)
+    cluster_ini["Range"]["file_count"] = str(file_count)
     return cluster_ini
 
 
@@ -66,11 +73,11 @@ def read_cluster_ini_as_dict(path):
     }
 
     # correct timestamps
-    cluster_dict["Range"]["start"] = datetime.strptime(
-        cluster_dict["Range"]["start"], "%Y-%m-%d %H:%M:%S"
+    cluster_dict["Range"]["start_date"] = datetime.strptime(
+        cluster_dict["Range"]["start_date"], "%Y-%m-%d %H:%M:%S"
     )
-    cluster_dict["Range"]["stop"] = datetime.strptime(
-        cluster_dict["Range"]["stop"], "%Y-%m-%d %H:%M:%S"
+    cluster_dict["Range"]["end_date"] = datetime.strptime(
+        cluster_dict["Range"]["end_date"], "%Y-%m-%d %H:%M:%S"
     )
 
     return cluster_dict
@@ -85,9 +92,12 @@ def fast_scandir(dirname: str) -> List[str]:
     Returns:
         list of subfolders
     """
-    subfolders = [f.path for f in os.scandir(dirname) if f.is_dir()]
-    for dirname in list(subfolders):
-        subfolders.extend(fast_scandir(dirname))
+    if dirname:
+        subfolders = [f.path for f in os.scandir(dirname) if f.is_dir()]
+        for dirname in list(subfolders):
+            subfolders.extend(fast_scandir(dirname))
+    else:
+        subfolders = []
     return subfolders
 
 
