@@ -13,16 +13,20 @@ logger.setLevel(logging.DEBUG)
 
 
 def get_existing_clusters_info(config: Config):
+    # TODO: Any non-empty subfolder of year folder should contain .cluster.ini file (see: Runmageddon example)
+    #   non-empty means - contains media files
     watch_folders = config.watch_folders
+
+    # is there a reason for using watch folders (library folders)?
+    #   do we have enabled duplicates or existing cluster functionalities
     use_watch_folders = (
-        config.skip_duplicated_existing_in_libs
-        or config.assign_to_clusters_existing_in_libs
+            config.skip_duplicated_existing_in_libs
+            or config.assign_to_clusters_existing_in_libs
     )
+
+    # Start scanning watch folders to get cluster information
     if use_watch_folders and len(watch_folders):
-        dfs = [
-            scan_library_dir(lib, force_deep_scan=config.force_deep_scan)
-            for lib in watch_folders
-        ]
+        dfs = [scan_library_dir(lib, config.force_deep_scan) for lib in watch_folders]
         df = pd.concat(dfs, axis=0)
         df.index = range(len(df))
         df = df.reset_index()

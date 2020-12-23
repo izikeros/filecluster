@@ -10,11 +10,11 @@ from filecluster.configuration import INI_FILENAME
 
 
 def initialize_cluster_info_dict(
-    start: str,
-    stop: str,
-    is_continous: bool,
-    median: Optional[int] = None,
-    file_count: Optional[int] = None,
+        start: str,
+        stop: str,
+        is_continous: bool,
+        median: Optional[int] = None,
+        file_count: Optional[int] = None,
 ) -> ConfigParser:
     """Return dictionary that store information on cluster existing on the disk.
 
@@ -39,8 +39,8 @@ def initialize_cluster_info_dict(
 
 
 def save_cluster_ini(
-    cluster_ini: ConfigParser,
-    path: str,
+        cluster_ini: ConfigParser,
+        path: str,
 ):
     """Save cluster information dictionary.
 
@@ -125,6 +125,8 @@ def identify_folder_types(subfolders_list) -> List[Tuple[str, str]]:
             subs_labeled.append((s, "sel"))
         elif is_event_folder(s):
             subs_labeled.append((s, "event"))
+        elif is_event_subcategory_folder(s):
+            subs_labeled.append((s, "sub_event"))
         else:
             subs_labeled.append((s, "unknown"))
     return subs_labeled
@@ -158,8 +160,8 @@ def is_event_folder(folder: str) -> bool:
     last_part = Path(folder).parts[-1]
     parrent_part = Path(folder).parts[-2]
     is_parrent_4_digits = bool(re.match(r"^\d\d\d\d$", parrent_part))
-    #starts_with_date_timestamp = bool(re.match(r"^\[\d\d\d\d/", last_part))
-    return is_parrent_4_digits #and starts_with_date_timestamp
+    # starts_with_date_timestamp = bool(re.match(r"^\[\d\d\d\d/", last_part))
+    return is_parrent_4_digits  # and starts_with_date_timestamp
 
 
 def is_sel_folder(folder: str) -> bool:
@@ -176,6 +178,20 @@ def is_sel_folder(folder: str) -> bool:
     """
     starts_with_4_digits = bool(re.match(r"^\d\d\d\d/", folder))
     return starts_with_4_digits and os.path.basename(folder) == "sel"
+
+
+def is_event_subcategory_folder(folder: str) -> bool:
+    """Check if given folder is a event sub-folder folder.
+
+    Args:
+      folder: path to folder that has to be examined.
+
+    Returns:
+        True if folder is a event sub-folder folder.
+    """
+    starts_with_4_digits = bool(re.match(r"^\d\d\d\d/", folder))
+    # FIXME: Implement
+    return False
 
 
 def is_video_folder(folder: str) -> bool:

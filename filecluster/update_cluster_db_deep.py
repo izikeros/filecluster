@@ -35,11 +35,12 @@ def scan_library_dir(library_path: str, force_deep_scan=False) -> pd.DataFrame:
     Returns:
         None
     """
-    # strip trailing '/' if any
-    library_path = library_path.rstrip("/")
+    # strip trailing '/' and '\' if any
+    library_path = library_path.rstrip("/").rstrip("\\")
 
     subfolders = fast_scandir(library_path)
 
+    # remove library path part from the library subfolders paths
     subfolders_root = [s.replace(library_path + "/", "") for s in subfolders]
     subs_labeled = identify_folder_types(subfolders_root)
 

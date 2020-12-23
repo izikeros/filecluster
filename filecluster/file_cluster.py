@@ -73,22 +73,23 @@ def main(
     )
 
     # read cluster info from clusters in libraries (or empty dataframe)
+    # TODO: Add listing of dirs without media
     df_clusters = get_existing_clusters_info(config)
 
     # Configure image reader, initialize media database
     image_reader = ImageReader(config)
 
     # read timestamps from imported pictures/recordings
-    # try:
-    # image_reader.media_df = pd.read_csv('h:\\incomming\\inbox.txt')
-    # except:
-    image_reader.get_media_info_from_inbox_files()
+    try:
+        image_reader.media_df = pd.read_csv('h:\\incomming\\inbox.csv')
+    except:
+        image_reader.get_media_info_from_inbox_files()
+        image_reader.media_df.to_csv('h:\\incomming\\inbox.csv', index=False)
 
     # skip inbox files duplicated with watch folders (if feature enabled)
-    # TODO: KS: 2020-12-19: remove from inbox df (current implementation) or keep but annotate
     inbox_media_df, dups = mark_inbox_duplicates_vs_watch_folders(
         config.watch_folders,
-        image_reader.media_df,
+        image_reader.media_df.copy(),
         config.skip_duplicated_existing_in_libs,
     )
 

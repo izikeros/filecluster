@@ -45,10 +45,11 @@ def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
     Prepare single timestamp out of few available."""
 
     logger.debug("Cleaning-up timestamps in imported media.")
-    # todo: Ensure that any date is assigned to file
+    # TODO: Ensure that any date is assigned to file
     # use exif date as base
     image_df["date"] = image_df["exif_date"]
     # unless is missing - then use modification date:
+    # TODO: Alternatively, take earliest from m_date and c_date
     image_df["date"] = image_df["date"].fillna(image_df["m_date"])
 
     # infer date format  from strings
@@ -119,7 +120,7 @@ class ImageReader(object):
         self.config = config
 
         if media_df is None:
-            logger.debug("Initializing empty media dataframe in ImageReader")
+            logger.debug(f"Initializing empty media dataframe in ImageReader ({config.in_dir_name})")
             self.media_df = MediaDataFrame(pd.DataFrame())
         else:
             msg = "Initializing media dataframe in ImageReader with provided df."
@@ -148,11 +149,7 @@ class ImageReader(object):
                 new_row = prepare_new_row_with_meta(
                     fn, image_extensions, in_dir_name, meta
                 )
-
                 list_of_rows.append(new_row)
-            else:
-                # not suported
-                pass
             ut.print_progress(i_file, n_files - 1, "reading files: ")
         print("")
         return list_of_rows
@@ -165,21 +162,6 @@ class ImageReader(object):
         inbox_media_df = MediaDataFrame(pd.DataFrame(row_list))
         inbox_media_df = multiple_timestamps_to_one(inbox_media_df)
         self.media_df = inbox_media_df
-
-    def check_import_for_duplicates_in_existing_clusters(
-            self, inbox_media_df: MediaDataFrame
-    ):
-        if self.media_df.empty:
-            logger.debug("MediaDataFrame db empty. Skipping duplicate analysis.")
-            # TODO: KS: 2020-05-24: Consider checking for duplicates within import (file size and hash based)
-            return None
-        else:
-            logger.debug("Checking newly imported files against database")
-            # TODO: 1. check for duplicates: in newly imported files (file size and hash based)
-            # TODO: 2. check for duplicates: newly imported files against database
-            # TODO: mark duplicates if found any
-            logger.warning("Duplicates check not implemented")
-            return inbox_media_df
 
 
 def mark_inbox_duplicates_vs_watch_folders(
@@ -235,7 +217,7 @@ def mark_inbox_duplicates_vs_watch_folders(
     # mark confirmed duplicates in import batch
     sel_dups = inbox_media_df.file_name.isin(keys_to_remove_from_inbox_import)
     for idx, _row in inbox_media_df[sel_dups].iterrows():
-        inbox_media_df.status[idx] = Status.DUPLICATE
+        inbox_media_df.status[idx] = Status.DUPLICATE           # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
         dups_patch = list(filter(lambda x: _row.file_name in str(x), lst))
         dups_str = [str(x) for x in dups_patch]
         dups_clust = [x.parts[-2] for x in dups_patch]
