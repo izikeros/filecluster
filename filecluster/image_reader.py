@@ -45,10 +45,12 @@ def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
     Prepare single timestamp out of few available."""
 
     logger.debug("Cleaning-up timestamps in imported media.")
+    # todo: Ensure that any date is assigned to file
     # use exif date as base
     image_df["date"] = image_df["exif_date"]
     # unless is missing - then use modification date:
     image_df["date"] = image_df["date"].fillna(image_df["m_date"])
+
     # infer date format  from strings
     image_df["date"] = pd.to_datetime(image_df["date"], infer_datetime_format=True)
 
@@ -85,7 +87,12 @@ def prepare_new_row_with_meta(fn, image_extensions, in_dir_name, meta):
     # get modification, creation and exif dates
     meta.m_time, meta.c_time, meta.exif_date = ut.get_date_from_file(path_name)
     # determine if media file is image or other type
-    meta.is_image = ut.is_image(path_name, image_extensions)
+    is_image = ut.is_image(path_name, image_extensions)
+    meta.is_image = is_image
+    if not is_image:
+        pass
+    if fn.lower().endswith("mov"):
+        pass
     # file size
     meta.file_size = os.path.getsize(path_name)
     # file hash
@@ -135,13 +142,17 @@ class ImageReader(object):
         n_files = len(list_dir)
         image_extensions = self.config.image_extensions
         meta = Metadata()
-        for i_file, fn in enumerate(os.listdir(in_dir_name)):
+        file_list = list(os.listdir(in_dir_name))
+        for i_file, fn in enumerate(file_list):
             if ut.is_supported_filetype(fn, ext):
                 new_row = prepare_new_row_with_meta(
                     fn, image_extensions, in_dir_name, meta
                 )
 
                 list_of_rows.append(new_row)
+            else:
+                # not suported
+                pass
             ut.print_progress(i_file, n_files - 1, "reading files: ")
         print("")
         return list_of_rows
@@ -156,7 +167,7 @@ class ImageReader(object):
         self.media_df = inbox_media_df
 
     def check_import_for_duplicates_in_existing_clusters(
-        self, inbox_media_df: MediaDataFrame
+            self, inbox_media_df: MediaDataFrame
     ):
         if self.media_df.empty:
             logger.debug("MediaDataFrame db empty. Skipping duplicate analysis.")
@@ -172,9 +183,9 @@ class ImageReader(object):
 
 
 def mark_inbox_duplicates_vs_watch_folders(
-    watch_folders: List[str],
-    inbox_media_df: MediaDataFrame,
-    skip_duplicated_existing_in_libs,
+        watch_folders: List[str],
+        inbox_media_df: MediaDataFrame,
+        skip_duplicated_existing_in_libs,
 ) -> Tuple[MediaDataFrame, List[str]]:
     """Check if imported files are not in the library already, if so - skip them."""
     if not skip_duplicated_existing_in_libs:
@@ -228,8 +239,8 @@ def mark_inbox_duplicates_vs_watch_folders(
         dups_patch = list(filter(lambda x: _row.file_name in str(x), lst))
         dups_str = [str(x) for x in dups_patch]
         dups_clust = [x.parts[-2] for x in dups_patch]
-        inbox_media_df.duplicated_to[idx] = dups_str
-        inbox_media_df.duplicated_cluster[idx] = dups_clust
+        inbox_media_df.duplicated_to[idx] = dups_str            # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
+        inbox_media_df.duplicated_cluster[idx] = dups_clust     # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
     return inbox_media_df, keys_to_remove_from_inbox_import
 
 
@@ -264,11 +275,14 @@ def configure_im_reader(in_dir_name):
     return conf
 
 
-def get_media_df(conf):
+def get_media_df(conf) -> Optional[MediaDataFrame]:
     im_reader = ImageReader(config=conf)
     row_list = im_reader.get_data_from_files_as_list_of_rows()
-    df = MediaDataFrame(pd.DataFrame(row_list))
-    return multiple_timestamps_to_one(df)
+    if row_list:
+        df = MediaDataFrame(pd.DataFrame(row_list))
+        return multiple_timestamps_to_one(df)
+    else:
+        return None
 
 
 def get_media_stats(df: pd.DataFrame, time_granularity: int) -> dict:
