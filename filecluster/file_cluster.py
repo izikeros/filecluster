@@ -2,8 +2,9 @@
 """Main module for image clustering."""
 import argparse
 import logging
+from pathlib import Path
 from typing import List, Optional
-
+import pandas as pd
 from filecluster import version
 from filecluster.configuration import (
     CopyMode,
@@ -33,6 +34,7 @@ def main(
     watch_dir_list: Optional[List[str]] = None,
     development_mode: Optional[bool] = None,
     no_operation: Optional[bool] = None,
+    copy_mode: Optional[bool] = None,
     force_deep_scan: Optional[bool] = None,
     drop_duplicates: Optional[bool] = None,
     use_existing_clusters: Optional[bool] = None,
@@ -62,6 +64,7 @@ def main(
         config=config,
         inbox_dir=inbox_dir,
         no_operation=no_operation,
+        copy_mode=copy_mode,
         output_dir=output_dir,
         watch_dir_list=watch_dir_list,
         force_deep_scan=force_deep_scan,
@@ -76,6 +79,9 @@ def main(
     image_reader = ImageReader(config)
 
     # read timestamps from imported pictures/recordings
+    # try:
+    # image_reader.media_df = pd.read_csv('h:\\incomming\\inbox.txt')
+    # except:
     image_reader.get_media_info_from_inbox_files()
 
     # skip inbox files duplicated with watch folders (if feature enabled)
@@ -132,14 +138,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "-w",
         "--watch-dir",
-        help="directories with structured media (official media repository)",
+        help="directory with structured media (official media repository)",
         action="append",
-    )
-    parser.add_argument(
-        "-d",
-        "--db-driver",
-        help="technology to use to store cluster and media databases. sqlite|dataframe",
-        required=False,
     )
     parser.add_argument(
         "-t",
@@ -152,6 +152,13 @@ if __name__ == "__main__":
         "-n",
         "--no-operation",
         help="Do not introduce any changes on the disk. Dry run.",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "-y",
+        "--copy-mode",
+        help="Copy instead of default move",
         action="store_true",
         default=False,
     )
@@ -181,19 +188,20 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if isinstance(args.watch_dirs, str):
-        watch_dirs = [args.watch_dirs]
-    elif isinstance(args.watch_dirs, str):
-        watch_dirs = args.watch_dirs
+    if isinstance(args.watch_dir, str):
+        watch_dirs = [args.watch_dir]
+    elif isinstance(args.watch_dir, List):
+        watch_dirs = args.watch_dir
     else:
         raise TypeError("watch_dirs should be a list")
 
     main(
-        inbox_dir=args.inbox_dir,
-        output_dir=args.output_dir,
+        inbox_dir=str(Path(args.inbox_dir)),
+        output_dir=str(Path(args.output_dir)),
         watch_dir_list=watch_dirs,
         development_mode=args.development_mode,
         no_operation=args.no_operation,
+        copy_mode=args.copy_mode,
         force_deep_scan=args.force_deep_scan,
         drop_duplicates=args.drop_duplicates,
         use_existing_clusters=args.use_existing_clusters,

@@ -306,6 +306,7 @@ def override_config_with_cli_params(
     config: Config,
     inbox_dir: str,
     no_operation: bool,
+    copy_mode: bool,
     output_dir: str,
     watch_dir_list: List[str],
     force_deep_scan: Optional[bool] = None,
@@ -331,8 +332,13 @@ def override_config_with_cli_params(
         config.in_dir_name = inbox_dir
     if output_dir is not None:
         config.out_dir_name = output_dir
+
+    # TODO: better handle these two mutually exclusive options
     if no_operation is not None:
         config.mode = CopyMode.NOP
+    if copy_mode is not None:
+        config.mode = CopyMode.COPY
+
     if watch_dir_list is not None:
         config.watch_folders = watch_dir_list
         file_cluster_dbs = [
