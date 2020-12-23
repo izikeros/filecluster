@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 from datetime import timedelta
 from pathlib import Path
 from shutil import copy2, move
@@ -8,6 +9,7 @@ from typing import List, Optional
 import pandas as pd
 from pandas._libs.tslibs.timedeltas import Timedelta
 from pandas._libs.tslibs.timestamps import Timestamp
+from tqdm import tqdm
 
 from filecluster import utlis as ut
 from filecluster.configuration import (
@@ -269,8 +271,15 @@ class ImageGrouper(object):
                 exif_date = df.iloc[int(len(df) / 2)]["date"]
 
             ts = pd.to_datetime(str(exif_date))
-            date_str = ts.strftime("[%Y_%m_%d]")
-            time_str = ts.strftime("%H%M%S")
+            try:
+                date_str = ts.strftime("[%Y_%m_%d]")
+            except ValueError:
+                date_str = f'[NaT_]_{str(random.randint(100000,999999))}'
+
+            try:
+                time_str = ts.strftime("%H%M%S")
+            except ValueError:
+                time_str = f'{str(random.randint(100000,999999))}'
 
             image_count = df.loc[df["is_image"]].shape[0]
             video_count = df.loc[~df["is_image"]].shape[0]
@@ -348,12 +357,16 @@ class ImageGrouper(object):
 
         margin = self.config.time_granularity
         sel_no_duplicated = ~(self.inbox_media_df.status == Status.DUPLICATE)
-        for row in self.inbox_media_df[sel_no_duplicated].iterrows():
+        for _, row in tqdm(self.inbox_media_df[sel_no_duplicated].iterrows()):
             index = row[0]
-            img_time = row[1].date  # read item_date
+            img_time = row['date']  # read item_date
 
-            not_too_old_clusters = self.df_clusters.start_date - margin <= img_time
-            not_too_new_clusters = self.df_clusters.end_date + margin >= img_time
+            try:
+                not_too_old_clusters = self.df_clusters.start_date - margin <= img_time
+                not_too_new_clusters = self.df_clusters.end_date + margin >= img_time
+            except:
+                pass
+
             range_ok = not_too_old_clusters & not_too_new_clusters
             continous = self.df_clusters.is_continous
             candidate_clusters = self.df_clusters[range_ok & continous]
