@@ -72,13 +72,10 @@ def read_cluster_ini_as_dict(path):
         section: dict(cluster_ini.items(section)) for section in cluster_ini.sections()
     }
 
-    # correct timestamps
-    cluster_dict["Range"]["start_date"] = datetime.strptime(
-        cluster_dict["Range"]["start_date"], "%Y-%m-%d %H:%M:%S"
-    )
-    cluster_dict["Range"]["end_date"] = datetime.strptime(
-        cluster_dict["Range"]["end_date"], "%Y-%m-%d %H:%M:%S"
-    )
+    if cluster_dict:
+        # correct timestamps
+        dt_start = cluster_dict["Range"]["start_date"]
+        dt_end = cluster_dict["Range"]["end_date"]
 
     return cluster_dict
 
