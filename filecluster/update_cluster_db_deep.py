@@ -53,22 +53,26 @@ def scan_library_dir(library_path: str, force_deep_scan=False) -> pd.DataFrame:
         if force_deep_scan or not is_ini:
             # calculate ini
             conf = configure_im_reader(in_dir_name=pth)
+            # TODO: check if the folder contains any media
             media_df = get_media_df(conf)
-            time_granularity = int(conf.time_granularity.total_seconds())
-            media_stats = get_media_stats(media_df, time_granularity)
-            cluster_ini = initialize_cluster_info_dict(
-                start=media_stats["date_min"],
-                stop=media_stats["date_max"],
-                is_continous=media_stats["is_normal"],
-                median=media_stats["date_median"],
-                file_count=media_stats["file_count"],
-            )
-            save_cluster_ini(cluster_ini, pth)
+            if media_df is not None:
+                time_granularity = int(conf.time_granularity.total_seconds())
+                media_stats = get_media_stats(media_df, time_granularity)
+                cluster_ini = initialize_cluster_info_dict(
+                    start=media_stats["date_min"],
+                    stop=media_stats["date_max"],
+                    is_continous=media_stats["is_normal"],
+                    median=media_stats["date_median"],
+                    file_count=media_stats["file_count"],
+                )
+                save_cluster_ini(cluster_ini, pth)
+
         # read existing ini
         cluster_ini_r = read_cluster_ini_as_dict(pth)
-        d = cluster_ini_r["Range"]
-        d["path"] = pth
-        ds.append(d)
+        if cluster_ini_r:
+            d = cluster_ini_r["Range"]
+            d["path"] = pth
+            ds.append(d)
 
     df = pd.DataFrame(ds)
     df["target_path"] = None
