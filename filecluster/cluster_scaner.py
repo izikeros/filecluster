@@ -139,7 +139,8 @@ def is_year_folder(folder: str) -> bool:
     Returns:
         True if folder is year-folder
     """
-    is_four_digits = re.match(r"^\d\d\d\d$", folder)
+    last_part = Path(folder).parts[-1]
+    is_four_digits = bool(re.match(r"^\d\d\d\d$", last_part))
     return is_four_digits
 
 
@@ -154,9 +155,11 @@ def is_event_folder(folder: str) -> bool:
     """
 
     # is under year-folder
-    starts_with_4_digits = re.match(r"^\d\d\d\d/", folder)
-    is_first_level_event = folder.count("/") == 1
-    return is_first_level_event and starts_with_4_digits
+    last_part = Path(folder).parts[-1]
+    parrent_part = Path(folder).parts[-2]
+    is_parrent_4_digits = bool(re.match(r"^\d\d\d\d$", parrent_part))
+    #starts_with_date_timestamp = bool(re.match(r"^\[\d\d\d\d/", last_part))
+    return is_parrent_4_digits #and starts_with_date_timestamp
 
 
 def is_sel_folder(folder: str) -> bool:
@@ -171,7 +174,7 @@ def is_sel_folder(folder: str) -> bool:
     Returns:
         True if folder is sel-folder
     """
-    starts_with_4_digits = re.match(r"^\d\d\d\d/", folder)
+    starts_with_4_digits = bool(re.match(r"^\d\d\d\d/", folder))
     return starts_with_4_digits and os.path.basename(folder) == "sel"
 
 
