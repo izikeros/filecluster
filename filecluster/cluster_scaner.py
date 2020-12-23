@@ -77,7 +77,17 @@ def read_cluster_ini_as_dict(path):
         dt_start = cluster_dict["Range"]["start_date"]
         dt_end = cluster_dict["Range"]["end_date"]
 
-    return cluster_dict
+        try:
+            cluster_dict["Range"]["start_date"] = datetime.strptime(dt_start, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            cluster_dict["Range"]["start_date"] = None
+        try:
+            cluster_dict["Range"]["end_date"] = datetime.strptime(dt_end, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            cluster_dict["Range"]["end_date"] = None
+        return cluster_dict
+    else:
+        return None
 
 
 def fast_scandir(dirname: str) -> List[str]:
