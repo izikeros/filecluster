@@ -14,7 +14,7 @@ from filecluster.cluster_scaner import (
     read_cluster_ini_as_dict,
     fast_scandir,
     identify_folder_types,
-    is_event,
+    is_event, is_year_folder,
 )
 from filecluster.configuration import INI_FILENAME
 from filecluster.image_reader import configure_im_reader, get_media_df, get_media_stats
@@ -42,9 +42,10 @@ def scan_library_dir(library_path: str, force_deep_scan=False) -> pd.DataFrame:
 
     # remove library path part from the library subfolders paths
     subfolders_root = [s.replace(library_path + "/", "") for s in subfolders]
+
     subs_labeled = identify_folder_types(subfolders_root)
 
-    event_dirs = list(filter(is_event, subs_labeled))
+    event_dirs = list(filter(is_event or is_year_folder, subs_labeled))
 
     # reading
     ds = []

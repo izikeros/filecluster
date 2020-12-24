@@ -44,6 +44,7 @@ def main(
     Input args are default parameters to override and all are optional.
 
     Args:
+        copy_mode:
         inbox_dir:
         output_dir:
         watch_dir_list:
@@ -81,10 +82,10 @@ def main(
 
     # read timestamps from imported pictures/recordings
     try:
-        image_reader.media_df = pd.read_csv('h:\\incomming\\inbox.csv')
+        image_reader.media_df = pd.read_csv("h:\\incomming\\inbox.csv")
     except:
         image_reader.get_media_info_from_inbox_files()
-        image_reader.media_df.to_csv('h:\\incomming\\inbox.csv', index=False)
+        image_reader.media_df.to_csv("h:\\incomming\\inbox.csv", index=False)
 
     # skip inbox files duplicated with watch folders (if feature enabled)
     inbox_media_df, dups = mark_inbox_duplicates_vs_watch_folders(

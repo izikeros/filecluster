@@ -120,7 +120,9 @@ class ImageReader(object):
         self.config = config
 
         if media_df is None:
-            logger.debug(f"Initializing empty media dataframe in ImageReader ({config.in_dir_name})")
+            logger.debug(
+                f"Initializing empty media dataframe in ImageReader ({config.in_dir_name})"
+            )
             self.media_df = MediaDataFrame(pd.DataFrame())
         else:
             msg = "Initializing media dataframe in ImageReader with provided df."
@@ -165,9 +167,9 @@ class ImageReader(object):
 
 
 def mark_inbox_duplicates_vs_watch_folders(
-        watch_folders: List[str],
-        inbox_media_df: MediaDataFrame,
-        skip_duplicated_existing_in_libs,
+    watch_folders: List[str],
+    inbox_media_df: MediaDataFrame,
+    skip_duplicated_existing_in_libs,
 ) -> Tuple[MediaDataFrame, List[str]]:
     """Check if imported files are not in the library already, if so - skip them."""
     if not skip_duplicated_existing_in_libs:
@@ -217,12 +219,20 @@ def mark_inbox_duplicates_vs_watch_folders(
     # mark confirmed duplicates in import batch
     sel_dups = inbox_media_df.file_name.isin(keys_to_remove_from_inbox_import)
     for idx, _row in inbox_media_df[sel_dups].iterrows():
-        inbox_media_df.status[idx] = Status.DUPLICATE           # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
+        inbox_media_df.status[
+            idx
+        ] = (
+            Status.DUPLICATE
+        )  # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
         dups_patch = list(filter(lambda x: _row.file_name in str(x), lst))
         dups_str = [str(x) for x in dups_patch]
         dups_clust = [x.parts[-2] for x in dups_patch]
-        inbox_media_df.duplicated_to[idx] = dups_str            # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
-        inbox_media_df.duplicated_cluster[idx] = dups_clust     # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
+        inbox_media_df.duplicated_to[
+            idx
+        ] = dups_str  # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
+        inbox_media_df.duplicated_cluster[
+            idx
+        ] = dups_clust  # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
     return inbox_media_df, keys_to_remove_from_inbox_import
 
 

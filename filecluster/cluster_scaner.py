@@ -135,6 +135,8 @@ def identify_folder_types(subfolders_list) -> List[Tuple[str, str]]:
 def is_year_folder(folder: str) -> bool:
     """Check if given folder is a folder that store all media from given year.
 
+    Valid year-folder starts with 19 or 20 followed by two digits
+    
     Args:
       folder: path to folder that has to be examined.
 
@@ -142,13 +144,15 @@ def is_year_folder(folder: str) -> bool:
         True if folder is year-folder
     """
     last_part = Path(folder).parts[-1]
-    is_four_digits = bool(re.match(r"^\d\d\d\d$", last_part))
+    is_four_digits = bool(re.match(r"^(19|20)\d{2}$", last_part))
     return is_four_digits
 
 
 def is_event_folder(folder: str) -> bool:
     """Check if given folder is a top-level event folder.
 
+    Check if given folder is directly under year folder
+    
     Args:
       folder: path to folder that has to be examined.
 
@@ -157,11 +161,11 @@ def is_event_folder(folder: str) -> bool:
     """
 
     # is under year-folder
-    last_part = Path(folder).parts[-1]
     parrent_part = Path(folder).parts[-2]
-    is_parrent_4_digits = bool(re.match(r"^\d\d\d\d$", parrent_part))
+    is_parrent_year = is_year_folder(parrent_part)
+    # last_part = Path(folder).parts[-1]
     # starts_with_date_timestamp = bool(re.match(r"^\[\d\d\d\d/", last_part))
-    return is_parrent_4_digits  # and starts_with_date_timestamp
+    return is_parrent_year  # and starts_with_date_timestamp
 
 
 def is_sel_folder(folder: str) -> bool:
@@ -176,8 +180,7 @@ def is_sel_folder(folder: str) -> bool:
     Returns:
         True if folder is sel-folder
     """
-    starts_with_4_digits = bool(re.match(r"^\d\d\d\d/", folder))
-    return starts_with_4_digits and os.path.basename(folder) == "sel"
+    return os.path.basename(folder) == "sel"
 
 
 def is_event_subcategory_folder(folder: str) -> bool:
@@ -189,7 +192,8 @@ def is_event_subcategory_folder(folder: str) -> bool:
     Returns:
         True if folder is a event sub-folder folder.
     """
-    starts_with_4_digits = bool(re.match(r"^\d\d\d\d/", folder))
+    # TODO: KS: 2020-12-23: add separator (for given system - / or \) after year
+    is_year_in_the_path = bool(re.match(r"(19|20)\d{2}", folder))
     # FIXME: Implement
     return False
 

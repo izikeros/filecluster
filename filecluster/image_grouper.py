@@ -274,12 +274,12 @@ class ImageGrouper(object):
             try:
                 date_str = ts.strftime("[%Y_%m_%d]")
             except ValueError:
-                date_str = f'[NaT_]_{str(random.randint(100000,999999))}'
+                date_str = f"[NaT_]_{str(random.randint(100000,999999))}"
 
             try:
                 time_str = ts.strftime("%H%M%S")
             except ValueError:
-                time_str = f'{str(random.randint(100000,999999))}'
+                time_str = f"{str(random.randint(100000,999999))}"
 
             image_count = df.loc[df["is_image"]].shape[0]
             video_count = df.loc[~df["is_image"]].shape[0]
@@ -359,7 +359,7 @@ class ImageGrouper(object):
         sel_no_duplicated = ~(self.inbox_media_df.status == Status.DUPLICATE)
         for _, row in tqdm(self.inbox_media_df[sel_no_duplicated].iterrows()):
             index = row[0]
-            img_time = row['date']  # read item_date
+            img_time = row["date"]  # read item_date
 
             try:
                 not_too_old_clusters = self.df_clusters.start_date - margin <= img_time
