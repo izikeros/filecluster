@@ -353,9 +353,9 @@ class ImageGrouper(object):
     def assign_to_existing_clusters(self) -> List[str]:
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
         # TODO: KS: 2020-12-22: these missing columns should be created earlier
-        if not "new_file_count" in self.df_clusters.columns:
+        if "new_file_count" not in self.df_clusters.columns:
             self.df_clusters["new_file_count"] = None
-        if not "target_path" in self.df_clusters.columns:
+        if "target_path" not in self.df_clusters.columns:
             self.df_clusters["target_path"] = None
 
         margin = self.config.time_granularity

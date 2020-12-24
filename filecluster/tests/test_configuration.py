@@ -32,6 +32,7 @@ def test_override_config_with_cli_params():
     config = get_default_config()
     nc = override_config_with_cli_params(
         config=config,
+        copy_mode=True,
         inbox_dir="aaa",
         no_operation=True,
         output_dir="bbb",
