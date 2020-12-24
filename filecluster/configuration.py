@@ -138,7 +138,6 @@ class Config:
     in_dir_name: Path
     out_dir_name: Path
     watch_folders: List[str]
-    file_cluster_dbs: List[Path]
     image_extensions: List[str]
     video_extensions: List[str]
     time_granularity: timedelta
@@ -227,9 +226,6 @@ def get_default_config() -> Config:
     # path to files to be clustered
     inbox_path, outbox_path, library_paths = configure_paths_for_this_os()
 
-    # one cluster db per each library
-    file_cluster_dbs = [os.path.join(lib, CLUSTER_DB_FILENAME) for lib in library_paths]
-
     # ensure extensions are lowercase
     image_extensions = [ext.lower() for ext in IMAGE_EXTENSIONS]
     video_extensions = [ext.lower() for ext in VIDEO_EXTENSIONS]
@@ -241,7 +237,6 @@ def get_default_config() -> Config:
     conf_dict = {
         "in_dir_name": inbox_path,
         "out_dir_name": outbox_path,
-        "file_cluster_dbs": file_cluster_dbs,
         "image_extensions": image_extensions,
         "video_extensions": video_extensions,
         "time_granularity": max_gap,
@@ -292,21 +287,14 @@ def get_development_config(os_name=os.name) -> Config:
     else:
         config.watch_folders = LIBRARY_LINUX_DEV
 
-    watch_folders = config.watch_folders
-    if watch_folders:
-        file_cluster_dbs = [
-            os.path.join(lib, CLUSTER_DB_FILENAME) for lib in watch_folders
-        ]
-        config.file_cluster_dbs = file_cluster_dbs
-
     return config
 
 
 def override_config_with_cli_params(
     config: Config,
     inbox_dir: str,
-    no_operation: bool,
-    copy_mode: bool,
+    no_operation: Optional[bool],
+    copy_mode: Optional[bool],
     output_dir: str,
     watch_dir_list: List[str],
     force_deep_scan: Optional[bool] = None,
@@ -316,6 +304,7 @@ def override_config_with_cli_params(
     """Use CLI arguments to override default configuration.
 
     Args:
+      copy_mode:
       use_existing_clusters:
       drop_duplicates:
       config: Config:
@@ -333,18 +322,14 @@ def override_config_with_cli_params(
     if output_dir is not None:
         config.out_dir_name = output_dir
 
-    # TODO: better handle these two mutually exclusive options
-    if no_operation is not None:
-        config.mode = CopyMode.NOP
+    # no_operation overrides copy mode
     if copy_mode is not None:
         config.mode = CopyMode.COPY
+    if no_operation is not None:
+        config.mode = CopyMode.NOP
 
     if watch_dir_list is not None:
         config.watch_folders = watch_dir_list
-        file_cluster_dbs = [
-            os.path.join(lib, CLUSTER_DB_FILENAME) for lib in watch_dir_list
-        ]
-        config.file_cluster_dbs = file_cluster_dbs
     if force_deep_scan is not None:
         config.force_deep_scan = force_deep_scan
     if drop_duplicates is not None:

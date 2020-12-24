@@ -148,7 +148,9 @@ class ImageReader(object):
         file_list = list(os.listdir(in_dir_name))
         for i_file, file_name in enumerate(file_list):
             if ut.is_supported_filetype(file_name, ext):
-                new_row = prepare_new_row_with_meta(file_name, image_extensions, in_dir_name, meta)
+                new_row = prepare_new_row_with_meta(
+                    file_name, image_extensions, in_dir_name, meta
+                )
                 list_of_rows.append(new_row)
             ut.print_progress(i_file, n_files - 1, "reading files: ")
         print("")
@@ -165,9 +167,9 @@ class ImageReader(object):
 
 
 def mark_inbox_duplicates_vs_watch_folders(
-        watch_folders: List[str],
-        inbox_media_df: MediaDataFrame,
-        skip_duplicated_existing_in_libs,
+    watch_folders: List[str],
+    inbox_media_df: MediaDataFrame,
+    skip_duplicated_existing_in_libs,
 ) -> Tuple[MediaDataFrame, List[str]]:
     """Check if imported files are not in the library already, if so - skip them."""
     # TODO: KS: 2020-12-24: make it method of ImageReader class

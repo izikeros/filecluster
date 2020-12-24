@@ -1,5 +1,3 @@
-import pytest
-
 from filecluster.file_cluster import main
 
 
@@ -53,13 +51,3 @@ class TestMain:
             use_existing_clusters=False,
             force_deep_scan=self.force_deep_scan,
         )
-
-
-@pytest.mark.skip(reason="not implemented")
-def test_save_media_and_cluster_info_to_database():
-    assert False
-
-
-@pytest.mark.skip(reason="not implemented")
-def test_read_timestamps_form_media_files():
-    assert False

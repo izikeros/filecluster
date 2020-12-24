@@ -4,12 +4,15 @@ import argparse
 import logging
 from pathlib import Path
 from typing import List, Optional
+
 import pandas as pd
+
 from filecluster import version
 from filecluster.configuration import (
     CopyMode,
     override_config_with_cli_params,
     get_proper_mode_config,
+    Status,
 )
 from filecluster.dbase import (
     get_existing_clusters_info,
@@ -83,8 +86,11 @@ def main(
     # read timestamps from imported pictures/recordings
     try:
         image_reader.media_df = pd.read_csv("h:\\incomming\\inbox.csv")
+        # Revert data types after reading from CSV
         image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
-        # TODO: KS: 2020-12-24: status needs conversion from string too
+        image_reader.media_df.status = image_reader.media_df.status.apply(
+            lambda x: Status[x.replace("Status.", "")]
+        )
     except:
         image_reader.get_media_info_from_inbox_files()
         image_reader.media_df.to_csv("h:\\incomming\\inbox.csv", index=False)
@@ -128,7 +134,7 @@ def main(
     # from clusters_df to media_df
     image_grouper.add_cluster_info_from_clusters_to_media()
 
-    # add target dir for duplicates
+    # assign target folder for duplicates
     image_grouper.add_target_dir_for_duplicates()
 
     # Physically move or copy files to folders

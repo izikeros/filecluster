@@ -14,7 +14,8 @@ from filecluster.cluster_scaner import (
     read_cluster_ini_as_dict,
     fast_scandir,
     identify_folder_types,
-    is_event, is_year_folder,
+    is_event,
+    is_year_folder,
 )
 from filecluster.configuration import INI_FILENAME
 from filecluster.image_reader import configure_im_reader, get_media_df, get_media_stats

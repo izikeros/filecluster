@@ -20,8 +20,8 @@ def get_existing_clusters_info(config: Config):
     # is there a reason for using watch folders (library folders)?
     #   do we have enabled duplicates or existing cluster functionalities
     use_watch_folders = (
-            config.skip_duplicated_existing_in_libs
-            or config.assign_to_clusters_existing_in_libs
+        config.skip_duplicated_existing_in_libs
+        or config.assign_to_clusters_existing_in_libs
     )
 
     # Start scanning watch folders to get cluster information
@@ -42,5 +42,5 @@ def get_new_cluster_id_from_dataframe(df_clusters):
         last_cluster = max(cluster_ids)
         new_cluster_id = last_cluster + 1
     else:
-        new_cluster_id = 0
+        new_cluster_id = 1
     return new_cluster_id

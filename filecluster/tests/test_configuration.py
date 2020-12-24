@@ -32,7 +32,7 @@ def test_override_config_with_cli_params():
     config = get_default_config()
     nc = override_config_with_cli_params(
         config=config,
-        copy_mode=True,
+        copy_mode=None,
         inbox_dir="aaa",
         no_operation=True,
         output_dir="bbb",
@@ -42,7 +42,6 @@ def test_override_config_with_cli_params():
     assert nc.mode == CopyMode.NOP
     assert nc.out_dir_name == "bbb"
     assert nc.watch_folders[0] == "/home/user/Pictures"
-    # TODO: KS: 2020-12-15: assert file_cluster_dbs property - it is also modified
 
 
 def test_configure_paths_for_this_os__runs():

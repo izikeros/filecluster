@@ -10,11 +10,11 @@ from filecluster.configuration import INI_FILENAME
 
 
 def initialize_cluster_info_dict(
-        start: str,
-        stop: str,
-        is_continous: bool,
-        median: Optional[int] = None,
-        file_count: Optional[int] = None,
+    start: str,
+    stop: str,
+    is_continous: bool,
+    median: Optional[int] = None,
+    file_count: Optional[int] = None,
 ) -> ConfigParser:
     """Return dictionary that store information on cluster existing on the disk.
 
@@ -39,8 +39,8 @@ def initialize_cluster_info_dict(
 
 
 def save_cluster_ini(
-        cluster_ini: ConfigParser,
-        path: str,
+    cluster_ini: ConfigParser,
+    path: str,
 ):
     """Save cluster information dictionary.
 
@@ -78,11 +78,15 @@ def read_cluster_ini_as_dict(path):
         dt_end = cluster_dict["Range"]["end_date"]
 
         try:
-            cluster_dict["Range"]["start_date"] = datetime.strptime(dt_start, "%Y-%m-%d %H:%M:%S")
+            cluster_dict["Range"]["start_date"] = datetime.strptime(
+                dt_start, "%Y-%m-%d %H:%M:%S"
+            )
         except ValueError:
             cluster_dict["Range"]["start_date"] = None
         try:
-            cluster_dict["Range"]["end_date"] = datetime.strptime(dt_end, "%Y-%m-%d %H:%M:%S")
+            cluster_dict["Range"]["end_date"] = datetime.strptime(
+                dt_end, "%Y-%m-%d %H:%M:%S"
+            )
         except ValueError:
             cluster_dict["Range"]["end_date"] = None
         return cluster_dict
@@ -136,7 +140,7 @@ def is_year_folder(folder: str) -> bool:
     """Check if given folder is a folder that store all media from given year.
 
     Valid year-folder starts with 19 or 20 followed by two digits
-    
+
     Args:
       folder: path to folder that has to be examined.
 
@@ -152,7 +156,7 @@ def is_event_folder(folder: str) -> bool:
     """Check if given folder is a top-level event folder.
 
     Check if given folder is directly under year folder
-    
+
     Args:
       folder: path to folder that has to be examined.
 

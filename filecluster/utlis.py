@@ -6,12 +6,14 @@ import sys
 import time
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 from typing import List
 
 import exifread
 from PIL import Image
 
-from filecluster.configuration import CopyMode
+from filecluster.configuration import CopyMode, Config
+from filecluster.exceptions import DateStringNoneException
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -70,11 +72,15 @@ def get_exif_date(path_name):
     return exif_date
 
 
-def create_folder_for_cluster(config, date_string, mode):
+def create_folder_for_cluster(config: Config, date_string: str, mode: CopyMode):
     """Create destination folder that for all pictures from the cluster."""
+
+    if date_string is None:
+        raise DateStringNoneException()
+
     if mode != CopyMode.NOP:
-        pth = config.out_dir_name
-        dir_name = os.path.join(pth, date_string)
+        pth = Path(config.out_dir_name)
+        dir_name = pth / date_string
         try:
             os.makedirs(dir_name)
         except OSError as err:
