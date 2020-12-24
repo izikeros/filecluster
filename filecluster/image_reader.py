@@ -146,11 +146,9 @@ class ImageReader(object):
         image_extensions = self.config.image_extensions
         meta = Metadata()
         file_list = list(os.listdir(in_dir_name))
-        for i_file, fn in enumerate(file_list):
-            if ut.is_supported_filetype(fn, ext):
-                new_row = prepare_new_row_with_meta(
-                    fn, image_extensions, in_dir_name, meta
-                )
+        for i_file, file_name in enumerate(file_list):
+            if ut.is_supported_filetype(file_name, ext):
+                new_row = prepare_new_row_with_meta(file_name, image_extensions, in_dir_name, meta)
                 list_of_rows.append(new_row)
             ut.print_progress(i_file, n_files - 1, "reading files: ")
         print("")
@@ -167,11 +165,12 @@ class ImageReader(object):
 
 
 def mark_inbox_duplicates_vs_watch_folders(
-    watch_folders: List[str],
-    inbox_media_df: MediaDataFrame,
-    skip_duplicated_existing_in_libs,
+        watch_folders: List[str],
+        inbox_media_df: MediaDataFrame,
+        skip_duplicated_existing_in_libs,
 ) -> Tuple[MediaDataFrame, List[str]]:
     """Check if imported files are not in the library already, if so - skip them."""
+    # TODO: KS: 2020-12-24: make it method of ImageReader class
     if not skip_duplicated_existing_in_libs:
         return inbox_media_df, []
     else:
@@ -211,28 +210,15 @@ def mark_inbox_duplicates_vs_watch_folders(
                     f"For inbox file {in_file_name} there is duplicate already in library: {lib_item}"
                 )
 
-    # # remove confirmed duplicated from the import batch
-    # inbox_media_df = inbox_media_df[
-    #     ~inbox_media_df.file_name.isin(keys_to_remove_from_inbox_import)
-    # ]
-
     # mark confirmed duplicates in import batch
     sel_dups = inbox_media_df.file_name.isin(keys_to_remove_from_inbox_import)
     for idx, _row in inbox_media_df[sel_dups].iterrows():
-        inbox_media_df.status[
-            idx
-        ] = (
-            Status.DUPLICATE
-        )  # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
+        inbox_media_df.status[idx] = Status.DUPLICATE  # Fixme: copy of a slice
         dups_patch = list(filter(lambda x: _row.file_name in str(x), lst))
         dups_str = [str(x) for x in dups_patch]
         dups_clust = [x.parts[-2] for x in dups_patch]
-        inbox_media_df.duplicated_to[
-            idx
-        ] = dups_str  # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
-        inbox_media_df.duplicated_cluster[
-            idx
-        ] = dups_clust  # Fixme: A value is trying to be set on a copy of a slice from a DataFrame
+        inbox_media_df.duplicated_to[idx] = dups_str  # Fixme: copy of a slice
+        inbox_media_df.duplicated_cluster[idx] = dups_clust  # Fixme: copy of a slice
     return inbox_media_df, keys_to_remove_from_inbox_import
 
 

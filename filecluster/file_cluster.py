@@ -83,14 +83,16 @@ def main(
     # read timestamps from imported pictures/recordings
     try:
         image_reader.media_df = pd.read_csv("h:\\incomming\\inbox.csv")
+        image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
+        # TODO: KS: 2020-12-24: status needs conversion from string too
     except:
         image_reader.get_media_info_from_inbox_files()
         image_reader.media_df.to_csv("h:\\incomming\\inbox.csv", index=False)
 
     # skip inbox files duplicated with watch folders (if feature enabled)
-    inbox_media_df, dups = mark_inbox_duplicates_vs_watch_folders(
+    image_reader.media_df, dups = mark_inbox_duplicates_vs_watch_folders(
         config.watch_folders,
-        image_reader.media_df.copy(),
+        image_reader.media_df,
         config.skip_duplicated_existing_in_libs,
     )
 
@@ -98,13 +100,15 @@ def main(
     image_grouper = ImageGrouper(
         configuration=config,
         df_clusters=df_clusters,
-        inbox_media_df=inbox_media_df,
+        inbox_media_df=image_reader.media_df.copy(),
     )
 
+    # == Assign to existing ==
     if config.assign_to_clusters_existing_in_libs:
         # try assign media items to clusters already existing in the library
         assigned = image_grouper.assign_to_existing_clusters()
 
+    # == Handle not-clustered items ==
     # Calculate gaps for non-clustered items
     logger.info("Calculating gaps for creating new clusters")
     image_grouper.calculate_gaps()
@@ -112,11 +116,16 @@ def main(
     # create new clusters, assign media
     cluster_list = image_grouper.run_clustering()
 
+    # concatenate info on new clusters to existing clusters dataframe
     image_grouper.add_new_cluster_data_to_data_frame(cluster_list)
+
+    # assign target folder for clusters identified so far (existing and new)
     image_grouper.assign_target_folder_name_to_clusters(
         method=config.assign_date_to_clusters_method
     )
-    # left-merge clusters to media_df
+
+    # left-merge clusters to media_df (to add "cluster_id" and "target_path")
+    # from clusters_df to media_df
     image_grouper.add_cluster_info_from_clusters_to_media()
 
     # add target dir for duplicates

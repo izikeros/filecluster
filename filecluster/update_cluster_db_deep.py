@@ -44,8 +44,9 @@ def scan_library_dir(library_path: str, force_deep_scan=False) -> pd.DataFrame:
     subfolders_root = [s.replace(library_path + "/", "") for s in subfolders]
 
     subs_labeled = identify_folder_types(subfolders_root)
-
-    event_dirs = list(filter(is_event or is_year_folder, subs_labeled))
+    # TODO: support more types of events dirs
+    # is_event or is_year_folder
+    event_dirs = list(filter(is_event, subs_labeled))
 
     # reading
     ds = []
