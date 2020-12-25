@@ -178,9 +178,9 @@ class ImageGrouper(object):
         # create mask for selecting not clustered media items
         # FIXME: Dataframe store status as string - make it uniform either keep string of object
         sel_not_clustered = self.inbox_media_df["status"] == Status.UNKNOWN
-
+        n_not_clustered = sum(sel_not_clustered)
         is_first_image_analysed = True
-        for media_index, _row in self.inbox_media_df[sel_not_clustered].iterrows():
+        for media_index, _row in tqdm(self.inbox_media_df[sel_not_clustered].iterrows(), total=n_not_clustered):
             if _row.cluster_id:
                 # gap to previous
                 delta_from_previous = self.inbox_media_df.loc[media_index]["date_delta"]
@@ -227,8 +227,8 @@ class ImageGrouper(object):
                 self.inbox_media_df.loc[media_index, "cluster_id"] = cluster_idx
                 self.inbox_media_df.loc[media_index, "status"] = Status.NEW_CLUSTER
 
-                i_file += 1
-                ut.print_progress(i_file, n_files, "clustering: ")
+                # i_file += 1
+                # ut.print_progress(i_file, n_files, "clustering: ")
             is_first_image_analysed = False
 
         # save last cluster (TODO: check border cases: one file, one cluster, no-files,...)
@@ -251,11 +251,17 @@ class ImageGrouper(object):
         sel_new = self.inbox_media_df["status"] == Status.NEW_CLUSTER
         return self.inbox_media_df[sel_new]["cluster_id"].unique()
 
-    def assign_target_folder_name_to_clusters(
+    def get_existing_to_be_expanded_cluster_ids(self):
+        sel_existing = ~(self.df_clusters["path"].isna())
+        sel_with_files_to_appened = self.df_clusters["new_file_count"] > 0
+        sel = sel_existing & sel_with_files_to_appened
+        return self.df_clusters[sel]["cluster_id"].unique()
+
+    def assign_target_folder_name_to_new_clusters(
         self, method=AssignDateToClusterMethod.MEDIAN
     ) -> None:
         """Set cluster string in the dataframe and return the string."""
-        date_string = ""
+        # date_string = ""
 
         # initialize "path" column if not exists
         if "target_path" not in self.df_clusters.columns:
@@ -301,8 +307,9 @@ class ImageGrouper(object):
             # save to cluster db
             pth = path_creator.for_new_cluster(date_string=date_string)
             sel_cluster = self.df_clusters.cluster_id == new_cluster
-            self.df_clusters.target_path[sel_cluster] = pth
-            self.df_clusters.new_file_count[sel_cluster] = image_count + video_count
+            self.df_clusters.loc[sel_cluster, 'target_path'] = pth
+
+            self.df_clusters.loc[sel_cluster, 'new_file_count'] = image_count + video_count
         return None
 
     def move_files_to_cluster_folder(self):
@@ -342,7 +349,7 @@ class ImageGrouper(object):
         # add target dir for the duplicates
         sel_dups = self.inbox_media_df.status == Status.DUPLICATE
         for idx, row in self.inbox_media_df[sel_dups].iterrows():
-            dup_cluster = self.inbox_media_df.duplicated_cluster[idx][0]
+            dup_cluster = self.inbox_media_df.duplicated_cluster[idx]
             self.inbox_media_df.target_path[idx] = path_creator.for_duplicates(
                 dup_cluster
             )
@@ -412,6 +419,20 @@ class ImageGrouper(object):
             has_cluster_id & has_status_existing_cluster
         ].file_name.values.tolist()
         return assigned
+
+    def assign_target_folder_name_to_existing_clusters(self):
+        """Set cluster string in the dataframe and return the string."""
+        path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
+
+        # FIXME: KS: 2020-12-25: perhaps also new clusters are captured here
+        existing_clusters_extended_by_inbox = self.get_existing_to_be_expanded_cluster_ids()
+
+        for cluster in existing_clusters_extended_by_inbox:
+            # save to cluster db
+            cl = Path(self.df_clusters.loc[4, "target_path"].values[0]).parts[-1]
+            pth = path_creator.for_existing_cluster(dir_string=cl)
+            sel_cluster = self.df_clusters.cluster_id == cluster
+            self.df_clusters.loc[sel_cluster, 'target_path'] = pth
 
 
 def check_df_has_all_expected_columns(df, expected_cols):

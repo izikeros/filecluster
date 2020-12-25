@@ -55,9 +55,12 @@ def get_exif_date(path_name):
     img_file = open(path_name, "rb")
 
     # Return Exif tags
-    tags = exifread.process_file(
-        img_file, details=False, stop_tag="EXIF DateTimeOriginal"
-    )
+    try:
+        tags = exifread.process_file(
+            img_file, details=False, stop_tag="EXIF DateTimeOriginal"
+        )
+    except Exception as ex:
+        tags={}
 
     try:
         exif_date_str = tags["EXIF DateTimeOriginal"].values

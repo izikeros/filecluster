@@ -91,7 +91,7 @@ def main(
         image_reader.media_df.status = image_reader.media_df.status.apply(
             lambda x: Status[x.replace("Status.", "")]
         )
-    except:
+    except FileNotFoundError:
         image_reader.get_media_info_from_inbox_files()
         image_reader.media_df.to_csv("h:\\incomming\\inbox.csv", index=False)
 
@@ -125,10 +125,12 @@ def main(
     # concatenate info on new clusters to existing clusters dataframe
     image_grouper.add_new_cluster_data_to_data_frame(cluster_list)
 
-    # assign target folder for clusters identified so far (existing and new)
-    image_grouper.assign_target_folder_name_to_clusters(
-        method=config.assign_date_to_clusters_method
-    )
+    # assign target folder for new clusters
+    image_grouper.assign_target_folder_name_to_new_clusters(
+        method=config.assign_date_to_clusters_method)
+
+    # assign target folder for existing clusters
+    image_grouper.assign_target_folder_name_to_existing_clusters()
 
     # left-merge clusters to media_df (to add "cluster_id" and "target_path")
     # from clusters_df to media_df
