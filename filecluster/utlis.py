@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import List
+from typing import Callable, List
 
 import exifread
 from PIL import Image
@@ -24,14 +24,14 @@ logger.setLevel(logging.DEBUG)
 block_size_for_hashing = 4096 * 32
 
 
-def is_supported_filetype(file_name: str, ext_list: List[str]):
+def is_supported_filetype(file_name: str, ext_list: List[str]) -> bool:
     """Check if filename has one of the allowed extensions from the list."""
     ext_list_lower = [ext.lower() for ext in ext_list]
     fn_lower = file_name.lower()
     return fn_lower.endswith(tuple(ext_list_lower))
 
 
-def is_image(file_name, ext_list_image):
+def is_image(file_name: str, ext_list_image: List[str]) -> bool:
     """Determine if file is image based on known file name extensions."""
     ext_list_lower = [ext.lower() for ext in ext_list_image]
     fn_lower = file_name.lower()
