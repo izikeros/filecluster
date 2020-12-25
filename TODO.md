@@ -10,6 +10,7 @@ TODO list
 - use cluster_is as index in cluster_df
 - better indicate progress while scanning library
 - better handle log level (single setting on package level)
+- add dataenforce and perhaps great expectations package to better control dataframes format and content
 FIXME:
 - why '[2020_01_23]_Wystep_Hani' has no date info. In case exif not available, mdate/cdate should be taken. Is this windows problem.
 seems that under windows do not read creation/modification date
