@@ -12,13 +12,13 @@ def check_lists_equal(list_1, list_2) -> bool:
 def test_get_existing_clusters_info__gives_the_same_dataframe_cols():
     config_1 = get_development_config()
     config_1.watch_folders = []
-    df_blank = get_existing_clusters_info(config_1)
+    df_blank, _, _ = get_existing_clusters_info(config_1)
 
     config_2 = get_development_config()
     config_2.watch_folders = ["zdjecia", "clusters"]
     config_2.force_deep_scan = True
     config_2.assign_to_clusters_existing_in_libs = True
-    df_clusters = get_existing_clusters_info(config_2)
+    df_clusters, _, _ = get_existing_clusters_info(config_2)
 
     cols_blank = df_blank.columns
     cols = df_clusters.columns
@@ -30,7 +30,7 @@ def test_get_existing_clusters_info__ids_are_uniq():
     config.watch_folders = ["zdjecia", "clusters"]
     config.force_deep_scan = True
     config.assign_to_clusters_existing_in_libs = True
-    df_clusters = get_existing_clusters_info(config)
+    df_clusters, _, _ = get_existing_clusters_info(config)
 
     ids = df_clusters.cluster_id.values
 
