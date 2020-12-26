@@ -4,10 +4,11 @@ import logging
 import pandas as pd
 
 from filecluster.configuration import Config, CLUSTER_DF_COLUMNS
+from filecluster.filecluster_types import ClustersDataFrame
 from filecluster.update_cluster_db_deep import scan_library_dir
 from numpy import int64
 from pandas.core.frame import DataFrame
-from typing import Union
+from typing import Union, List, Tuple
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -15,10 +16,20 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def get_existing_clusters_info(config: Config) -> DataFrame:
+def get_existing_clusters_info(
+    config: Config,
+) -> Tuple[ClustersDataFrame, List[str], List[str]]:
+    """Scan library, find existing clusters and empty or non-compliant folders."""
+
     # TODO: Any non-empty subfolder of year folder should contain .cluster.ini file (see: Runmageddon example)
     #   non-empty means - contains media files
     watch_folders = config.watch_folders
+
+    # NOTE: these requires refactoring in scan_library_dir()
+    empty_folders = []  # TODO: KS: 2020-12-26: totally empty folders
+    non_compliant_folders = (
+        []
+    )  # TODO: KS: 2020-12-26: folders than contains no media files but subfolders
 
     # is there a reason for using watch folders (library folders)?
     #   do we have enabled duplicates or existing cluster functionalities
@@ -36,7 +47,7 @@ def get_existing_clusters_info(config: Config) -> DataFrame:
         df = df.rename(columns={"index": "cluster_id"})
     else:
         df = pd.DataFrame(columns=CLUSTER_DF_COLUMNS)
-    return df
+    return ClustersDataFrame(df), empty_folders, non_compliant_folders
 
 
 def get_new_cluster_id_from_dataframe(df_clusters: DataFrame) -> Union[int64, int]:

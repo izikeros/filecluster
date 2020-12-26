@@ -18,7 +18,7 @@ CLUSTER_DB_FILENAME = ".clusters.csv"
 INI_FILENAME = ".cluster.ini"
 
 # Filename extensions in scope of clustering
-IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".dng", ".cr2"]
+IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".dng", ".cr2", ".tif", ".tiff"]
 VIDEO_EXTENSIONS = [".mp4", ".3gp", "mov"]
 
 # Locations for media: Inbox/Outbox/Library
@@ -252,7 +252,7 @@ def get_default_config() -> Config:
     return config
 
 
-def get_development_config(os_name: str=os.name) -> Config:
+def get_development_config(os_name: str = os.name) -> Config:
     """Configuration for development phase.
     Key features of development mode:
 
@@ -325,7 +325,7 @@ def override_config_with_cli_params(
     # no_operation overrides copy mode
     if copy_mode is not None:
         config.mode = CopyMode.COPY
-    if no_operation is not None:
+    if no_operation:
         config.mode = CopyMode.NOP
 
     if watch_dir_list is not None:

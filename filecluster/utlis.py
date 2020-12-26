@@ -60,7 +60,7 @@ def get_exif_date(path_name):
             img_file, details=False, stop_tag="EXIF DateTimeOriginal"
         )
     except Exception as ex:
-        tags={}
+        tags = {}
 
     try:
         exif_date_str = tags["EXIF DateTimeOriginal"].values

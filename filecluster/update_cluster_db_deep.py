@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def scan_library_dir(library_path: str, force_deep_scan: bool=False) -> pd.DataFrame:
+def scan_library_dir(library_path: str, force_deep_scan: bool = False) -> pd.DataFrame:
     """Scan folder for cluster info and return dataframe with clusters.
 
     Args:

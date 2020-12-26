@@ -3,9 +3,9 @@ import math
 import os
 import random
 from datetime import timedelta
-from pathlib import Path
+from pathlib import Path, PosixPath
 from shutil import copy2, move
-from typing import List, Optional
+from typing import List, Optional, Tuple, Iterator, Any
 
 import pandas as pd
 from pandas._libs.tslibs.timedeltas import Timedelta
@@ -148,7 +148,14 @@ class ImageGrouper(object):
         self.inbox_media_df[date_col] = pd.to_datetime(self.inbox_media_df[date_col])
         self.inbox_media_df[delta_col][sel] = self.inbox_media_df[date_col][sel].diff()
 
-    def run_clustering(self):
+    def run_clustering(self) -> ClustersDataFrame:
+        """Identify clusters in media not clustered so far.
+
+        Responsibilities:
+            - update media_df - assign cluster, and cluster status (NEW_CLUSTER)
+            - add new clusters to clusters_df
+
+        """
         list_new_cluster_dictionaries = []
         max_gap = self.config.time_granularity
 
@@ -162,92 +169,89 @@ class ImageGrouper(object):
                 "cluster_id": cluster_idx,
                 "start_date": None,
                 "end_date": None,
-                "is_continous": True,
+                "is_continous": True,  # FIXME: rename `is_continous` to `is_continuous`
             }
         )
 
         n_files = len(self.inbox_media_df)
-        i_file = 0
+        # i_file = 0
 
-        # set new index (as range)
+        # set new index in inbox_media_df (as range)
         self.inbox_media_df.index = list(range(n_files))
 
         # Iterate over all inbox media and create new clusters for each item
         # or assign to one just created
 
         # create mask for selecting not clustered media items
-        # FIXME: Dataframe store status as string - make it uniform either keep string of object
         sel_not_clustered = self.inbox_media_df["status"] == Status.UNKNOWN
         n_not_clustered = sum(sel_not_clustered)
         is_first_image_analysed = True
-        for media_index, _row in tqdm(self.inbox_media_df[sel_not_clustered].iterrows(), total=n_not_clustered):
-            if _row.cluster_id:
-                # gap to previous
-                delta_from_previous = self.inbox_media_df.loc[media_index]["date_delta"]
-                # date of this media object
-                media_date = self.inbox_media_df.loc[media_index]["date"]
+        df_not_clustered = self.inbox_media_df[sel_not_clustered].copy()
+        for media_index, _row in tqdm(
+            self.inbox_media_df[sel_not_clustered].iterrows(), total=n_not_clustered
+        ):
+            # if _row.cluster_id:
+            # gap to previous
+            delta_from_previous = self.inbox_media_df.loc[media_index]["date_delta"]
+            # date of this media object
+            media_date = self.inbox_media_df.loc[media_index]["date"]
 
-                # check if new cluster encountered
-                is_this_image_too_far_from_other_in_the_cluster = (
-                    delta_from_previous > max_gap
+            # check if new cluster encountered
+            is_this_image_too_far_from_other_in_the_cluster = (
+                delta_from_previous > max_gap
+            )
+            is_new_cluster = (
+                is_this_image_too_far_from_other_in_the_cluster
+                or is_first_image_analysed
+            )
+            if is_new_cluster:
+                # == We are starting new cluster here ==
+                if not is_first_image_analysed:
+                    cluster_idx += 1
+                    # append previous cluster date to the list
+                    #   previous cluster is completed, add previous cluster info
+                    #   to the list of clusters
+                    list_new_cluster_dictionaries.append(current_cluster_dict)
+
+                # initialize record for new cluster
+                current_cluster_dict = dict.fromkeys(CLUSTER_DF_COLUMNS)
+                current_cluster_dict.update(
+                    {
+                        "cluster_id": cluster_idx,
+                        "start_date": media_date,
+                        "end_date": media_date,
+                        "is_continous": True,
+                    }
                 )
-                is_new_cluster = (
-                    is_this_image_too_far_from_other_in_the_cluster
-                    or is_first_image_analysed
+            else:
+                # update cluster start & stop date
+                current_cluster_dict["start_date"] = min(
+                    media_date, current_cluster_dict["start_date"]
                 )
-                if is_new_cluster:
-                    # == We are starting new cluster here ==
-                    if not is_first_image_analysed:
-                        cluster_idx += 1
-                        # append previous cluster date to the list
-                        #   previous cluster is completed, add previous cluster info
-                        #   to the list of clusters
-                        list_new_cluster_dictionaries.append(current_cluster_dict)
+                current_cluster_dict["end_date"] = max(
+                    media_date, current_cluster_dict["end_date"]
+                )
 
-                    # initialize record for new cluster
-                    current_cluster_dict = dict.fromkeys(CLUSTER_DF_COLUMNS)
-                    current_cluster_dict.update(
-                        {
-                            "cluster_id": cluster_idx,
-                            "start_date": media_date,
-                            "end_date": media_date,
-                            "is_continous": True,
-                        }
-                    )
-                else:
-                    # update cluster start & stop date
-                    current_cluster_dict["start_date"] = min(
-                        media_date, current_cluster_dict["start_date"]
-                    )
-                    current_cluster_dict["end_date"] = max(
-                        media_date, current_cluster_dict["end_date"]
-                    )
-
-                # assign cluster id to image
-                self.inbox_media_df.loc[media_index, "cluster_id"] = cluster_idx
-                self.inbox_media_df.loc[media_index, "status"] = Status.NEW_CLUSTER
-
-                # i_file += 1
-                # ut.print_progress(i_file, n_files, "clustering: ")
+            # assign cluster id to image
+            self.inbox_media_df.loc[media_index, "cluster_id"] = cluster_idx
+            self.inbox_media_df.loc[media_index, "status"] = Status.NEW_CLUSTER
+            # ----
             is_first_image_analysed = False
 
         # save last cluster (TODO: check border cases: one file, one cluster, no-files,...)
         list_new_cluster_dictionaries.append(current_cluster_dict)
 
-        print("")
-        print("{num_clusters} clusters identified".format(num_clusters=cluster_idx))
+        new_cluster_df = ClustersDataFrame(pd.DataFrame(list_new_cluster_dictionaries))
+        # Concatenate df with existing clusters with new clusters df."""
+        self.df_clusters = pd.concat([self.df_clusters, new_cluster_df])
+        return new_cluster_df
 
-        return list_new_cluster_dictionaries
-
-    def add_new_cluster_data_to_data_frame(self, row_list):
-        """convert list of rows to pandas dataframe"""
-        new_df = pd.DataFrame(row_list)
-        self.df_clusters = pd.concat([self.df_clusters, new_df])
-
-    def get_num_of_clusters_in_df(self):
-        return self.inbox_media_df["cluster_id"].value_counts()
+    def add_new_cluster_data_to_data_frame(self, new_cluster_df):
+        """Concatenate df with existing clusters with new clusters df."""
+        self.df_clusters = pd.concat([self.df_clusters, new_cluster_df])
 
     def get_new_cluster_ids(self):
+        """Get ids of the new clusters."""
         sel_new = self.inbox_media_df["status"] == Status.NEW_CLUSTER
         return self.inbox_media_df[sel_new]["cluster_id"].unique()
 
@@ -257,11 +261,14 @@ class ImageGrouper(object):
         sel = sel_existing & sel_with_files_to_appened
         return self.df_clusters[sel]["cluster_id"].unique()
 
-    def assign_target_folder_name_to_new_clusters(
+    def assign_target_folder_name_and_file_count_to_new_clusters(
         self, method=AssignDateToClusterMethod.MEDIAN
-    ) -> None:
-        """Set cluster string in the dataframe and return the string."""
-        # date_string = ""
+    ) -> List[str]:
+        """Set target_path and new_file_count in clusters_df.
+        Returns:
+            target_folder names for debug and testing purposes
+        """
+        new_folder_names = []
 
         # initialize "path" column if not exists
         if "target_path" not in self.df_clusters.columns:
@@ -281,7 +288,8 @@ class ImageGrouper(object):
                 df = df.sort_values("date")
                 exif_date = df.iloc[int(len(df) / 2)]["date"]
 
-            ts = pd.to_datetime(str(exif_date))
+            # ts = pd.to_datetime(str(exif_date))
+            ts = exif_date
             try:
                 date_str = ts.strftime("[%Y_%m_%d]")
             except ValueError:
@@ -304,13 +312,15 @@ class ImageGrouper(object):
                 ]
             )
 
-            # save to cluster db
+            # save 'target_path' and 'new_file_count' info to cluster db
             pth = path_creator.for_new_cluster(date_string=date_string)
             sel_cluster = self.df_clusters.cluster_id == new_cluster
-            self.df_clusters.loc[sel_cluster, 'target_path'] = pth
-
-            self.df_clusters.loc[sel_cluster, 'new_file_count'] = image_count + video_count
-        return None
+            self.df_clusters.loc[sel_cluster, "target_path"] = pth
+            self.df_clusters.loc[sel_cluster, "new_file_count"] = (
+                image_count + video_count
+            )
+            new_folder_names.append(pth)
+        return new_folder_names
 
     def move_files_to_cluster_folder(self):
         dirs = self.inbox_media_df["target_path"].unique()
@@ -329,7 +339,7 @@ class ImageGrouper(object):
         pth_in = self.config.in_dir_name
         n_files = len(self.inbox_media_df)
         i_file = 0
-        for idx, row in self.inbox_media_df.iterrows():
+        for idx, row in tqdm(self.inbox_media_df.iterrows()):
             date_string = row["target_path"]
             file_name = row["file_name"]
             src = os.path.join(pth_in, file_name)
@@ -341,7 +351,7 @@ class ImageGrouper(object):
             elif mode == CopyMode.NOP:
                 pass
             i_file += 1
-            ut.print_progress(i_file, n_files, f"{mode}: ")
+            # ut.print_progress(i_file, n_files, f"{mode}: ")
         print("")
 
     def add_target_dir_for_duplicates(self):
@@ -361,7 +371,7 @@ class ImageGrouper(object):
         )
         return None
 
-    def assign_to_existing_clusters(self) -> List[str]:
+    def assign_to_existing_clusters(self) -> Tuple[List[str], List[str]]:
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
 
         check_df_has_all_expected_columns(
@@ -414,26 +424,146 @@ class ImageGrouper(object):
         has_status_existing_cluster = (
             self.inbox_media_df.status == Status.EXISTING_CLUSTER
         )
-        assigned = self.inbox_media_df[
+        files_assigned_to_existing_cl = self.inbox_media_df[
             has_cluster_id & has_status_existing_cluster
         ].file_name.values.tolist()
-        return assigned
+        existing_cluster_ids = self.inbox_media_df[
+            has_cluster_id & has_status_existing_cluster
+        ].cluster_id.unique()
+        existing_cluster_names = [
+            Path(cl_row.path).parts[-1]
+            for _, cl_row in self.df_clusters.iterrows()
+            if cl_row.cluster_id in existing_cluster_ids
+        ]
+        return files_assigned_to_existing_cl, existing_cluster_names
 
     def assign_target_folder_name_to_existing_clusters(self):
         """Set cluster string in the dataframe and return the string."""
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
 
-        existing_clusters_extended_by_inbox = self.get_existing_to_be_expanded_cluster_ids()
+        existing_clusters_extended_by_inbox = (
+            self.get_existing_to_be_expanded_cluster_ids()
+        )
 
         for cluster in existing_clusters_extended_by_inbox:
             # save to cluster db
             sel_cluster = self.df_clusters.cluster_id == cluster
-            cl = Path(self.df_clusters.loc[sel_cluster, "target_path"].values[0]).parts[-1]
+            cl = Path(self.df_clusters.loc[sel_cluster, "target_path"].values[0]).parts[
+                -1
+            ]
             pth = path_creator.for_existing_cluster(dir_string=cl)
-            self.df_clusters.loc[sel_cluster, 'target_path'] = pth
+            self.df_clusters.loc[sel_cluster, "target_path"] = pth
+
+    def mark_inbox_duplicates_vs_watch_folders(self) -> Tuple[List[str], List[str]]:
+        """Check if imported files are not in the library already, if so - skip them.
+
+        Returns:
+            List of inbox filenames that has duplicates in library
+        """
+        clusters_with_dups = []
+        if not self.config.skip_duplicated_existing_in_libs:
+            return [], []
+        else:
+            logger.debug("Checking import for duplicates in watch folders")
+
+        if not any(self.config.watch_folders):
+            logger.debug("No library folder defined. Skipping duplicate search.")
+            return [], []
+
+        # get files in library
+        watch_names, lst = get_watch_folders_files_path(self.config.watch_folders)
+
+        # get files in inbox
+        new_names = self.inbox_media_df.file_name.values.tolist()
+
+        # commons - list of new names that apear in watch folders
+        potential_dups = [f for f in new_names if f in watch_names]
+
+        # verify potential dups using size comparison
+        file_already_in_library = []
+        inbox_import_files_marked_as_duplicates = []
+
+        logger.info("Confirm potential duplicates")
+        for potential_duplicate in tqdm(potential_dups):
+            # get inbox item info
+            inbox_item = self.inbox_media_df[
+                self.inbox_media_df.file_name == potential_duplicate
+            ]
+
+            # get matching watch folder items
+            lib_items = [path for path in lst if path.name == potential_duplicate]
+            inbox_item_size = inbox_item["size"].values[0]
+
+            for lib_item in lib_items:
+                if inbox_item_size == os.path.getsize(lib_item):
+                    file_already_in_library.append(lib_item)
+                    in_file_name = inbox_item.file_name.values[0]
+                    inbox_import_files_marked_as_duplicates.append(in_file_name)
+                    logger.debug(
+                        f"For inbox file {in_file_name} there is duplicate already in library: {lib_item}"
+                    )
+
+        # mark confirmed duplicates in import batch
+        logger.info("mark confirmed duplicates in import batch")
+        # FIXME: KS: 2020-12-26: Very slow stage 1sec/it
+        sel_dups = self.inbox_media_df.file_name.isin(
+            inbox_import_files_marked_as_duplicates
+        )
+        for idx, _row in tqdm(
+            self.inbox_media_df[sel_dups].iterrows(), total=sum(sel_dups)
+        ):
+            self.inbox_media_df.loc[
+                idx, "status"
+            ] = Status.DUPLICATE  # Fixme: copy of a slice
+            dups_patch = list(filter(lambda x: _row.file_name in str(x), lst))
+            dups_str = [str(x) for x in dups_patch]
+            dups_clust = [x.parts[-2] for x in dups_patch]
+
+            self.inbox_media_df["duplicated_to"][
+                idx
+            ] = dups_str  # Fixme: copy of a slice
+            self.inbox_media_df["duplicated_cluster"][
+                idx
+            ] = dups_clust  # Fixme: copy of a slice
+
+            # return first cluster with this duplicated media file (for debug and testing)
+            clusters_with_dups.append(dups_clust[0])
+        return inbox_import_files_marked_as_duplicates, list(set(clusters_with_dups))
 
 
-def check_df_has_all_expected_columns(df, expected_cols):
+def get_files_from_folder(folder: str) -> Iterator[Any]:
+    """
+
+    Args:
+      folder: str:
+
+    Returns:
+
+    """
+    return Path(folder).rglob("*.*")
+
+
+def get_watch_folders_files_path(
+    watch_folders: List[str],
+) -> Tuple[List[str], List[PosixPath]]:
+    """
+
+    Args:
+      watch_folders:
+
+    Returns:
+
+    """
+    lst = []
+    for w in watch_folders:
+        file_list_watch = get_files_from_folder(w)
+        path_list = [path for path in file_list_watch]
+        lst.extend(path_list)
+    watch_names = [path.name for path in lst]
+    return watch_names, lst
+
+
+def check_df_has_all_expected_columns(df: pd.DataFrame, expected_cols: List[str]):
     for c in df.columns:
         if c not in expected_cols:
             raise MissingDfClusterColumn(c)

@@ -64,6 +64,7 @@ def main(
     config = get_proper_mode_config(development_mode)
 
     # override config with CLI params
+    logger.info("Override config with CLI params")
     config = override_config_with_cli_params(
         config=config,
         inbox_dir=inbox_dir,
@@ -78,13 +79,15 @@ def main(
 
     # read cluster info from clusters in libraries (or empty dataframe)
     # TODO: Add listing of dirs without media
-    df_clusters = get_existing_clusters_info(config)
+    logger.info("Read cluster info from clusters in libraries")
+    df_clusters, empty, non_compliant = get_existing_clusters_info(config)
 
     # Configure image reader, initialize media database
     image_reader = ImageReader(config)
 
     # read timestamps from imported pictures/recordings
     try:
+        logger.info("Read inbox info from CSV")
         image_reader.media_df = pd.read_csv("h:\\incomming\\inbox.csv")
         # Revert data types after reading from CSV
         image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
@@ -92,27 +95,27 @@ def main(
             lambda x: Status[x.replace("Status.", "")]
         )
     except FileNotFoundError:
+        logger.info("Read inbox info from files")
         image_reader.get_media_info_from_inbox_files()
         image_reader.media_df.to_csv("h:\\incomming\\inbox.csv", index=False)
-
-    # skip inbox files duplicated with watch folders (if feature enabled)
-    image_reader.media_df, dups = mark_inbox_duplicates_vs_watch_folders(
-        config.watch_folders,
-        image_reader.media_df,
-        config.skip_duplicated_existing_in_libs,
-    )
 
     # configure media grouper, initialize internal dataframes
     image_grouper = ImageGrouper(
         configuration=config,
-        df_clusters=df_clusters,
-        inbox_media_df=image_reader.media_df.copy(),
+        df_clusters=df_clusters,  # existing clusters
+        inbox_media_df=image_reader.media_df.copy(),  # inbox media
     )
+
+    # Mark inbox files duplicated with watch folders (if feature enabled)
+    dup_files, dup_clusters = image_grouper.mark_inbox_duplicates_vs_watch_folders()
 
     # == Assign to existing ==
     if config.assign_to_clusters_existing_in_libs:
         # try assign media items to clusters already existing in the library
-        assigned = image_grouper.assign_to_existing_clusters()
+        (
+            files_assigned_to_existing_cl,
+            existing_cluster_names,
+        ) = image_grouper.assign_to_existing_clusters()  # TODO: KS: 2020-12-26: should not have assigned target path yet
 
     # == Handle not-clustered items ==
     # Calculate gaps for non-clustered items
@@ -120,23 +123,28 @@ def main(
     image_grouper.calculate_gaps()
 
     # create new clusters, assign media
-    cluster_list = image_grouper.run_clustering()
+    logger.info("run_clustering")
+    new_cluster_df = image_grouper.run_clustering()
 
-    # concatenate info on new clusters to existing clusters dataframe
-    image_grouper.add_new_cluster_data_to_data_frame(cluster_list)
-
-    # assign target folder for new clusters
-    image_grouper.assign_target_folder_name_to_new_clusters(
-        method=config.assign_date_to_clusters_method)
+    # assign target folder for new clusters (update media_df)
+    logger.info("assign_target_folder_name_to_new_clusters")
+    new_folder_names = (
+        image_grouper.assign_target_folder_name_and_file_count_to_new_clusters(
+            method=config.assign_date_to_clusters_method
+        )
+    )
 
     # assign target folder for existing clusters
+    logger.info("assign_target_folder_name_to_existing_clusters")
     image_grouper.assign_target_folder_name_to_existing_clusters()
 
     # left-merge clusters to media_df (to add "cluster_id" and "target_path")
     # from clusters_df to media_df
+    logger.info("add_cluster_info_from_clusters_to_media")
     image_grouper.add_cluster_info_from_clusters_to_media()
 
     # assign target folder for duplicates
+    logger.info("assign target folder for duplicates")
     image_grouper.add_target_dir_for_duplicates()
 
     # Physically move or copy files to folders

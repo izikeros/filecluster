@@ -55,7 +55,9 @@ def save_cluster_ini(
         cluster_ini.write(cluster_ini_file)
 
 
-def read_cluster_ini_as_dict(path: PosixPath) -> Optional[Dict[str, Dict[str, Union[datetime, str]]]]:
+def read_cluster_ini_as_dict(
+    path: PosixPath,
+) -> Optional[Dict[str, Dict[str, Union[datetime, str]]]]:
     """Read cluster info from the path and return as dictionary.
 
     Args:

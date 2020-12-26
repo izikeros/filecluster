@@ -98,7 +98,12 @@ def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
     return row
 
 
-def prepare_new_row_with_meta(fn: str, image_extensions: List[str], in_dir_name: Union[str, PosixPath], meta: Metadata) -> Dict[str, Any]:
+def prepare_new_row_with_meta(
+    fn: str,
+    image_extensions: List[str],
+    in_dir_name: Union[str, PosixPath],
+    meta: Metadata,
+) -> Dict[str, Any]:
     """
 
     Args:
@@ -142,7 +147,9 @@ def prepare_new_row_with_meta(fn: str, image_extensions: List[str], in_dir_name:
 
 
 class ImageReader(object):
-    def __init__(self, config: Config, media_df: Optional[MediaDataFrame] = None) -> None:
+    def __init__(
+        self, config: Config, media_df: Optional[MediaDataFrame] = None
+    ) -> None:
         """Initialize media database with existing media dataframe or create empty one."""
 
         # read the config
@@ -237,7 +244,8 @@ def mark_inbox_duplicates_vs_watch_folders(
     file_already_in_library = []
     keys_to_remove_from_inbox_import = []
 
-    for potential_duplicate in potential_dups:
+    logger.info("Confirm potential duplicates")
+    for potential_duplicate in tqdm(potential_dups):
         # get inbox item info
         inbox_item = inbox_media_df[inbox_media_df.file_name == potential_duplicate]
 
@@ -255,8 +263,10 @@ def mark_inbox_duplicates_vs_watch_folders(
                 )
 
     # mark confirmed duplicates in import batch
+    logger.info("mark confirmed duplicates in import batch")
+    # FIXME: KS: 2020-12-26: Very slow stage 1sec/it
     sel_dups = inbox_media_df.file_name.isin(keys_to_remove_from_inbox_import)
-    for idx, _row in inbox_media_df[sel_dups].iterrows():
+    for idx, _row in tqdm(inbox_media_df[sel_dups].iterrows(), total=sum(sel_dups)):
         inbox_media_df.loc[idx, "status"] = Status.DUPLICATE  # Fixme: copy of a slice
         dups_patch = list(filter(lambda x: _row.file_name in str(x), lst))
         dups_str = [str(x) for x in dups_patch]
@@ -265,36 +275,6 @@ def mark_inbox_duplicates_vs_watch_folders(
         inbox_media_df["duplicated_to"][idx] = dups_str  # Fixme: copy of a slice
         inbox_media_df["duplicated_cluster"][idx] = dups_clust  # Fixme: copy of a slice
     return inbox_media_df, keys_to_remove_from_inbox_import
-
-
-def get_watch_folders_files_path(watch_folders: List[str]) -> Tuple[List[str], List[PosixPath]]:
-    """
-
-    Args:
-      watch_folders:
-
-    Returns:
-
-    """
-    lst = []
-    for w in watch_folders:
-        file_list_watch = get_files_from_folder(w)
-        path_list = [path for path in file_list_watch]
-        lst.extend(path_list)
-    watch_names = [path.name for path in lst]
-    return watch_names, lst
-
-
-def get_files_from_folder(folder: str) -> Iterator[Any]:
-    """
-
-    Args:
-      folder: str:
-
-    Returns:
-
-    """
-    return Path(folder).rglob("*.*")
 
 
 def check_if_media_files_from_db_exists():
