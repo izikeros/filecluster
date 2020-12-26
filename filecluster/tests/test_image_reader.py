@@ -106,4 +106,3 @@ def test_dir_scanner():
     media_df = get_media_df(conf)
     time_granularity = int(conf.time_granularity.total_seconds())
     media_stats = get_media_stats(media_df, time_granularity)
-    pass
