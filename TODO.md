@@ -11,8 +11,11 @@ TODO list
 - better indicate progress while scanning library
 - better handle log level (single setting on package level)
 - add dataenforce and perhaps great expectations package to better control dataframes format and content
+- integrate library scanning with diary - add reference to events dir in the diary note for given date. Create note for the day if not existing. Write python script for that. Might be too complex for bash script.
+- use gitlab issues and tools for project planning
+
 FIXME:
-- why '[2020_01_23]_Wystep_Hani' has no date info. In case exif not available, mdate/cdate should be taken. Is this windows problem.
+- why '[2020_01_23]_Wystep_Hani' has no date info. In case exif not available, mdate/cdate should be taken. Is this windows problem?
 seems that under windows do not read creation/modification date
 - E [WinError 183] Nie można utworzyć pliku, który już istnieje: 'h:\\zdjecia\\2020\\[2020_09_26]_Runmageddon\\Piotrek'
 - E [WinError 183] Nie można utworzyć pliku, który już istnieje: 'h:\\zdjecia\\2020\\[2020_09_26]_Runmageddon\\Hania'
