@@ -1,5 +1,5 @@
+"""Module for file clustering and supporting operations."""
 import logging
-import math
 import os
 import random
 from datetime import timedelta
@@ -31,13 +31,13 @@ logger.setLevel(logging.DEBUG)
 
 
 def expand_cluster_or_init_new(
-    delta_from_previous: Timedelta,
-    max_time_delta: timedelta,
-    index: int,
-    new_cluster_idx: int,
-    list_new_clusters: List[dict],
-    media_date: Timestamp,
-    cluster: dict,
+        delta_from_previous: Timedelta,
+        max_time_delta: timedelta,
+        index: int,
+        new_cluster_idx: int,
+        list_new_clusters: List[dict],
+        media_date: Timestamp,
+        cluster: dict,
 ):
     """Add new item to existing cluster and update cluster info or init new cluster.
 
@@ -56,14 +56,13 @@ def expand_cluster_or_init_new(
         cluster:                cluster dictionary with description of current "buffer" cluster
     :return:
     """
-
     # check if new cluster encountered
     is_first_image_analysed = index == 0
     is_this_image_too_far_from_other_in_the_cluster = (
-        delta_from_previous > max_time_delta
+            delta_from_previous > max_time_delta
     )
     is_new_cluster = (
-        is_this_image_too_far_from_other_in_the_cluster or is_first_image_analysed
+            is_this_image_too_far_from_other_in_the_cluster or is_first_image_analysed
     )
     if is_new_cluster:
         new_cluster_idx += 1
@@ -107,12 +106,12 @@ class TargetPathCreator:
 
 class ImageGrouper(object):
     def __init__(
-        self,
-        configuration: Config,
-        df_clusters: Optional[ClustersDataFrame] = None,
-        inbox_media_df: Optional[MediaDataFrame] = None,
+            self,
+            configuration: Config,
+            df_clusters: Optional[ClustersDataFrame] = None,
+            inbox_media_df: Optional[MediaDataFrame] = None,
     ):
-        """
+        """Class for clustering media objects by date.
 
         configuration: instance of Configuration
         media_df: media database (loaded from file or empty)
@@ -132,7 +131,7 @@ class ImageGrouper(object):
             self.inbox_media_df = inbox_media_df
 
     def calculate_gaps(self, date_col="date", delta_col="date_delta"):
-        """Calculate gaps between consecutive shots, save delta to dataframe
+        """Calculate gaps between consecutive shots, save delta to dataframe.
 
         Use 'creation date' from given column and save results to
         selected 'delta' column
@@ -174,7 +173,6 @@ class ImageGrouper(object):
         )
 
         n_files = len(self.inbox_media_df)
-        # i_file = 0
 
         # set new index in inbox_media_df (as range)
         self.inbox_media_df.index = list(range(n_files))
@@ -188,7 +186,7 @@ class ImageGrouper(object):
         is_first_image_analysed = True
         df_not_clustered = self.inbox_media_df[sel_not_clustered].copy()
         for media_index, _row in tqdm(
-            self.inbox_media_df[sel_not_clustered].iterrows(), total=n_not_clustered
+                self.inbox_media_df[sel_not_clustered].iterrows(), total=n_not_clustered
         ):
             # if _row.cluster_id:
             # gap to previous
@@ -198,11 +196,11 @@ class ImageGrouper(object):
 
             # check if new cluster encountered
             is_this_image_too_far_from_other_in_the_cluster = (
-                delta_from_previous > max_gap
+                    delta_from_previous > max_gap
             )
             is_new_cluster = (
-                is_this_image_too_far_from_other_in_the_cluster
-                or is_first_image_analysed
+                    is_this_image_too_far_from_other_in_the_cluster
+                    or is_first_image_analysed
             )
             if is_new_cluster:
                 # == We are starting new cluster here ==
@@ -262,7 +260,7 @@ class ImageGrouper(object):
         return self.df_clusters[sel]["cluster_id"].unique()
 
     def assign_target_folder_name_and_file_count_to_new_clusters(
-        self, method=AssignDateToClusterMethod.MEDIAN
+            self, method=AssignDateToClusterMethod.MEDIAN
     ) -> List[str]:
         """Set target_path and new_file_count in clusters_df.
         Returns:
@@ -317,7 +315,7 @@ class ImageGrouper(object):
             sel_cluster = self.df_clusters.cluster_id == new_cluster
             self.df_clusters.loc[sel_cluster, "target_path"] = pth
             self.df_clusters.loc[sel_cluster, "new_file_count"] = (
-                image_count + video_count
+                    image_count + video_count
             )
             new_folder_names.append(pth)
         return new_folder_names
@@ -339,7 +337,7 @@ class ImageGrouper(object):
         pth_in = self.config.in_dir_name
         n_files = len(self.inbox_media_df)
         i_file = 0
-        for idx, row in tqdm(self.inbox_media_df.iterrows()):
+        for _, row in tqdm(self.inbox_media_df.iterrows()):
             date_string = row["target_path"]
             file_name = row["file_name"]
             src = os.path.join(pth_in, file_name)
@@ -351,8 +349,6 @@ class ImageGrouper(object):
             elif mode == CopyMode.NOP:
                 pass
             i_file += 1
-            # ut.print_progress(i_file, n_files, f"{mode}: ")
-        print("")
 
     def add_target_dir_for_duplicates(self):
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
@@ -381,7 +377,6 @@ class ImageGrouper(object):
         margin = self.config.time_granularity
         sel_no_duplicated = ~(self.inbox_media_df.status == Status.DUPLICATE)
         for index, row in tqdm(self.inbox_media_df[sel_no_duplicated].iterrows()):
-            # index: str = row[0]
             img_time: Timestamp = row["date"]  # read item_date
 
             not_too_old_clusters = self.df_clusters.start_date - margin <= img_time
@@ -403,7 +398,7 @@ class ImageGrouper(object):
                 # update counter
                 cluster_idx = self.df_clusters[
                     self.df_clusters.cluster_id == cluster_id
-                ].index
+                    ].index
                 if self.df_clusters.new_file_count.loc[cluster_idx].values[0]:
                     self.df_clusters.new_file_count.loc[cluster_idx] += 1
                 else:
@@ -422,14 +417,14 @@ class ImageGrouper(object):
 
         has_cluster_id = self.inbox_media_df.cluster_id >= 0
         has_status_existing_cluster = (
-            self.inbox_media_df.status == Status.EXISTING_CLUSTER
+                self.inbox_media_df.status == Status.EXISTING_CLUSTER
         )
         files_assigned_to_existing_cl = self.inbox_media_df[
             has_cluster_id & has_status_existing_cluster
-        ].file_name.values.tolist()
+            ].file_name.values.tolist()
         existing_cluster_ids = self.inbox_media_df[
             has_cluster_id & has_status_existing_cluster
-        ].cluster_id.unique()
+            ].cluster_id.unique()
         existing_cluster_names = [
             Path(cl_row.path).parts[-1]
             for _, cl_row in self.df_clusters.iterrows()
@@ -488,7 +483,7 @@ class ImageGrouper(object):
             # get inbox item info
             inbox_item = self.inbox_media_df[
                 self.inbox_media_df.file_name == potential_duplicate
-            ]
+                ]
 
             # get matching watch folder items
             lib_items = [path for path in lst if path.name == potential_duplicate]
@@ -510,7 +505,7 @@ class ImageGrouper(object):
             inbox_import_files_marked_as_duplicates
         )
         for idx, _row in tqdm(
-            self.inbox_media_df[sel_dups].iterrows(), total=sum(sel_dups)
+                self.inbox_media_df[sel_dups].iterrows(), total=sum(sel_dups)
         ):
             self.inbox_media_df.loc[
                 idx, "status"
@@ -532,19 +527,19 @@ class ImageGrouper(object):
 
 
 def get_files_from_folder(folder: str) -> Iterator[Any]:
-    """
+    """Get iterator over recursive listing of files in folder.
 
     Args:
-      folder: str:
+      folder: str: Folder to get files from
 
     Returns:
-
+        Iterator over recursive directory contents (items matching *.* pattern)
     """
     return Path(folder).rglob("*.*")
 
 
 def get_watch_folders_files_path(
-    watch_folders: List[str],
+        watch_folders: List[str],
 ) -> Tuple[List[str], List[PosixPath]]:
     """
 
@@ -556,14 +551,23 @@ def get_watch_folders_files_path(
     """
     lst = []
     for w in watch_folders:
-        file_list_watch = get_files_from_folder(w)
-        path_list = [path for path in file_list_watch]
+        file_list_watch: Iterator = get_files_from_folder(w)
+        path_list = list(file_list_watch)
         lst.extend(path_list)
     watch_names = [path.name for path in lst]
     return watch_names, lst
 
 
 def check_df_has_all_expected_columns(df: pd.DataFrame, expected_cols: List[str]):
+    """Check if data frame has all expected columns."""
     for c in df.columns:
         if c not in expected_cols:
             raise MissingDfClusterColumn(c)
+
+
+def check_df_has_all_expected_columns_and_types(df: pd.DataFrame, col_expectations: dict):
+    """Check if data frame has all expected columns."""
+    for c in df.columns:
+        if c not in list(col_expectations.keys()):
+            raise MissingDfClusterColumn(c)
+        # TODO: KS: 2020-12-26: check dtype

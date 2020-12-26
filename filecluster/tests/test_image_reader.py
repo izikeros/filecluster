@@ -5,18 +5,17 @@ import pytest
 
 from filecluster.configuration import get_development_config
 from filecluster.filecluster_types import MediaDataFrame
+from filecluster.image_grouper import get_watch_folders_files_path, get_files_from_folder
 from filecluster.image_reader import (
     ImageReader,
     Metadata,
     multiple_timestamps_to_one,
     initialize_row_dict,
     prepare_new_row_with_meta,
-    get_files_from_folder,
     configure_im_reader,
     get_media_df,
     get_media_stats,
     mark_inbox_duplicates_vs_watch_folders,
-    get_watch_folders_files_path,
 )
 from filecluster.tests.test_dbase import check_lists_equal
 
