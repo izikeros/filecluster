@@ -252,7 +252,7 @@ def get_default_config() -> Config:
     return config
 
 
-def get_development_config(os_name=os.name) -> Config:
+def get_development_config(os_name: str=os.name) -> Config:
     """Configuration for development phase.
     Key features of development mode:
 

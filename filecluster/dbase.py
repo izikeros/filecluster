@@ -5,6 +5,9 @@ import pandas as pd
 
 from filecluster.configuration import Config, CLUSTER_DF_COLUMNS
 from filecluster.update_cluster_db_deep import scan_library_dir
+from numpy import int64
+from pandas.core.frame import DataFrame
+from typing import Union
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -12,7 +15,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def get_existing_clusters_info(config: Config):
+def get_existing_clusters_info(config: Config) -> DataFrame:
     # TODO: Any non-empty subfolder of year folder should contain .cluster.ini file (see: Runmageddon example)
     #   non-empty means - contains media files
     watch_folders = config.watch_folders
@@ -36,7 +39,7 @@ def get_existing_clusters_info(config: Config):
     return df
 
 
-def get_new_cluster_id_from_dataframe(df_clusters):
+def get_new_cluster_id_from_dataframe(df_clusters: DataFrame) -> Union[int64, int]:
     cluster_ids = df_clusters.cluster_id.dropna().values
     if len(cluster_ids) > 0:
         last_cluster = max(cluster_ids)

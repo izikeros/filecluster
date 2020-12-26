@@ -3,8 +3,8 @@ import os
 import re
 from configparser import ConfigParser
 from datetime import datetime
-from pathlib import Path
-from typing import List, Tuple, Optional
+from pathlib import PosixPath, Path
+from typing import Dict, Union, List, Tuple, Optional
 
 from filecluster.configuration import INI_FILENAME
 
@@ -41,7 +41,7 @@ def initialize_cluster_info_dict(
 def save_cluster_ini(
     cluster_ini: ConfigParser,
     path: str,
-):
+) -> None:
     """Save cluster information dictionary.
 
     Args:
@@ -55,7 +55,7 @@ def save_cluster_ini(
         cluster_ini.write(cluster_ini_file)
 
 
-def read_cluster_ini_as_dict(path):
+def read_cluster_ini_as_dict(path: PosixPath) -> Optional[Dict[str, Dict[str, Union[datetime, str]]]]:
     """Read cluster info from the path and return as dictionary.
 
     Args:
@@ -112,7 +112,7 @@ def fast_scandir(dirname: str) -> List[str]:
     return subfolders
 
 
-def identify_folder_types(subfolders_list) -> List[Tuple[str, str]]:
+def identify_folder_types(subfolders_list: List[str]) -> List[Tuple[str, str]]:
     """Assign folder-type label.
 
     Args:

@@ -19,6 +19,7 @@ from filecluster.cluster_scaner import (
 )
 from filecluster.configuration import INI_FILENAME
 from filecluster.image_reader import configure_im_reader, get_media_df, get_media_stats
+from pandas.core.frame import DataFrame
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def scan_library_dir(library_path: str, force_deep_scan=False) -> pd.DataFrame:
+def scan_library_dir(library_path: str, force_deep_scan: bool=False) -> pd.DataFrame:
     """Scan folder for cluster info and return dataframe with clusters.
 
     Args:

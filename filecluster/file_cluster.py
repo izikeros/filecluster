@@ -41,7 +41,7 @@ def main(
     force_deep_scan: Optional[bool] = None,
     drop_duplicates: Optional[bool] = None,
     use_existing_clusters: Optional[bool] = None,
-):
+) -> None:
     """Main function to run clustering.
 
     Input args are default parameters to override and all are optional.

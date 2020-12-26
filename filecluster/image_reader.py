@@ -1,7 +1,7 @@
 import logging
 import os
-from pathlib import Path
-from typing import List, Optional, Tuple
+from pathlib import PosixPath, Path
+from typing import Any, Dict, Iterator, Union, List, Optional, Tuple
 
 import pandas as pd
 from tqdm import tqdm
@@ -15,6 +15,7 @@ from filecluster.configuration import (
     Status,
 )
 from filecluster.filecluster_types import MediaDataFrame
+from pandas.core.frame import DataFrame
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -25,7 +26,7 @@ logger.setLevel(logging.DEBUG)
 class Metadata:
     """ """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.file_name: str = ""
         self.path_name: str = ""
         self.m_time: str = ""
@@ -69,7 +70,7 @@ def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
     return image_df
 
 
-def initialize_row_dict(meta: Metadata):
+def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
     """generate single row based on values defined in outer method
 
     Args:
@@ -97,7 +98,7 @@ def initialize_row_dict(meta: Metadata):
     return row
 
 
-def prepare_new_row_with_meta(fn, image_extensions, in_dir_name, meta):
+def prepare_new_row_with_meta(fn: str, image_extensions: List[str], in_dir_name: Union[str, PosixPath], meta: Metadata) -> Dict[str, Any]:
     """
 
     Args:
@@ -141,7 +142,7 @@ def prepare_new_row_with_meta(fn, image_extensions, in_dir_name, meta):
 
 
 class ImageReader(object):
-    def __init__(self, config: Config, media_df: Optional[MediaDataFrame] = None):
+    def __init__(self, config: Config, media_df: Optional[MediaDataFrame] = None) -> None:
         """Initialize media database with existing media dataframe or create empty one."""
 
         # read the config
@@ -188,7 +189,7 @@ class ImageReader(object):
                 list_of_rows.append(new_row)
         return list_of_rows
 
-    def get_media_info_from_inbox_files(self):
+    def get_media_info_from_inbox_files(self) -> None:
         """Read data from files, return media info in dataframe."""
         row_list = self.get_data_from_files_as_list_of_rows()
         logger.debug(f"Read info from {len(row_list)} files.")
@@ -201,7 +202,7 @@ class ImageReader(object):
 def mark_inbox_duplicates_vs_watch_folders(
     watch_folders: List[str],
     inbox_media_df: MediaDataFrame,
-    skip_duplicated_existing_in_libs,
+    skip_duplicated_existing_in_libs: bool,
 ) -> Tuple[MediaDataFrame, List[str]]:
     """Check if imported files are not in the library already, if so - skip them.
 
@@ -266,7 +267,7 @@ def mark_inbox_duplicates_vs_watch_folders(
     return inbox_media_df, keys_to_remove_from_inbox_import
 
 
-def get_watch_folders_files_path(watch_folders):
+def get_watch_folders_files_path(watch_folders: List[str]) -> Tuple[List[str], List[PosixPath]]:
     """
 
     Args:
@@ -284,7 +285,7 @@ def get_watch_folders_files_path(watch_folders):
     return watch_names, lst
 
 
-def get_files_from_folder(folder: str):
+def get_files_from_folder(folder: str) -> Iterator[Any]:
     """
 
     Args:
@@ -302,7 +303,7 @@ def check_if_media_files_from_db_exists():
     logger.info("Running media scan (not implemented yet)")
 
 
-def configure_im_reader(in_dir_name: str):
+def configure_im_reader(in_dir_name: str) -> Config:
     """
 
     Args:
