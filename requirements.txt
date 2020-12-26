@@ -1,6 +1,6 @@
 ExifRead==2.3.2
 numpy==1.19.3   # there is Windows problem with numpy==1.19.4
-pandas==1.1.5
+pandas==1.1.5   # 1.1.5 works ok
 Pillow==8.0.1
 python-dateutil==2.8.1
 pytz==2020.5
@@ -16,5 +16,13 @@ MonkeyType
 pytest-monkeytype
 pytest-mypy
 mypy
-black
 flake8
+flake8-commas==2.0.0
+flake8-docstrings==1.5.0
+flake8-print==4.0.0
+# darglint # A functional docstring linter which checks whether a docstring's description matches the actual function/method implementation.
+flake8-expression-complexity # An extension for flake8 that validates expression complexity.
+flake8-comprehensions
+flake8-bugbear
+flake8-pytest-style
+flake8-black
