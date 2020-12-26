@@ -23,6 +23,8 @@ logger.setLevel(logging.DEBUG)
 
 
 class Metadata:
+    """ """
+
     def __init__(self):
         self.file_name: str = ""
         self.path_name: str = ""
@@ -43,7 +45,14 @@ class Metadata:
 def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
     """Get timestamp from exif (primary) or m_date. Drop not needed date cols.
 
-    Prepare single timestamp out of few available."""
+    Prepare single timestamp out of few available.
+
+    Args:
+      image_df: MediaDataFrame:
+
+    Returns:
+
+    """
 
     logger.debug("Cleaning-up timestamps in imported media.")
     # TODO: Ensure that any date is assigned to file
@@ -61,7 +70,14 @@ def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
 
 
 def initialize_row_dict(meta: Metadata):
-    """generate single row based on values defined in outer method"""
+    """generate single row based on values defined in outer method
+
+    Args:
+      meta: Metadata:
+
+    Returns:
+
+    """
 
     # define structure of images dataframe and fill with data
     row = {
@@ -82,6 +98,17 @@ def initialize_row_dict(meta: Metadata):
 
 
 def prepare_new_row_with_meta(fn, image_extensions, in_dir_name, meta):
+    """
+
+    Args:
+      fn:
+      image_extensions:
+      in_dir_name:
+      meta:
+
+    Returns:
+
+    """
     meta.file_name = fn
     # full path + file name
     path_name = os.path.join(in_dir_name, fn)
@@ -133,28 +160,32 @@ class ImageReader(object):
     def get_data_from_files_as_list_of_rows(self) -> List[dict]:
         """Recursively read exif data from files given in path provided in config
 
-        :return: list of rows with all information
-        :rtype: List of rows
+        Args:
+
+        Returns:
+          List of rows: list of rows with all information
+
         """
 
         list_of_rows = []
         in_dir_name = self.config.in_dir_name
         ext = self.config.image_extensions + self.config.video_extensions
 
-        print(f"Reading data from: {in_dir_name}")
+        logger.debug(f"Reading data from: {in_dir_name}")
         list_dir = os.listdir(in_dir_name)
         n_files = len(list_dir)
         image_extensions = self.config.image_extensions
         meta = Metadata()
         file_list = list(os.listdir(in_dir_name))
-        for i_file, file_name in tqdm(enumerate(file_list), total=n_files,):
+        for i_file, file_name in tqdm(
+            enumerate(file_list),
+            total=n_files,
+        ):
             if ut.is_supported_filetype(file_name, ext):
                 new_row = prepare_new_row_with_meta(
                     file_name, image_extensions, in_dir_name, meta
                 )
                 list_of_rows.append(new_row)
-            #ut.print_progress(i_file, n_files - 1, "reading files: ")
-        print("")
         return list_of_rows
 
     def get_media_info_from_inbox_files(self):
@@ -172,7 +203,16 @@ def mark_inbox_duplicates_vs_watch_folders(
     inbox_media_df: MediaDataFrame,
     skip_duplicated_existing_in_libs,
 ) -> Tuple[MediaDataFrame, List[str]]:
-    """Check if imported files are not in the library already, if so - skip them."""
+    """Check if imported files are not in the library already, if so - skip them.
+
+    Args:
+      watch_folders: List[str]:
+      inbox_media_df: MediaDataFrame:
+      skip_duplicated_existing_in_libs:
+
+    Returns:
+
+    """
     # TODO: KS: 2020-12-24: make it method of ImageReader class
     if not skip_duplicated_existing_in_libs:
         return inbox_media_df, []
@@ -216,16 +256,25 @@ def mark_inbox_duplicates_vs_watch_folders(
     # mark confirmed duplicates in import batch
     sel_dups = inbox_media_df.file_name.isin(keys_to_remove_from_inbox_import)
     for idx, _row in inbox_media_df[sel_dups].iterrows():
-        inbox_media_df.loc[idx, 'status'] = Status.DUPLICATE  # Fixme: copy of a slice
+        inbox_media_df.loc[idx, "status"] = Status.DUPLICATE  # Fixme: copy of a slice
         dups_patch = list(filter(lambda x: _row.file_name in str(x), lst))
         dups_str = [str(x) for x in dups_patch]
         dups_clust = [x.parts[-2] for x in dups_patch]
-        inbox_media_df.loc[idx, 'duplicated_to'] = dups_str  # Fixme: copy of a slice
-        inbox_media_df.loc[idx, 'duplicated_cluster'] = dups_clust  # Fixme: copy of a slice
+
+        inbox_media_df["duplicated_to"][idx] = dups_str  # Fixme: copy of a slice
+        inbox_media_df["duplicated_cluster"][idx] = dups_clust  # Fixme: copy of a slice
     return inbox_media_df, keys_to_remove_from_inbox_import
 
 
 def get_watch_folders_files_path(watch_folders):
+    """
+
+    Args:
+      watch_folders:
+
+    Returns:
+
+    """
     lst = []
     for w in watch_folders:
         file_list_watch = get_files_from_folder(w)
@@ -235,17 +284,33 @@ def get_watch_folders_files_path(watch_folders):
     return watch_names, lst
 
 
-# @lru_cache
 def get_files_from_folder(folder: str):
+    """
+
+    Args:
+      folder: str:
+
+    Returns:
+
+    """
     return Path(folder).rglob("*.*")
 
 
 def check_if_media_files_from_db_exists():
+    """ """
     # TODO: KS: 2020-10-28: implement
     logger.info("Running media scan (not implemented yet)")
 
 
-def configure_im_reader(in_dir_name):
+def configure_im_reader(in_dir_name: str):
+    """
+
+    Args:
+      in_dir_name:
+
+    Returns:
+
+    """
     conf = get_default_config()
     # modify config
     conf.__setattr__("in_dir_name", in_dir_name)
@@ -256,7 +321,15 @@ def configure_im_reader(in_dir_name):
     return conf
 
 
-def get_media_df(conf) -> Optional[MediaDataFrame]:
+def get_media_df(conf: Config) -> Optional[MediaDataFrame]:
+    """
+
+    Args:
+      conf:
+
+    Returns:
+
+    """
     im_reader = ImageReader(config=conf)
     row_list = im_reader.get_data_from_files_as_list_of_rows()
     if row_list:
@@ -267,6 +340,15 @@ def get_media_df(conf) -> Optional[MediaDataFrame]:
 
 
 def get_media_stats(df: pd.DataFrame, time_granularity: int) -> dict:
+    """
+
+    Args:
+      df: pd.DataFrame:
+      time_granularity: int:
+
+    Returns:
+
+    """
     date_min = df.date.min()
     date_max = df.date.max()
     date_median = df.iloc[int(len(df) / 2)].date
