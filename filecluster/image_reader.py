@@ -1,7 +1,8 @@
+"""Module for reading media data on files from given folder."""
 import logging
 import os
-from pathlib import PosixPath, Path
-from typing import Any, Dict, Iterator, Union, List, Optional, Tuple
+from pathlib import PosixPath
+from typing import Any, Dict, Union, List, Optional, Tuple
 
 import pandas as pd
 from tqdm import tqdm
@@ -15,7 +16,7 @@ from filecluster.configuration import (
     Status,
 )
 from filecluster.filecluster_types import MediaDataFrame
-from pandas.core.frame import DataFrame
+from filecluster.image_grouper import get_watch_folders_files_path
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -46,15 +47,15 @@ class Metadata:
 def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
     """Get timestamp from exif (primary) or m_date. Drop not needed date cols.
 
-    Prepare single timestamp out of few available.
+    Prepare single timestamp out of cdate, mdate and exif.
 
     Args:
       image_df: MediaDataFrame:
 
     Returns:
+      media dataframe with selected single date out of cdate, mdate and exif
 
     """
-
     logger.debug("Cleaning-up timestamps in imported media.")
     # TODO: Ensure that any date is assigned to file
     # use exif date as base
@@ -71,7 +72,7 @@ def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
 
 
 def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
-    """generate single row based on values defined in outer method
+    """Generate single row based on values defined in outer method
 
     Args:
       meta: Metadata:
@@ -79,7 +80,6 @@ def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
     Returns:
 
     """
-
     # define structure of images dataframe and fill with data
     row = {
         "file_name": meta.file_name,
@@ -99,34 +99,34 @@ def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
 
 
 def prepare_new_row_with_meta(
-    fn: str,
-    image_extensions: List[str],
-    in_dir_name: Union[str, PosixPath],
-    meta: Metadata,
+        media_file_name: str,
+        accepted_media_file_extensions: List[str],
+        in_dir_name: Union[str, PosixPath],  # FIXME: Needs harmonization
+        meta: Metadata,
 ) -> Dict[str, Any]:
-    """
+    """Prepare dictionary with metadata for input media file.
 
     Args:
-      fn:
-      image_extensions:
+      media_file_name:
+      accepted_media_file_extensions:
       in_dir_name:
       meta:
 
     Returns:
-
+        Dictionary with metadata.
     """
-    meta.file_name = fn
+    meta.file_name = media_file_name
     # full path + file name
-    path_name = os.path.join(in_dir_name, fn)
+    path_name = os.path.join(in_dir_name, media_file_name)
     meta.path_name = path_name
     # get modification, creation and exif dates
     meta.m_time, meta.c_time, meta.exif_date = ut.get_date_from_file(path_name)
     # determine if media file is image or other type
-    is_image = ut.is_image(path_name, image_extensions)
+    is_image = ut.is_image(path_name, accepted_media_file_extensions)
     meta.is_image = is_image
     if not is_image:
         pass
-    if fn.lower().endswith("mov"):
+    if media_file_name.lower().endswith("mov"):
         pass
     # file size
     meta.file_size = os.path.getsize(path_name)
@@ -148,10 +148,9 @@ def prepare_new_row_with_meta(
 
 class ImageReader(object):
     def __init__(
-        self, config: Config, media_df: Optional[MediaDataFrame] = None
+            self, config: Config, media_df: Optional[MediaDataFrame] = None
     ) -> None:
         """Initialize media database with existing media dataframe or create empty one."""
-
         # read the config
         self.config = config
 
@@ -166,7 +165,7 @@ class ImageReader(object):
             self.media_df = media_df
 
     def get_data_from_files_as_list_of_rows(self) -> List[dict]:
-        """Recursively read exif data from files given in path provided in config
+        """Recursively read exif data from files given in path provided in config.
 
         Args:
 
@@ -174,7 +173,6 @@ class ImageReader(object):
           List of rows: list of rows with all information
 
         """
-
         list_of_rows = []
         in_dir_name = self.config.in_dir_name
         ext = self.config.image_extensions + self.config.video_extensions
@@ -186,8 +184,8 @@ class ImageReader(object):
         meta = Metadata()
         file_list = list(os.listdir(in_dir_name))
         for i_file, file_name in tqdm(
-            enumerate(file_list),
-            total=n_files,
+                enumerate(file_list),
+                total=n_files,
         ):
             if ut.is_supported_filetype(file_name, ext):
                 new_row = prepare_new_row_with_meta(
@@ -206,77 +204,6 @@ class ImageReader(object):
         self.media_df = inbox_media_df
 
 
-def mark_inbox_duplicates_vs_watch_folders(
-    watch_folders: List[str],
-    inbox_media_df: MediaDataFrame,
-    skip_duplicated_existing_in_libs: bool,
-) -> Tuple[MediaDataFrame, List[str]]:
-    """Check if imported files are not in the library already, if so - skip them.
-
-    Args:
-      watch_folders: List[str]:
-      inbox_media_df: MediaDataFrame:
-      skip_duplicated_existing_in_libs:
-
-    Returns:
-
-    """
-    # TODO: KS: 2020-12-24: make it method of ImageReader class
-    if not skip_duplicated_existing_in_libs:
-        return inbox_media_df, []
-    else:
-        logger.debug("Checking import for duplicates in watch folders")
-
-    if not any(watch_folders):
-        logger.debug("No library folder defined. Skipping duplicate search.")
-        return inbox_media_df, []
-
-    # get files in library
-    watch_names, lst = get_watch_folders_files_path(watch_folders)
-
-    # get files in inbox
-    new_names = inbox_media_df.file_name.values.tolist()
-
-    # commons - list of new names that apear in watch folders
-    potential_dups = [f for f in new_names if f in watch_names]
-
-    # verify potential dups using size comparison
-    file_already_in_library = []
-    keys_to_remove_from_inbox_import = []
-
-    logger.info("Confirm potential duplicates")
-    for potential_duplicate in tqdm(potential_dups):
-        # get inbox item info
-        inbox_item = inbox_media_df[inbox_media_df.file_name == potential_duplicate]
-
-        # get matching watch folder items
-        lib_items = [path for path in lst if path.name == potential_duplicate]
-        inbox_item_size = inbox_item["size"].values[0]
-
-        for lib_item in lib_items:
-            if inbox_item_size == os.path.getsize(lib_item):
-                file_already_in_library.append(lib_item)
-                in_file_name = inbox_item.file_name.values[0]
-                keys_to_remove_from_inbox_import.append(in_file_name)
-                logger.debug(
-                    f"For inbox file {in_file_name} there is duplicate already in library: {lib_item}"
-                )
-
-    # mark confirmed duplicates in import batch
-    logger.info("mark confirmed duplicates in import batch")
-    # FIXME: KS: 2020-12-26: Very slow stage 1sec/it
-    sel_dups = inbox_media_df.file_name.isin(keys_to_remove_from_inbox_import)
-    for idx, _row in tqdm(inbox_media_df[sel_dups].iterrows(), total=sum(sel_dups)):
-        inbox_media_df.loc[idx, "status"] = Status.DUPLICATE  # Fixme: copy of a slice
-        dups_patch = list(filter(lambda x: _row.file_name in str(x), lst))
-        dups_str = [str(x) for x in dups_patch]
-        dups_clust = [x.parts[-2] for x in dups_patch]
-
-        inbox_media_df["duplicated_to"][idx] = dups_str  # Fixme: copy of a slice
-        inbox_media_df["duplicated_cluster"][idx] = dups_clust  # Fixme: copy of a slice
-    return inbox_media_df, keys_to_remove_from_inbox_import
-
-
 def check_if_media_files_from_db_exists():
     """ """
     # TODO: KS: 2020-10-28: implement
@@ -284,13 +211,13 @@ def check_if_media_files_from_db_exists():
 
 
 def configure_im_reader(in_dir_name: str) -> Config:
-    """
+    """Customize configuration for purpose of scanning the media library.
 
     Args:
-      in_dir_name:
+        in_dir_name: input directory name to be scanned for the media contents.
 
     Returns:
-
+        Configuration object for the im_reader.
     """
     conf = get_default_config()
     # modify config
@@ -321,14 +248,14 @@ def get_media_df(conf: Config) -> Optional[MediaDataFrame]:
 
 
 def get_media_stats(df: pd.DataFrame, time_granularity: int) -> dict:
-    """
+    """Get statistics of media data represented in data frame.
 
     Args:
       df: pd.DataFrame:
       time_granularity: int:
 
     Returns:
-
+        Dictionary describing media in dataframe.
     """
     date_min = df.date.min()
     date_max = df.date.max()
