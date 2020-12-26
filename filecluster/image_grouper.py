@@ -351,9 +351,8 @@ class ImageGrouper(object):
         for idx, row in self.inbox_media_df[sel_dups].iterrows():
             dup_cluster = self.inbox_media_df.duplicated_cluster[idx]
             self.inbox_media_df.target_path[idx] = path_creator.for_duplicates(
-                dup_cluster
+                dup_cluster[0]
             )
-            pass
 
     def add_cluster_info_from_clusters_to_media(self):
         # add path info from cluster dir,
@@ -424,14 +423,13 @@ class ImageGrouper(object):
         """Set cluster string in the dataframe and return the string."""
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
 
-        # FIXME: KS: 2020-12-25: perhaps also new clusters are captured here
         existing_clusters_extended_by_inbox = self.get_existing_to_be_expanded_cluster_ids()
 
         for cluster in existing_clusters_extended_by_inbox:
             # save to cluster db
-            cl = Path(self.df_clusters.loc[4, "target_path"].values[0]).parts[-1]
-            pth = path_creator.for_existing_cluster(dir_string=cl)
             sel_cluster = self.df_clusters.cluster_id == cluster
+            cl = Path(self.df_clusters.loc[sel_cluster, "target_path"].values[0]).parts[-1]
+            pth = path_creator.for_existing_cluster(dir_string=cl)
             self.df_clusters.loc[sel_cluster, 'target_path'] = pth
 
 
