@@ -1,4 +1,4 @@
-"""Helper utilitties to work with media files, exif data, hashing and base64 images."""
+"""Helper utilities to work with media files, exif data, hashing and base64 images."""
 import base64
 import hashlib
 import logging
