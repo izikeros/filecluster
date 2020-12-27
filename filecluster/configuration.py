@@ -1,3 +1,4 @@
+"""Module for keeping configuration-related code for the filecluster."""
 import logging
 import os
 from dataclasses import dataclass
@@ -90,12 +91,8 @@ class Driver(Enum):
 class AssignDateToClusterMethod(Enum):
     """Method for selecting representative date for the cluster.
 
-    RANDOM - comming from random file in the cluster
+    RANDOM - coming from random file in the cluster
     MEDIAN - median datetime from the cluster
-
-    Args:
-
-    Returns:
 
     """
 
@@ -124,15 +121,10 @@ class CopyMode(Enum):
 class Config:
     """Dataclass for keeping configuration parameters.
 
-    - `in_dir_name` - Name of the input directory. Inbox where new media to be
-    discovered
-
-    - 'out_dir_name' - Name of output directory where cluster directories are located/
-
-    Args:
-
-    Returns:
-
+    Attributes:
+        in_dir_name:     Name of the input directory. Inbox where new media to be
+                          discovered
+        out_dir_name:    Name of output directory where cluster directories are located/
     """
 
     in_dir_name: Path
@@ -169,10 +161,8 @@ def configure_paths_for_this_os() -> Tuple[str, str, List[str]]:
     - outbox
     - library.
 
-    Args:
-
     Returns:
-
+        inbox path, outbox path and list of library paths
     """
     if os.name == "nt":
         pth = INBOX_PATH_WINDOWS
@@ -191,10 +181,8 @@ def configure_watch_folder_paths() -> List:
     Watch folder is a location of official folder with media.
      This is your media library.
 
-    Args:
-
     Returns:
-
+        list of default library paths depending on the operating system.
     """
     if os.name == "nt":
         pth = LIBRARY_WINDOWS
@@ -210,7 +198,7 @@ def get_proper_mode_config(is_development_mode: bool) -> Config:
       is_development_mode: bool:
 
     Returns:
-
+        Either 'production' or 'development' config object
     """
     # get proper config
     if is_development_mode:
@@ -222,7 +210,6 @@ def get_proper_mode_config(is_development_mode: bool) -> Config:
 
 def get_default_config() -> Config:
     """Provide default configuration that can be further modified."""
-
     # path to files to be clustered
     inbox_path, outbox_path, library_paths = configure_paths_for_this_os()
 
@@ -253,7 +240,8 @@ def get_default_config() -> Config:
 
 
 def get_development_config(os_name: str = os.name) -> Config:
-    """Configuration for development phase.
+    """Provide configuration for the development phase.
+
     Key features of development mode:
 
     - use copy operation instead of move (source files remain in their original locations)
@@ -263,7 +251,7 @@ def get_development_config(os_name: str = os.name) -> Config:
       os_name:  (Default value = os.name)
 
     Returns:
-
+        Configuration object modified for the development mode
     """
     logger.warning("Warning: Using development configuration")
 
@@ -337,11 +325,9 @@ def override_config_with_cli_params(
     if use_existing_clusters is not None:
         config.assign_to_clusters_existing_in_libs = use_existing_clusters
 
-    # Sanity check: if using 'drop_duplicates' or 'use_existing_clusters' - need to provide watch_dirs
-    if (
-        config.skip_duplicated_existing_in_libs
-        or config.assign_to_clusters_existing_in_libs
-    ):
+    # Sanity check: if using 'drop_duplicates' or 'use_existing_clusters'
+    #  - need to provide watch_dirs
+    if config.skip_duplicated_existing_in_libs or config.assign_to_clusters_existing_in_libs:
         assert (
             len(watch_dir_list) > 0
         ), "Need to provide watch folders if using 'drop_duplicates' or 'use_existing_clusters'"

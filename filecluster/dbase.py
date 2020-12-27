@@ -20,9 +20,8 @@ def get_existing_clusters_info(
     config: Config,
 ) -> Tuple[ClustersDataFrame, List[str], List[str]]:
     """Scan library, find existing clusters and empty or non-compliant folders."""
-
-    # TODO: Any non-empty subfolder of year folder should contain .cluster.ini file (see: Runmageddon example)
-    #   non-empty means - contains media files
+    # TODO: Any non-empty subfolder of year folder should contain .cluster.ini
+    #  file (see: Runmageddon example). Non-empty means - contains media files
     watch_folders = config.watch_folders
 
     # NOTE: these requires refactoring in scan_library_dir()
@@ -34,13 +33,15 @@ def get_existing_clusters_info(
     # is there a reason for using watch folders (library folders)?
     #   do we have enabled duplicates or existing cluster functionalities
     use_watch_folders = (
-        config.skip_duplicated_existing_in_libs
-        or config.assign_to_clusters_existing_in_libs
+        config.skip_duplicated_existing_in_libs or config.assign_to_clusters_existing_in_libs
     )
 
     # Start scanning watch folders to get cluster information
     if use_watch_folders and len(watch_folders):
-        dfs = [get_or_create_library_cluster_ini_as_dataframe(lib, config.force_deep_scan) for lib in watch_folders]
+        dfs = [
+            get_or_create_library_cluster_ini_as_dataframe(lib, config.force_deep_scan)
+            for lib in watch_folders
+        ]
         df = pd.concat(dfs, axis=0)
         df.index = range(len(df))
         df = df.reset_index()
@@ -51,6 +52,10 @@ def get_existing_clusters_info(
 
 
 def get_new_cluster_id_from_dataframe(df_clusters: DataFrame) -> Union[int64, int]:
+    """Return cluster id value that is greater than all already used cluster ids.
+
+    If there are gaps, there will be no first not-used returned.
+    """
     cluster_ids = df_clusters.cluster_id.dropna().values
     if len(cluster_ids) > 0:
         last_cluster = max(cluster_ids)

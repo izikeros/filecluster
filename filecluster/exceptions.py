@@ -1,3 +1,6 @@
+"""Module with custom exceptions to be used in the filecluster."""
+
+
 class DateStringNoneException(Exception):
     def __init__(self):
         self.message = "date_string is None"

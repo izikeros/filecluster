@@ -2,6 +2,7 @@
 """Main module for image clustering."""
 import argparse
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -38,7 +39,7 @@ def main(
     drop_duplicates: Optional[bool] = None,
     use_existing_clusters: Optional[bool] = None,
 ) -> dict:
-    """Main function to run clustering.
+    """Run clustering on the media files provided as inbox.
 
     Input args are default parameters to override and all are optional.
 
@@ -75,26 +76,34 @@ def main(
     # read cluster info from clusters in libraries (or empty dataframe)
     logger.info("Read cluster info from clusters in libraries")
     df_clusters, empty, non_compliant = get_existing_clusters_info(config)
-    results = {"df_clusters": df_clusters, "empty": empty, "non_compliant": non_compliant}
+    results = {
+        "df_clusters": df_clusters,
+        "empty": empty,
+        "non_compliant": non_compliant,
+    }
 
     # Configure image reader, initialize media database
     image_reader = ImageReader(config)
 
     # read timestamps from imported pictures/recordings
-    try:
+    USE_CSV = True
+    INBOX_CSV_FILE_NAME = "h:\\incomming\\inbox.csv"
+    if USE_CSV and os.path.isfile(INBOX_CSV_FILE_NAME):
         import pandas as pd
         from filecluster.configuration import Status
+
         logger.info("Read inbox info from CSV")
-        image_reader.media_df = pd.read_csv("h:\\incomming\\inbox.csv")
+        image_reader.media_df = pd.read_csv(INBOX_CSV_FILE_NAME)
         # Revert data types after reading from CSV
         image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
         image_reader.media_df.status = image_reader.media_df.status.apply(
             lambda x: Status[x.replace("Status.", "")]
         )
-    except FileNotFoundError:
+    else:
         logger.info("Read inbox info from files")
         image_reader.get_media_info_from_inbox_files()
-        # image_reader.media_df.to_csv("h:\\incomming\\inbox.csv", index=False)
+        if USE_CSV:
+            image_reader.media_df.to_csv(INBOX_CSV_FILE_NAME, index=False)
 
     # configure media grouper, initialize internal dataframes
     image_grouper = ImageGrouper(
@@ -132,12 +141,14 @@ def main(
     # create new clusters, assign media
     logger.info("run_clustering")
     new_cluster_df = image_grouper.run_clustering()
-    results.update({"new_cluster_df":new_cluster_df})
+    results.update({"new_cluster_df": new_cluster_df})
 
     # assign target folder for new clusters (update media_df)
     logger.info("assign_target_folder_name_to_new_clusters")
-    new_folder_names = image_grouper.assign_target_folder_name_and_file_count_to_new_clusters(
-        method=config.assign_date_to_clusters_method
+    new_folder_names = (
+        image_grouper.assign_target_folder_name_and_file_count_to_new_clusters(
+            method=config.assign_date_to_clusters_method
+        )
     )
     results.update({"new_folder_names": new_folder_names})
 
@@ -167,7 +178,9 @@ if __name__ == "__main__":
     """Main routine to perform grouping process."""
     parser = argparse.ArgumentParser(description="Purpose of the script")
     parser.add_argument("-i", "--inbox-dir", help="directory with input images")
-    parser.add_argument("-o", "--output-dir", help="output directory for clustered images")
+    parser.add_argument(
+        "-o", "--output-dir", help="output directory for clustered images"
+    )
     parser.add_argument(
         "-w",
         "--watch-dir",
@@ -216,7 +229,9 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
     )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {version.__version__}")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {version.__version__}"
+    )
     args = parser.parse_args()
 
     if isinstance(args.watch_dir, str):

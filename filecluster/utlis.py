@@ -1,3 +1,4 @@
+"""Helper utilitties to work with media files, exif data, hashing and base64 images."""
 import base64
 import hashlib
 import logging
@@ -7,7 +8,7 @@ import time
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Callable, List
+from typing import List
 
 import exifread
 from PIL import Image
@@ -41,7 +42,6 @@ def is_image(file_name: str, ext_list_image: List[str]) -> bool:
 
 def get_date_from_file(path_name):
     """Get date information from photo file."""
-
     m_time = time.ctime(os.path.getmtime(path_name))
     c_time = time.ctime(os.path.getctime(path_name))
     exif_date = get_exif_date(path_name)
@@ -50,7 +50,6 @@ def get_date_from_file(path_name):
 
 def get_exif_date(path_name):
     """Return exif date or none."""
-
     # Open image file for reading (binary mode)
     img_file = open(path_name, "rb")
 
@@ -77,7 +76,6 @@ def get_exif_date(path_name):
 
 def create_folder_for_cluster(config: Config, date_string: str, mode: CopyMode):
     """Create destination folder that for all pictures from the cluster."""
-
     if date_string is None:
         raise DateStringNoneException()
 
@@ -107,7 +105,7 @@ def image_base64(img):
 
 
 def image_formatter(im_base64):
-    """HTML template to display base64 image"""
+    """HTML template to display base64 image."""
     return '<img src="data:image/jpeg;base64,{image_tn}">'.format(
         image_tn=image_base64(im_base64)
     )
@@ -117,8 +115,8 @@ def image_formatter(im_base64):
 # from: https://gist.github.com/aubricus/f91fb55dc6ba5557fbab06119420dd6a
 # TODO: KS: 2020-04-17: Consider using tqdm instead
 def print_progress(iteration, total, prefix="", suffix="", decimals=1, bar_length=100):
-    """
-    Call in a loop to create terminal progress bar
+    """Call in a loop to create terminal progress bar.
+
     @params:
         iteration   - Required  : current iteration (Int)
         total       - Required  : total iterations (Int)
@@ -128,7 +126,6 @@ def print_progress(iteration, total, prefix="", suffix="", decimals=1, bar_lengt
         complete (Int)
         bar_length  - Optional  : character length of bar (Int)
     """
-
     if total > 0:
         str_format = "{0:." + str(decimals) + "f}"
         percents = str_format.format(100 * (iteration / float(total)))

@@ -1,7 +1,8 @@
-#!/usr/bin/env Python3
+#!/usr/bin/env python3
+"""Simple GUI to configure and run filecluster. EXPERIMENTAL."""
 import PySimpleGUI as sg
 
-# sg.ChangeLookAndFeel("GreenTan")
+# TODO: KS: 2020-12-28: read default values from configuration module
 
 # ------ Menu Definition ------ #
 menu_def = [
@@ -54,17 +55,17 @@ layout = [
             auto_size_text=False,
             justification="right",
         ),
-        sg.InputText("h:\incomming\inbox", key="inbox"),
+        sg.InputText("h:\\incomming\\inbox", key="inbox"),
         sg.FolderBrowse(),
     ],
     [
         sg.Text("Library 1", size=(15, 1), auto_size_text=False, justification="right"),
-        sg.InputText("h:\zdjecia", key="lib_1"),
+        sg.InputText("h:\\zdjecia", key="lib_1"),
         sg.FolderBrowse(),
     ],
     [
         sg.Text("Library 2", size=(15, 1), auto_size_text=False, justification="right"),
-        sg.InputText("h:\incomming\clustered", key="lib_2"),
+        sg.InputText("h:\\incomming\\clustered", key="lib_2"),
         sg.FolderBrowse(),
     ],
     [sg.Submit(button_text="Run", tooltip="Click to start clustering"), sg.Cancel()],

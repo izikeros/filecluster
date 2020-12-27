@@ -16,11 +16,9 @@ from filecluster.cluster_scaner import (
     fast_scandir,
     identify_folder_types,
     is_event,
-    is_year_folder,
 )
 from filecluster.configuration import INI_FILENAME
 from filecluster.image_reader import configure_im_reader, get_media_df, get_media_stats
-from pandas.core.frame import DataFrame
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -30,15 +28,18 @@ logger.setLevel(logging.INFO)
 
 # from: https://stackoverflow.com/a/21732183
 def str_to_bool(s: str) -> bool:
-    if s == 'True':
+    """Convert 'True' or 'False' provided as string to corresponding bool value."""
+    if s == "True":
         return True
-    elif s == 'False':
+    elif s == "False":
         return False
     else:
         raise ValueError  # evil ValueError that doesn't tell you what the wrong value was
 
 
-def get_or_create_library_cluster_ini_as_dataframe(library_path: str, force_deep_scan: bool = False) -> pd.DataFrame:
+def get_or_create_library_cluster_ini_as_dataframe(
+    library_path: str, force_deep_scan: bool = False
+) -> pd.DataFrame:
     """Scan folder for cluster info and return dataframe with clusters.
 
     Args:
@@ -63,7 +64,7 @@ def get_or_create_library_cluster_ini_as_dataframe(library_path: str, force_deep
 
     # reading
     ds = []
-    for i, ed in tqdm(enumerate(event_dirs)):
+    for _, ed in tqdm(enumerate(event_dirs)):
         pth = Path(library_path) / ed[0]
         is_ini = os.path.isfile(Path(pth) / INI_FILENAME)
         if force_deep_scan or not is_ini:
@@ -88,9 +89,9 @@ def get_or_create_library_cluster_ini_as_dataframe(library_path: str, force_deep
         if cluster_ini_r:
             d = cluster_ini_r["Range"]
             # convert types
-            d['is_continous'] = str_to_bool(d['is_continous'])
-            d['median'] = datetime.strptime(d['median'], "%Y-%m-%d %H:%M:%S")
-            d['file_count'] = int(d['file_count'])
+            d["is_continous"] = str_to_bool(d["is_continous"])
+            d["median"] = datetime.strptime(d["median"], "%Y-%m-%d %H:%M:%S")
+            d["file_count"] = int(d["file_count"])
             d["path"] = pth
             ds.append(d)
 
@@ -125,4 +126,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     libs = args.library
     for lib in libs:
-        _ = get_or_create_library_cluster_ini_as_dataframe(library_path=lib, force_deep_scan=args.force_recalc)
+        _ = get_or_create_library_cluster_ini_as_dataframe(
+            library_path=lib, force_deep_scan=args.force_recalc
+        )

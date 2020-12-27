@@ -1,8 +1,8 @@
 """Module for reading media data on files from given folder."""
 import logging
 import os
-from pathlib import PosixPath, Path
-from typing import Any, Dict, Union, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from tqdm import tqdm
@@ -43,7 +43,9 @@ class Metadata:
         self.duplicated_cluster: List[str] = []
 
 
-def multiple_timestamps_to_one(image_df: MediaDataFrame, rule='m_date', drop_columns=True) -> MediaDataFrame:
+def multiple_timestamps_to_one(
+    image_df: MediaDataFrame, rule="m_date", drop_columns=True
+) -> MediaDataFrame:
     """Get timestamp from exif (primary) or m_date. Drop not needed date cols.
 
     Prepare single timestamp out of cdate, mdate and exif.
@@ -66,14 +68,11 @@ def multiple_timestamps_to_one(image_df: MediaDataFrame, rule='m_date', drop_col
     # use exif date as base
 
     # unless is missing - then use modification date:
-    if rule == 'm_date':
+    if rule == "m_date":
         image_df["date"] = image_df["exif_date"]
         image_df["date"] = image_df["date"].fillna(image_df["m_date"])
-    elif rule == 'earliest':
+    elif rule == "earliest":
         image_df["date"] = image_df[["m_date", "c_date", "exif_date"]].min(axis=1)
-
-    # # infer date format  from strings
-    # image_df["date"] = pd.to_datetime(image_df["date"], infer_datetime_format=True)
 
     if drop_columns:
         image_df.drop(["m_date", "c_date", "exif_date"], axis=1, inplace=True)
@@ -156,9 +155,7 @@ def prepare_new_row_with_meta(
 
 
 class ImageReader(object):
-    def __init__(
-        self, config: Config, media_df: Optional[MediaDataFrame] = None
-    ) -> None:
+    def __init__(self, config: Config, media_df: Optional[MediaDataFrame] = None) -> None:
         """Initialize media database with existing media dataframe or create empty one."""
         # read the config
         self.config = config
@@ -230,7 +227,7 @@ def configure_im_reader(in_dir_name: str) -> Config:
 
 
 def get_media_df(conf: Config) -> Optional[MediaDataFrame]:
-    """Get data frame with metadata description of media indicated in Config
+    """Get data frame with metadata description of media indicated in Config.
 
     Args:
       conf:
@@ -259,7 +256,7 @@ def get_media_stats(df: pd.DataFrame, time_granularity: int) -> dict:
     """
     date_min = df.date.min()
     date_max = df.date.max()
-    date_median = df['date'].iloc[int(len(df) / 2)]
+    date_median = df["date"].iloc[int(len(df) / 2)]
 
     df = df[["file_name", "date"]].copy()
     df["date_int"] = df["date"].apply(lambda x: x.value / 10 ** 9)
