@@ -3,6 +3,7 @@
 import argparse
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +26,16 @@ log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+# from: https://stackoverflow.com/a/21732183
+def str_to_bool(s: str) -> bool:
+    if s == 'True':
+        return True
+    elif s == 'False':
+        return False
+    else:
+        raise ValueError  # evil ValueError that doesn't tell you what the wrong value was
 
 
 def scan_library_dir(library_path: str, force_deep_scan: bool = False) -> pd.DataFrame:
@@ -76,6 +87,10 @@ def scan_library_dir(library_path: str, force_deep_scan: bool = False) -> pd.Dat
         cluster_ini_r = read_cluster_ini_as_dict(pth)
         if cluster_ini_r:
             d = cluster_ini_r["Range"]
+            # convert types
+            d['is_continous'] = str_to_bool(d['is_continous'])
+            d['median'] = datetime.strptime(d['median'], "%Y-%m-%d %H:%M:%S")
+            d['file_count'] = int(d['file_count'])
             d["path"] = pth
             ds.append(d)
 
