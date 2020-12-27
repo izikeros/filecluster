@@ -15,9 +15,11 @@ dataenforce==0.1.2
 MonkeyType
 pytest-monkeytype
 pytest-mypy
+
 mypy
+data-science-types  # stubs for pandas, numpy, matplotlib
 flake8
-flake8-commas==2.0.0
+# flake8-commas==2.0.0
 flake8-docstrings==1.5.0
 flake8-print==4.0.0
 # darglint # A functional docstring linter which checks whether a docstring's description matches the actual function/method implementation.

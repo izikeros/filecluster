@@ -2,20 +2,8 @@
 
 Add new photos to the repository that already cover time when photos were taken.
 Usually case for late adding photos from iphone when photos from the other 
-'family media devices' were already downloaded and groupped by event.
- 
-* ISSUES:
-    - Option 1 (prefered): 
-        - use rather central database (sqlite3 for the beggining)      
-            - name, date, size, cluster id, hash(?)
-        - separate table with clusters:
-            - cluster id, start_date, end_date, median_date, 'center of 
-            mass' date   
-    - Option 2:
-        - put csv with filename and date in each dir
-        - run update: remove non-existing files from csv, add new
-        - put cluster range file to avoid parsing csv each time
-         
+'family media devices' were already downloaded and grouped by event.
+        
 
 ## DUPLICATES
 check if photos in given directory (e.g. photo_1) were already added to main photo repository. Put duplicates in `checkme_duplicates` and
