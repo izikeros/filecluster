@@ -10,13 +10,14 @@
 ;[D102] Missing docstring in public method
 ;[D103] Missing docstring in public function
 ;[D104] Missing docstring in public package
-;[D105] Missing docstring in magic method
-;[D107] Missing docstring in __init__
+;[D105] Missing docstring in magic method (e.g. __repr__())
+;[D107] Missing docstring in (class) __init__
+;[W503] line break before binary operator
 
 ; this should be not excluded in more mature version
 ;[D103] Missing docstring in public function
 
-ignore = T003, M502, N802, N806, F405, T001, D101, D102, D104, D105, D107
+ignore = W503, T003, M502, N802, N806, F405, D105, D107
 
 #select = B
 

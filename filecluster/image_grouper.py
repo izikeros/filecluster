@@ -324,7 +324,7 @@ class ImageGrouper(object):
         pth_out = self.config.out_dir_name
         pth_in = self.config.in_dir_name
         n_files = len(self.inbox_media_df)
-        for _, row in tqdm(self.inbox_media_df.iterrows(), target=n_files):
+        for _, row in tqdm(self.inbox_media_df.iterrows(), total=n_files):
             date_string = row["target_path"]
             file_name = row["file_name"]
             src = os.path.join(pth_in, file_name)

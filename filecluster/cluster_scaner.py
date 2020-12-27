@@ -165,7 +165,6 @@ def is_event_folder(folder: str) -> bool:
     Returns:
         True if folder is event-folder
     """
-
     # is under year-folder
     parrent_part = Path(folder).parts[-2]
     is_parrent_year = is_year_folder(parrent_part)
@@ -199,7 +198,7 @@ def is_event_subcategory_folder(folder: str) -> bool:
         True if folder is a event sub-folder folder.
     """
     # TODO: KS: 2020-12-23: add separator (for given system - / or \) after year
-    is_year_in_the_path = bool(re.match(r"(19|20)\d{2}", folder))
+    # is_year_in_the_path = bool(re.match(r"(19|20)\d{2}", folder))
     # FIXME: Implement
     return False
 

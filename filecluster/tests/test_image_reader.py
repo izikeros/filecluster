@@ -2,10 +2,14 @@ import os
 
 import pandas as pd
 import pytest
+from numpy import dtype
 
 from filecluster.configuration import get_development_config
 from filecluster.filecluster_types import MediaDataFrame
-from filecluster.image_grouper import get_watch_folders_files_path, get_files_from_folder
+from filecluster.image_grouper import (
+    get_watch_folders_files_path,
+    get_files_from_folder,
+)
 from filecluster.image_reader import (
     ImageReader,
     Metadata,
@@ -34,8 +38,6 @@ class TestImageReader:
         files = os.listdir(TEST_INBOX_DIR)
         assert len(self.media_list_of_rows) == len(files)
 
-
-
     @pytest.mark.skip(reason="not implemented")
     def test_check_import_for_duplicates_in_existing_clusters(self):
         assert False
@@ -55,15 +57,34 @@ def test_multiple_timestamps_to_one__columns_reduced():
     assert len(df.columns) == 1 and df.columns[0] == "date"
 
 
+def test_multiple_timestamps_to_one__date_is_datetime64():
+    df = MediaDataFrame(pd.DataFrame({"exif_date": [], "c_date": [], "m_date": []}))
+    df = multiple_timestamps_to_one(df)
+    dtypes = df.dtypes
+    assert dtypes["date"] == dtype("<M8[ns]")
+
+
+def test_multiple_timestamps_to_one__dates_are_datetime64():
+    df = MediaDataFrame(pd.DataFrame({"exif_date": [], "c_date": [], "m_date": []}))
+    df = multiple_timestamps_to_one(df, drop_columns=False)
+    dtypes = df.dtypes
+    assert dtypes["date"] == dtype("<M8[ns]")
+    assert dtypes["exif_date"] == dtype("<M8[ns]")
+    assert dtypes["c_date"] == dtype("<M8[ns]")
+    assert dtypes["m_date"] == dtype("<M8[ns]")
+
+
 def test_multiple_timestamps_to_one():
     config = get_development_config()
     image_reader = ImageReader(config)
     row_list = image_reader.get_data_from_files_as_list_of_rows()
     inbox_media_df_in = MediaDataFrame(pd.DataFrame(row_list))
-    sel_cols = ['file_name', 'm_date', 'c_date', 'exif_date','date']
+    sel_cols = ["file_name", "m_date", "c_date", "exif_date", "date"]
 
-    inbox_media_df_out = multiple_timestamps_to_one(inbox_media_df_in.copy(), drop_columns=False)
-    sel_cols_out = ['file_name', 'date']
+    inbox_media_df_out = multiple_timestamps_to_one(
+        inbox_media_df_in.copy(), drop_columns=False
+    )
+    sel_cols_out = ["file_name", "date"]
 
     # keep only most important results for analysis in testing
     inbox_media_df_out = inbox_media_df_out[sel_cols]

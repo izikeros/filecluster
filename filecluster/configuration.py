@@ -75,17 +75,12 @@ MEDIA_DF_COLUMNS = [
 
 
 class Status(Enum):
+    """Cluster status."""
+
     UNKNOWN = 0
     NEW_CLUSTER = 1
     EXISTING_CLUSTER = 2
     DUPLICATE = 3
-
-
-class Driver(Enum):
-    """ """
-
-    SQLITE = 1
-    DATAFRAME = 2
 
 
 class AssignDateToClusterMethod(Enum):
@@ -101,7 +96,7 @@ class AssignDateToClusterMethod(Enum):
 
 
 class ClusteringMethod(Enum):
-    """ """
+    """Method used to decide whether media files are from the same event."""
 
     # method that is used to group images, default: assume different events
     # are separated by significant time gape (max_gap config parameter)
@@ -110,7 +105,13 @@ class ClusteringMethod(Enum):
 
 
 class CopyMode(Enum):
-    """ """
+    """Mode of operation for the finalization of clustering.
+
+    Attributes:
+        COPY:   make copy of inbox files in output directory
+        MOVE:   move inbox files to proper location in output directory
+        NOP:    'no operation' - do nothing, useful for testing and development
+    """
 
     COPY = 1
     MOVE = 2
@@ -327,7 +328,10 @@ def override_config_with_cli_params(
 
     # Sanity check: if using 'drop_duplicates' or 'use_existing_clusters'
     #  - need to provide watch_dirs
-    if config.skip_duplicated_existing_in_libs or config.assign_to_clusters_existing_in_libs:
+    if (
+        config.skip_duplicated_existing_in_libs
+        or config.assign_to_clusters_existing_in_libs
+    ):
         assert (
             len(watch_dir_list) > 0
         ), "Need to provide watch folders if using 'drop_duplicates' or 'use_existing_clusters'"

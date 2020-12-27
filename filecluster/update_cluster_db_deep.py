@@ -34,7 +34,7 @@ def str_to_bool(s: str) -> bool:
     elif s == "False":
         return False
     else:
-        raise ValueError  # evil ValueError that doesn't tell you what the wrong value was
+        raise ValueError
 
 
 def get_or_create_library_cluster_ini_as_dataframe(
@@ -87,18 +87,24 @@ def get_or_create_library_cluster_ini_as_dataframe(
         # read existing ini
         cluster_ini_r = read_cluster_ini_as_dict(pth)
         if cluster_ini_r:
-            d = cluster_ini_r["Range"]
-            # convert types
-            d["is_continous"] = str_to_bool(d["is_continous"])
-            d["median"] = datetime.strptime(d["median"], "%Y-%m-%d %H:%M:%S")
-            d["file_count"] = int(d["file_count"])
-            d["path"] = pth
+            d = dict_from_ini_range_section(cluster_ini_r, pth)
             ds.append(d)
 
     df = pd.DataFrame(ds)
     df["target_path"] = None
     df["new_file_count"] = None
     return df
+
+
+def dict_from_ini_range_section(cluster_ini_r, pth):
+    """Read data from ini section and adjust data types."""
+    d = cluster_ini_r["Range"]
+    # convert types
+    d["is_continous"] = str_to_bool(d["is_continous"])
+    d["median"] = datetime.strptime(d["median"], "%Y-%m-%d %H:%M:%S")
+    d["file_count"] = int(d["file_count"])
+    d["path"] = pth
+    return d
 
 
 if __name__ == "__main__":

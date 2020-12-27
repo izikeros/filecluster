@@ -12,7 +12,6 @@ from filecluster.configuration import (
     Config,
     get_default_config,
     CopyMode,
-    Driver,
     Status,
 )
 from filecluster.filecluster_types import MediaDataFrame
@@ -51,6 +50,8 @@ def multiple_timestamps_to_one(
     Prepare single timestamp out of cdate, mdate and exif.
 
     Args:
+      rule:
+      drop_columns:
       image_df: MediaDataFrame:
 
     Returns:
@@ -62,7 +63,7 @@ def multiple_timestamps_to_one(
     # normalize date format
     image_df["m_date"] = pd.to_datetime(image_df["m_date"], infer_datetime_format=True)
     image_df["c_date"] = pd.to_datetime(image_df["c_date"], infer_datetime_format=True)
-    image_df["exit_date"] = pd.to_datetime(image_df["exif_date"], infer_datetime_format=True)
+    image_df["exif_date"] = pd.to_datetime(image_df["exif_date"], infer_datetime_format=True)
 
     # TODO: Ensure that any date is assigned to file
     # use exif date as base
@@ -221,7 +222,6 @@ def configure_im_reader(in_dir_name: str) -> Config:
     conf.__setattr__("in_dir_name", in_dir_name)
     conf.__setattr__("out_dir_name", "")
     conf.__setattr__("mode", CopyMode.NOP)
-    conf.__setattr__("db_driver", Driver.DATAFRAME)
     conf.__setattr__("delete_db", False)
     return conf
 
