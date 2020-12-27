@@ -31,13 +31,13 @@ logger.setLevel(logging.DEBUG)
 
 
 def expand_cluster_or_init_new(
-    delta_from_previous: Timedelta,
-    max_time_delta: timedelta,
-    index: int,
-    new_cluster_idx: int,
-    list_new_clusters: List[dict],
-    media_date: Timestamp,
-    cluster: dict,
+        delta_from_previous: Timedelta,
+        max_time_delta: timedelta,
+        index: int,
+        new_cluster_idx: int,
+        list_new_clusters: List[dict],
+        media_date: Timestamp,
+        cluster: dict,
 ):
     """Add new item to existing cluster and update cluster info or init new cluster.
 
@@ -59,10 +59,10 @@ def expand_cluster_or_init_new(
     # check if new cluster encountered
     is_first_image_analysed = index == 0
     is_this_image_too_far_from_other_in_the_cluster = (
-        delta_from_previous > max_time_delta
+            delta_from_previous > max_time_delta
     )
     is_new_cluster = (
-        is_this_image_too_far_from_other_in_the_cluster or is_first_image_analysed
+            is_this_image_too_far_from_other_in_the_cluster or is_first_image_analysed
     )
     if is_new_cluster:
         new_cluster_idx += 1
@@ -104,12 +104,17 @@ class TargetPathCreator:
         return str(self.out_dir / "duplicated" / dir_string)
 
 
+def filter_by_substring_list(string_list, substr_list):
+    return [str for str in string_list if
+            any(sub in str for sub in substr_list)]
+
+
 class ImageGrouper(object):
     def __init__(
-        self,
-        configuration: Config,
-        df_clusters: Optional[ClustersDataFrame] = None,
-        inbox_media_df: Optional[MediaDataFrame] = None,
+            self,
+            configuration: Config,
+            df_clusters: Optional[ClustersDataFrame] = None,
+            inbox_media_df: Optional[MediaDataFrame] = None,
     ):
         """Class for clustering media objects by date.
 
@@ -186,7 +191,7 @@ class ImageGrouper(object):
         is_first_image_analysed = True
         df_not_clustered = self.inbox_media_df[sel_not_clustered].copy()
         for media_index, _row in tqdm(
-            self.inbox_media_df[sel_not_clustered].iterrows(), total=n_not_clustered
+                self.inbox_media_df[sel_not_clustered].iterrows(), total=n_not_clustered
         ):
             # if _row.cluster_id:
             # gap to previous
@@ -196,11 +201,11 @@ class ImageGrouper(object):
 
             # check if new cluster encountered
             is_this_image_too_far_from_other_in_the_cluster = (
-                delta_from_previous > max_gap
+                    delta_from_previous > max_gap
             )
             is_new_cluster = (
-                is_this_image_too_far_from_other_in_the_cluster
-                or is_first_image_analysed
+                    is_this_image_too_far_from_other_in_the_cluster
+                    or is_first_image_analysed
             )
             if is_new_cluster:
                 # == We are starting new cluster here ==
@@ -260,7 +265,7 @@ class ImageGrouper(object):
         return self.df_clusters[sel]["cluster_id"].unique()
 
     def assign_target_folder_name_and_file_count_to_new_clusters(
-        self, method=AssignDateToClusterMethod.MEDIAN
+            self, method=AssignDateToClusterMethod.MEDIAN
     ) -> List[str]:
         """Set target_path and new_file_count in clusters_df.
         Returns:
@@ -315,7 +320,7 @@ class ImageGrouper(object):
             sel_cluster = self.df_clusters.cluster_id == new_cluster
             self.df_clusters.loc[sel_cluster, "target_path"] = pth
             self.df_clusters.loc[sel_cluster, "new_file_count"] = (
-                image_count + video_count
+                    image_count + video_count
             )
             new_folder_names.append(pth)
         return new_folder_names
@@ -402,7 +407,7 @@ class ImageGrouper(object):
                 # update counter
                 cluster_idx = self.df_clusters[
                     self.df_clusters.cluster_id == cluster_id
-                ].index
+                    ].index
                 if self.df_clusters.new_file_count.loc[cluster_idx].values[0]:
                     self.df_clusters.new_file_count.loc[cluster_idx] += 1
                 else:
@@ -421,14 +426,14 @@ class ImageGrouper(object):
 
         has_cluster_id = self.inbox_media_df.cluster_id >= 0
         has_status_existing_cluster = (
-            self.inbox_media_df.status == Status.EXISTING_CLUSTER
+                self.inbox_media_df.status == Status.EXISTING_CLUSTER
         )
         files_assigned_to_existing_cl = self.inbox_media_df[
             has_cluster_id & has_status_existing_cluster
-        ].file_name.values.tolist()
+            ].file_name.values.tolist()
         existing_cluster_ids = self.inbox_media_df[
             has_cluster_id & has_status_existing_cluster
-        ].cluster_id.unique()
+            ].cluster_id.unique()
         existing_cluster_names = [
             Path(cl_row.path).parts[-1]
             for _, cl_row in self.df_clusters.iterrows()
@@ -460,6 +465,8 @@ class ImageGrouper(object):
             List of inbox filenames that has duplicates in library
         """
         clusters_with_dups = []
+        confirmed_inbox_dups = []
+        confirmed_library_dups = []
         if not self.config.skip_duplicated_existing_in_libs:
             return [], []
         else:
@@ -469,29 +476,30 @@ class ImageGrouper(object):
             logger.debug("No library folder defined. Skipping duplicate search.")
             return [], []
 
-        potential_dups, lib_lst = self.file_name_based_duplicates()
+        potential_inbox_dups, potential_library_dups, watch_full_paths = self.file_name_based_duplicates()
 
         # verify potential dups using size comparison
         file_already_in_library = []
-        inbox_import_files_marked_as_duplicates = []
 
         logger.info("Confirm potential duplicates")
-        for potential_duplicate in tqdm(potential_dups):
+        for potential_duplicate in tqdm(potential_inbox_dups):
             # get inbox item info
             inbox_item = self.inbox_media_df[
                 self.inbox_media_df.file_name == potential_duplicate
-            ]
-
+                ]
+            inbox_f_name = inbox_item.file_name.values[0]
             # get matching watch folder items with full path
-            lib_items = [path for path in lib_lst if path.name == potential_duplicate]
+            # lib_items = [path for path in watch_full_paths if path.name == potential_duplicate]
             inbox_item_size = inbox_item["size"].values[0]
 
-            for lib_item in lib_items:
+            for lib_item in potential_library_dups:
                 lib_item_size = os.path.getsize(lib_item)
+                in_file_name = inbox_item.file_name.values[0]
                 if inbox_item_size == lib_item_size:
                     file_already_in_library.append(lib_item)
-                    in_file_name = inbox_item.file_name.values[0]
-                    inbox_import_files_marked_as_duplicates.append(in_file_name)
+
+                    confirmed_library_dups.append(lib_item)
+                    confirmed_inbox_dups.append(in_file_name)
                     logger.debug(
                         f"For inbox file {in_file_name} there is duplicate already in library: {lib_item}"
                     )
@@ -500,40 +508,43 @@ class ImageGrouper(object):
         logger.info("mark confirmed duplicates in import batch")
         # FIXME: KS: 2020-12-26: Very slow stage 1sec/it
         # deduplicate list
-        inbox_import_files_marked_as_duplicates = list(set(inbox_import_files_marked_as_duplicates))
-        sel_dups = self.inbox_media_df.file_name.isin(
-            inbox_import_files_marked_as_duplicates
-        )
+        confirmed_inbox_dups = list(set(confirmed_inbox_dups))
+        sel_dups = self.inbox_media_df.file_name.isin(confirmed_inbox_dups)
         for idx, _row in tqdm(
-            self.inbox_media_df[sel_dups].iterrows(), total=sum(sel_dups)
+                self.inbox_media_df[sel_dups].iterrows(), total=sum(sel_dups)
         ):
             self.inbox_media_df.loc[
                 idx, "status"
             ] = Status.DUPLICATE  # Fixme: copy of a slice
-            dups_patch = list(filter(lambda x: _row.file_name in str(x), lib_lst))
-            dups_str = [str(x) for x in dups_patch]
-            dups_clust = [x.parts[-2] for x in dups_patch]
+            dups_lib_patch = list(
+                filter(lambda x: _row.file_name in str(x), confirmed_library_dups))
+            dups_lib_str_list = [str(x) for x in dups_lib_patch]
+            dups_lib_clust_list = [Path(x).parts[-2] for x in dups_lib_patch]
 
-            self.inbox_media_df["duplicated_to"][
-                idx
-            ] = dups_str  # Fixme: copy of a slice
-            self.inbox_media_df["duplicated_cluster"][
-                idx
-            ] = dups_clust  # Fixme: copy of a slice
+            self.inbox_media_df["duplicated_to"][idx] = dups_lib_str_list  # FIXME
+            self.inbox_media_df["duplicated_cluster"][idx] = dups_lib_clust_list
 
             # return first cluster with this duplicated media file (for debug and testing)
-            clusters_with_dups.append(dups_clust[0])
-        return inbox_import_files_marked_as_duplicates, list(set(clusters_with_dups))
+            clusters_with_dups.append(
+                dups_lib_clust_list[0])  # FIXME: KS: 2020-12-27: Not entirely correct
+            if len(dups_lib_clust_list) > 1:
+                # TODO: KS: 2020-12-27: Properly handle duplicate to multiple destignations in library
+                pass
+
+        return confirmed_inbox_dups, list(set(clusters_with_dups)) #,confirmed_lib_dups
 
     def file_name_based_duplicates(self):
         # get files in library
-        watch_names, lst = get_watch_folders_files_path(self.config.watch_folders)
+        watch_file_names, watch_full_paths = get_watch_folders_files_path(self.config.watch_folders)
         # get files in inbox
         new_names = self.inbox_media_df.file_name.values.tolist()
         # commons - list of new names that appear in watch folders
         #   potential dups - inbox files with the same name as files in library (no other criterion)
-        potential_dups = [f for f in new_names if f in watch_names]
-        return potential_dups, lst
+        potential_inbox_dups = [f for f in new_names if f in watch_file_names]
+        watch_full_paths_str = [str(x) for x in watch_full_paths]
+        potential_library_dups = filter_by_substring_list(watch_full_paths_str,
+                                                          potential_inbox_dups)
+        return potential_inbox_dups, potential_library_dups, watch_full_paths
 
 
 def get_files_from_folder(folder: str) -> Iterator[Any]:
@@ -549,7 +560,7 @@ def get_files_from_folder(folder: str) -> Iterator[Any]:
 
 
 def get_watch_folders_files_path(
-    watch_folders: List[str],
+        watch_folders: List[str],
 ) -> Tuple[List[str], List[PosixPath]]:
     """
 
@@ -576,7 +587,7 @@ def check_df_has_all_expected_columns(df: pd.DataFrame, expected_cols: List[str]
 
 
 def check_df_has_all_expected_columns_and_types(
-    df: pd.DataFrame, col_expectations: dict
+        df: pd.DataFrame, col_expectations: dict
 ):
     """Check if data frame has all expected columns."""
     for c in df.columns:

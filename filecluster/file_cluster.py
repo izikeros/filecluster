@@ -81,18 +81,20 @@ def main(
     image_reader = ImageReader(config)
 
     # read timestamps from imported pictures/recordings
-    # try:
-    #     logger.info("Read inbox info from CSV")
-    #     image_reader.media_df = pd.read_csv("h:\\incomming\\inbox.csv")
-    #     # Revert data types after reading from CSV
-    #     image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
-    #     image_reader.media_df.status = image_reader.media_df.status.apply(
-    #         lambda x: Status[x.replace("Status.", "")]
-    #     )
-    # except FileNotFoundError:
-    logger.info("Read inbox info from files")
-    image_reader.get_media_info_from_inbox_files()
-    # image_reader.media_df.to_csv("h:\\incomming\\inbox.csv", index=False)
+    try:
+        import pandas as pd
+        from filecluster.configuration import Status
+        logger.info("Read inbox info from CSV")
+        image_reader.media_df = pd.read_csv("h:\\incomming\\inbox.csv")
+        # Revert data types after reading from CSV
+        image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
+        image_reader.media_df.status = image_reader.media_df.status.apply(
+            lambda x: Status[x.replace("Status.", "")]
+        )
+    except FileNotFoundError:
+        logger.info("Read inbox info from files")
+        image_reader.get_media_info_from_inbox_files()
+        # image_reader.media_df.to_csv("h:\\incomming\\inbox.csv", index=False)
 
     # configure media grouper, initialize internal dataframes
     image_grouper = ImageGrouper(
