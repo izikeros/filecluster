@@ -5,14 +5,11 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-import pandas as pd
-
 from filecluster import version
 from filecluster.configuration import (
     CopyMode,
     override_config_with_cli_params,
     get_proper_mode_config,
-    Status,
 )
 from filecluster.dbase import (
     get_existing_clusters_info,
@@ -20,7 +17,6 @@ from filecluster.dbase import (
 from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import (
     ImageReader,
-    mark_inbox_duplicates_vs_watch_folders,
 )
 
 # TODO: KS: 2020-12-17: There are copies of config in the classes.
@@ -41,7 +37,7 @@ def main(
     force_deep_scan: Optional[bool] = None,
     drop_duplicates: Optional[bool] = None,
     use_existing_clusters: Optional[bool] = None,
-) -> None:
+) -> dict:
     """Main function to run clustering.
 
     Input args are default parameters to override and all are optional.
@@ -58,7 +54,7 @@ def main(
         use_existing_clusters:
 
     Returns:
-
+        dictionary with diagnostics data
     """
     # get development or production config
     config = get_proper_mode_config(development_mode)
@@ -76,28 +72,27 @@ def main(
         drop_duplicates=drop_duplicates,
         use_existing_clusters=use_existing_clusters,
     )
-
     # read cluster info from clusters in libraries (or empty dataframe)
-    # TODO: Add listing of dirs without media
     logger.info("Read cluster info from clusters in libraries")
     df_clusters, empty, non_compliant = get_existing_clusters_info(config)
+    results = {"df_clusters": df_clusters, "empty": empty, "non_compliant": non_compliant}
 
     # Configure image reader, initialize media database
     image_reader = ImageReader(config)
 
     # read timestamps from imported pictures/recordings
-    try:
-        logger.info("Read inbox info from CSV")
-        image_reader.media_df = pd.read_csv("h:\\incomming\\inbox.csv")
-        # Revert data types after reading from CSV
-        image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
-        image_reader.media_df.status = image_reader.media_df.status.apply(
-            lambda x: Status[x.replace("Status.", "")]
-        )
-    except FileNotFoundError:
-        logger.info("Read inbox info from files")
-        image_reader.get_media_info_from_inbox_files()
-        image_reader.media_df.to_csv("h:\\incomming\\inbox.csv", index=False)
+    # try:
+    #     logger.info("Read inbox info from CSV")
+    #     image_reader.media_df = pd.read_csv("h:\\incomming\\inbox.csv")
+    #     # Revert data types after reading from CSV
+    #     image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
+    #     image_reader.media_df.status = image_reader.media_df.status.apply(
+    #         lambda x: Status[x.replace("Status.", "")]
+    #     )
+    # except FileNotFoundError:
+    logger.info("Read inbox info from files")
+    image_reader.get_media_info_from_inbox_files()
+    # image_reader.media_df.to_csv("h:\\incomming\\inbox.csv", index=False)
 
     # configure media grouper, initialize internal dataframes
     image_grouper = ImageGrouper(
@@ -107,15 +102,25 @@ def main(
     )
 
     # Mark inbox files duplicated with watch folders (if feature enabled)
-    dup_files, dup_clusters = image_grouper.mark_inbox_duplicates_vs_watch_folders()
+    dup_files, dup_clusters = image_grouper.mark_inbox_duplicates()
+    results.update({"dup_files": dup_files, "dup_clusters": dup_clusters})
 
     # == Assign to existing ==
+    results.update({"files_existing_cl": None, "existing_cluster_names": None})
     if config.assign_to_clusters_existing_in_libs:
         # try assign media items to clusters already existing in the library
         (
             files_assigned_to_existing_cl,
             existing_cluster_names,
-        ) = image_grouper.assign_to_existing_clusters()  # TODO: KS: 2020-12-26: should not have assigned target path yet
+        ) = (
+            image_grouper.assign_to_existing_clusters()
+        )  # TODO: KS: 2020-12-26: should not have assigned target path yet
+        results.update(
+            {
+                "files_existing_cl": files_assigned_to_existing_cl,
+                "existing_cluster_names": existing_cluster_names,
+            }
+        )
 
     # == Handle not-clustered items ==
     # Calculate gaps for non-clustered items
@@ -125,14 +130,14 @@ def main(
     # create new clusters, assign media
     logger.info("run_clustering")
     new_cluster_df = image_grouper.run_clustering()
+    results.update({"new_cluster_df":new_cluster_df})
 
     # assign target folder for new clusters (update media_df)
     logger.info("assign_target_folder_name_to_new_clusters")
-    new_folder_names = (
-        image_grouper.assign_target_folder_name_and_file_count_to_new_clusters(
-            method=config.assign_date_to_clusters_method
-        )
+    new_folder_names = image_grouper.assign_target_folder_name_and_file_count_to_new_clusters(
+        method=config.assign_date_to_clusters_method
     )
+    results.update({"new_folder_names": new_folder_names})
 
     # assign target folder for existing clusters
     logger.info("assign_target_folder_name_to_existing_clusters")
@@ -153,15 +158,14 @@ def main(
         image_grouper.move_files_to_cluster_folder()
     else:
         logger.debug("No copy/move operation performed since 'nop' option selected.")
+    return results
 
 
 if __name__ == "__main__":
     """Main routine to perform grouping process."""
     parser = argparse.ArgumentParser(description="Purpose of the script")
     parser.add_argument("-i", "--inbox-dir", help="directory with input images")
-    parser.add_argument(
-        "-o", "--output-dir", help="output directory for clustered images"
-    )
+    parser.add_argument("-o", "--output-dir", help="output directory for clustered images")
     parser.add_argument(
         "-w",
         "--watch-dir",
@@ -210,9 +214,7 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
     )
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {version.__version__}"
-    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {version.__version__}")
     args = parser.parse_args()
 
     if isinstance(args.watch_dir, str):

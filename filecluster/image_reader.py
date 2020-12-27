@@ -1,8 +1,8 @@
 """Module for reading media data on files from given folder."""
 import logging
 import os
-from pathlib import PosixPath
-from typing import Any, Dict, Union, List, Optional, Tuple
+from pathlib import PosixPath, Path
+from typing import Any, Dict, Union, List, Optional
 
 import pandas as pd
 from tqdm import tqdm
@@ -16,7 +16,6 @@ from filecluster.configuration import (
     Status,
 )
 from filecluster.filecluster_types import MediaDataFrame
-from filecluster.image_grouper import get_watch_folders_files_path
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -33,18 +32,18 @@ class Metadata:
         self.m_time: str = ""
         self.c_time: str = ""
         self.exif_date: str = ""
-        self.date: str = ""
+        self.date: Optional[str] = ""
         self.file_size: int = 0
         self.hash_value: int = 0
         self.image: int = 0
         self.is_image: bool = True
-        self.cluster_id: int = 0
+        self.cluster_id: Optional[int] = 0
         self.status: Status = Status.UNKNOWN
         self.duplicated_to: List[str] = []
         self.duplicated_cluster: List[str] = []
 
 
-def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
+def multiple_timestamps_to_one(image_df: MediaDataFrame, rule='m_date', drop_columns=True) -> MediaDataFrame:
     """Get timestamp from exif (primary) or m_date. Drop not needed date cols.
 
     Prepare single timestamp out of cdate, mdate and exif.
@@ -57,28 +56,38 @@ def multiple_timestamps_to_one(image_df: MediaDataFrame) -> MediaDataFrame:
 
     """
     logger.debug("Cleaning-up timestamps in imported media.")
+
+    # normalize date format
+    image_df["m_date"] = pd.to_datetime(image_df["m_date"], infer_datetime_format=True)
+    image_df["c_date"] = pd.to_datetime(image_df["c_date"], infer_datetime_format=True)
+    image_df["exit_date"] = pd.to_datetime(image_df["exif_date"], infer_datetime_format=True)
+
     # TODO: Ensure that any date is assigned to file
     # use exif date as base
-    image_df["date"] = image_df["exif_date"]
+
     # unless is missing - then use modification date:
-    # TODO: Alternatively, take earliest from m_date and c_date
-    image_df["date"] = image_df["date"].fillna(image_df["m_date"])
+    if rule == 'm_date':
+        image_df["date"] = image_df["exif_date"]
+        image_df["date"] = image_df["date"].fillna(image_df["m_date"])
+    elif rule == 'earliest':
+        image_df["date"] = image_df[["m_date", "c_date", "exif_date"]].min(axis=1)
 
-    # infer date format  from strings
-    image_df["date"] = pd.to_datetime(image_df["date"], infer_datetime_format=True)
+    # # infer date format  from strings
+    # image_df["date"] = pd.to_datetime(image_df["date"], infer_datetime_format=True)
 
-    image_df.drop(["m_date", "c_date", "exif_date"], axis=1, inplace=True)
+    if drop_columns:
+        image_df.drop(["m_date", "c_date", "exif_date"], axis=1, inplace=True)
     return image_df
 
 
 def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
-    """Generate single row based on values defined in outer method
+    """Generate single row based on values defined in outer method.
 
     Args:
       meta: Metadata:
 
     Returns:
-
+        Dictionary filled-in data from the input Metadata object.
     """
     # define structure of images dataframe and fill with data
     row = {
@@ -99,10 +108,10 @@ def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
 
 
 def prepare_new_row_with_meta(
-        media_file_name: str,
-        accepted_media_file_extensions: List[str],
-        in_dir_name: Union[str, PosixPath],  # FIXME: Needs harmonization
-        meta: Metadata,
+    media_file_name: str,
+    accepted_media_file_extensions: List[str],
+    in_dir_name: Path,
+    meta: Metadata,
 ) -> Dict[str, Any]:
     """Prepare dictionary with metadata for input media file.
 
@@ -148,7 +157,7 @@ def prepare_new_row_with_meta(
 
 class ImageReader(object):
     def __init__(
-            self, config: Config, media_df: Optional[MediaDataFrame] = None
+        self, config: Config, media_df: Optional[MediaDataFrame] = None
     ) -> None:
         """Initialize media database with existing media dataframe or create empty one."""
         # read the config
@@ -183,13 +192,10 @@ class ImageReader(object):
         image_extensions = self.config.image_extensions
         meta = Metadata()
         file_list = list(os.listdir(in_dir_name))
-        for i_file, file_name in tqdm(
-                enumerate(file_list),
-                total=n_files,
-        ):
+        for file_name in tqdm(file_list, total=n_files):
             if ut.is_supported_filetype(file_name, ext):
                 new_row = prepare_new_row_with_meta(
-                    file_name, image_extensions, in_dir_name, meta
+                    file_name, image_extensions, Path(in_dir_name), meta
                 )
                 list_of_rows.append(new_row)
         return list_of_rows
@@ -202,12 +208,6 @@ class ImageReader(object):
         inbox_media_df = MediaDataFrame(pd.DataFrame(row_list))
         inbox_media_df = multiple_timestamps_to_one(inbox_media_df)
         self.media_df = inbox_media_df
-
-
-def check_if_media_files_from_db_exists():
-    """ """
-    # TODO: KS: 2020-10-28: implement
-    logger.info("Running media scan (not implemented yet)")
 
 
 def configure_im_reader(in_dir_name: str) -> Config:
@@ -230,13 +230,13 @@ def configure_im_reader(in_dir_name: str) -> Config:
 
 
 def get_media_df(conf: Config) -> Optional[MediaDataFrame]:
-    """
+    """Get data frame with metadata description of media indicated in Config
 
     Args:
       conf:
 
     Returns:
-
+        Dataframe with metadata of the contents of directory.
     """
     im_reader = ImageReader(config=conf)
     row_list = im_reader.get_data_from_files_as_list_of_rows()
@@ -259,7 +259,7 @@ def get_media_stats(df: pd.DataFrame, time_granularity: int) -> dict:
     """
     date_min = df.date.min()
     date_max = df.date.max()
-    date_median = df.iloc[int(len(df) / 2)].date
+    date_median = df['date'].iloc[int(len(df) / 2)]
 
     df = df[["file_name", "date"]].copy()
     df["date_int"] = df["date"].apply(lambda x: x.value / 10 ** 9)

@@ -15,7 +15,6 @@ from filecluster.image_reader import (
     configure_im_reader,
     get_media_df,
     get_media_stats,
-    mark_inbox_duplicates_vs_watch_folders,
 )
 from filecluster.tests.test_dbase import check_lists_equal
 
@@ -35,25 +34,7 @@ class TestImageReader:
         files = os.listdir(TEST_INBOX_DIR)
         assert len(self.media_list_of_rows) == len(files)
 
-    def test_check_import_for_duplicates_in_watch_folders(self):
-        watch_folders = self.config.watch_folders
 
-        self.imreader.get_media_info_from_inbox_files()
-
-        # get files in library
-        watch_names, _ = get_watch_folders_files_path(watch_folders)
-        # get files in inbox
-        new_names = self.imreader.media_df.file_name.values.tolist()
-        potential_dups = [f for f in new_names if f in watch_names]
-
-        inbox_media_df, dups = mark_inbox_duplicates_vs_watch_folders(
-            inbox_media_df=self.imreader.media_df,
-            watch_folders=watch_folders,
-            skip_duplicated_existing_in_libs=True,
-        )
-        # check if duplicates removed from dataframe
-        exp_dups = ["IMG_4029.JPG", "IMG_3957.JPG", "IMG_3955.JPG"]
-        assert check_lists_equal(exp_dups, list(set(dups)))
 
     @pytest.mark.skip(reason="not implemented")
     def test_check_import_for_duplicates_in_existing_clusters(self):
@@ -68,10 +49,25 @@ def test_metadata__intializes():
     _ = Metadata()
 
 
-def test_multiple_timestamps_to_one():
+def test_multiple_timestamps_to_one__columns_reduced():
     df = MediaDataFrame(pd.DataFrame({"exif_date": [], "c_date": [], "m_date": []}))
     df = multiple_timestamps_to_one(df)
     assert len(df.columns) == 1 and df.columns[0] == "date"
+
+
+def test_multiple_timestamps_to_one():
+    config = get_development_config()
+    image_reader = ImageReader(config)
+    row_list = image_reader.get_data_from_files_as_list_of_rows()
+    inbox_media_df_in = MediaDataFrame(pd.DataFrame(row_list))
+    sel_cols = ['file_name', 'm_date', 'c_date', 'exif_date','date']
+
+    inbox_media_df_out = multiple_timestamps_to_one(inbox_media_df_in.copy(), drop_columns=False)
+    sel_cols_out = ['file_name', 'date']
+
+    # keep only most important results for analysis in testing
+    inbox_media_df_out = inbox_media_df_out[sel_cols]
+    pass
 
 
 def test_initialize_row_dict():
@@ -86,8 +82,8 @@ def test_prepare_new_row_with_meta():
     # TODO: KS: 2020-12-09: Create dummy image or mock it
     empty_meta = Metadata()
     row = prepare_new_row_with_meta(
-        fn="my_file_name",
-        image_extensions=["jpg", "png"],
+        media_file_name="my_file_name",
+        accepted_media_file_extensions=["jpg", "png"],
         in_dir_name="my_dir_name",
         meta=empty_meta,
     )
