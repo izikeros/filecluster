@@ -38,7 +38,7 @@ def str_to_bool(s: str) -> bool:
         raise ValueError  # evil ValueError that doesn't tell you what the wrong value was
 
 
-def scan_library_dir(library_path: str, force_deep_scan: bool = False) -> pd.DataFrame:
+def get_or_create_library_cluster_ini_as_dataframe(library_path: str, force_deep_scan: bool = False) -> pd.DataFrame:
     """Scan folder for cluster info and return dataframe with clusters.
 
     Args:
@@ -125,4 +125,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     libs = args.library
     for lib in libs:
-        _ = scan_library_dir(library_path=lib, force_deep_scan=args.force_recalc)
+        _ = get_or_create_library_cluster_ini_as_dataframe(library_path=lib, force_deep_scan=args.force_recalc)

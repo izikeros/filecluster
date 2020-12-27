@@ -341,8 +341,7 @@ class ImageGrouper(object):
         pth_out = self.config.out_dir_name
         pth_in = self.config.in_dir_name
         n_files = len(self.inbox_media_df)
-        i_file = 0
-        for _, row in tqdm(self.inbox_media_df.iterrows()):
+        for _, row in tqdm(self.inbox_media_df.iterrows(), target=n_files):
             date_string = row["target_path"]
             file_name = row["file_name"]
             src = os.path.join(pth_in, file_name)
@@ -353,7 +352,6 @@ class ImageGrouper(object):
                 move(src, dst)
             elif mode == CopyMode.NOP:
                 pass
-            i_file += 1
 
     def add_target_dir_for_duplicates(self):
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
@@ -389,13 +387,15 @@ class ImageGrouper(object):
             not_too_new_clusters = self.df_clusters.end_date + margin >= img_time
             range_ok = not_too_old_clusters & not_too_new_clusters
 
-            # condition for the continutity
-            continous = self.df_clusters.is_continous
+            # condition for the continuity
+            continuous = self.df_clusters.is_continous
 
-            candidate_clusters = self.df_clusters[range_ok & continous]
-
-            if len(candidate_clusters) > 0:
-                if len(candidate_clusters) > 1:
+            sel = range_ok & continuous
+            n_sel = sum(sel.values)
+            f_name = row['file_name']
+            if n_sel > 0:
+                candidate_clusters = self.df_clusters[sel]
+                if n_sel > 1:
                     logger.warning("Ambiguity")
                     # TODO: KS: 2020-12-17: Solve ambiguity other way?
                     # assign to first anyway
@@ -518,20 +518,24 @@ class ImageGrouper(object):
             ] = Status.DUPLICATE  # Fixme: copy of a slice
             dups_lib_patch = list(
                 filter(lambda x: _row.file_name in str(x), confirmed_library_dups))
-            dups_lib_str_list = [str(x) for x in dups_lib_patch]
-            dups_lib_clust_list = [Path(x).parts[-2] for x in dups_lib_patch]
+            if dups_lib_patch:
+                dups_lib_str_list = [str(x) for x in dups_lib_patch]
+                dups_lib_clust_list = [Path(x).parts[-2] for x in dups_lib_patch]
 
-            self.inbox_media_df["duplicated_to"][idx] = dups_lib_str_list  # FIXME
-            self.inbox_media_df["duplicated_cluster"][idx] = dups_lib_clust_list
+                self.inbox_media_df["duplicated_to"][idx] = dups_lib_str_list  # FIXME
+                self.inbox_media_df["duplicated_cluster"][idx] = dups_lib_clust_list
 
-            # return first cluster with this duplicated media file (for debug and testing)
-            clusters_with_dups.append(
-                dups_lib_clust_list[0])  # FIXME: KS: 2020-12-27: Not entirely correct
-            if len(dups_lib_clust_list) > 1:
-                # TODO: KS: 2020-12-27: Properly handle duplicate to multiple destignations in library
-                pass
+                # return first cluster with this duplicated media file (for debug and testing)
+                clusters_with_dups.append(
+                    dups_lib_clust_list[0])  # FIXME: KS: 2020-12-27: Not entirely correct
 
-        return confirmed_inbox_dups, list(set(clusters_with_dups)) #,confirmed_lib_dups
+                if len(dups_lib_clust_list) > 1:
+                    # TODO: KS: 2020-12-27: Properly handle duplicate to multiple destignations in library
+                    pass
+            else:
+                pass  # TODO: investigate such case, should not happen
+
+        return confirmed_inbox_dups, list(set(clusters_with_dups))  # ,confirmed_lib_dups
 
     def file_name_based_duplicates(self):
         # get files in library

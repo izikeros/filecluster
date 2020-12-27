@@ -5,7 +5,7 @@ import pandas as pd
 
 from filecluster.configuration import Config, CLUSTER_DF_COLUMNS
 from filecluster.filecluster_types import ClustersDataFrame
-from filecluster.update_cluster_db_deep import scan_library_dir
+from filecluster.update_cluster_db_deep import get_or_create_library_cluster_ini_as_dataframe
 from numpy import int64
 from pandas.core.frame import DataFrame
 from typing import Union, List, Tuple
@@ -40,7 +40,7 @@ def get_existing_clusters_info(
 
     # Start scanning watch folders to get cluster information
     if use_watch_folders and len(watch_folders):
-        dfs = [scan_library_dir(lib, config.force_deep_scan) for lib in watch_folders]
+        dfs = [get_or_create_library_cluster_ini_as_dataframe(lib, config.force_deep_scan) for lib in watch_folders]
         df = pd.concat(dfs, axis=0)
         df.index = range(len(df))
         df = df.reset_index()
