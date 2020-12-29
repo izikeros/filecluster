@@ -1,11 +1,12 @@
 """Module for handling operations on both databases: media and clusters."""
 import logging
+import multiprocessing
 
 import pandas as pd
 
 from filecluster.configuration import Config, CLUSTER_DF_COLUMNS
 from filecluster.filecluster_types import ClustersDataFrame
-from filecluster.update_cluster_db_deep import get_or_create_library_cluster_ini_as_dataframe
+from filecluster.update_existing_cluster_info import get_or_create_library_cluster_ini_as_dataframe
 from numpy import int64
 from pandas.core.frame import DataFrame
 from typing import Union, List, Tuple
@@ -22,6 +23,17 @@ def get_existing_clusters_info(
     """Scan library, find existing clusters and empty or non-compliant folders."""
     # TODO: Any non-empty subfolder of year folder should contain .cluster.ini
     #  file (see: Runmageddon example). Non-empty means - contains media files
+
+    USE_PARALLEL = True
+    # setting-up pool is time consuming
+    # list_is_short = len(event_dirs) < 50
+
+    # if USE_PARALLEL:
+    n_cpu = multiprocessing.cpu_count()
+    logger.debug(f"Setting-up multiprocessing pool with {n_cpu} processes")
+    pool = multiprocessing.Pool(processes=n_cpu)
+    logger.debug(f"Pool ready to use")
+
     watch_folders = config.watch_folders
 
     # NOTE: these requires refactoring in scan_library_dir()
@@ -39,7 +51,7 @@ def get_existing_clusters_info(
     # Start scanning watch folders to get cluster information
     if use_watch_folders and len(watch_folders):
         dfs = [
-            get_or_create_library_cluster_ini_as_dataframe(lib, config.force_deep_scan)
+            get_or_create_library_cluster_ini_as_dataframe(lib, pool, config.force_deep_scan)
             for lib in watch_folders
         ]
         df = pd.concat(dfs, axis=0)

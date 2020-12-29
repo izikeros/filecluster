@@ -145,7 +145,7 @@ class ImageGrouper(object):
         # calculate breaks between the non-clustered images
         self.inbox_media_df[delta_col] = None
         self.inbox_media_df[date_col] = pd.to_datetime(self.inbox_media_df[date_col])
-        self.inbox_media_df[delta_col][sel] = self.inbox_media_df[date_col][sel].diff()
+        self.inbox_media_df[delta_col][sel] = self.inbox_media_df[date_col][sel].diff() # FIXME: SettingWithCopyWarning
 
     def run_clustering(self) -> ClustersDataFrame:
         """Identify clusters in media not clustered so far.
@@ -293,12 +293,16 @@ class ImageGrouper(object):
             image_count = df.loc[df["is_image"]].shape[0]
             video_count = df.loc[~df["is_image"]].shape[0]
 
+            rich_str = ''
+            if (image_count > 10) or (video_count > 10):
+                rich_str = '_rich'
             date_string = "_".join(
                 [
                     date_str,
                     time_str,
                     "IC_{ic}".format(ic=image_count),
                     "VC_{vc}".format(vc=video_count),
+                    rich_str,
                 ]
             )
 
@@ -340,9 +344,14 @@ class ImageGrouper(object):
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
         # add target dir for the duplicates
         sel_dups = self.inbox_media_df.status == Status.DUPLICATE
+        # TODO: use pandas apply or even parallel apply instead of iterrows
         for idx, _row in self.inbox_media_df[sel_dups].iterrows():
             dup_cluster = self.inbox_media_df.duplicated_cluster[idx]
-            self.inbox_media_df.target_path[idx] = path_creator.for_duplicates(dup_cluster[0])
+            try:
+                self.inbox_media_df.loc[idx, "target_path"] = path_creator.for_duplicates(dup_cluster[0])
+            except Exception as ex:
+                a=0
+                pass
 
     def add_cluster_info_from_clusters_to_media(self):
         # add path info from cluster dir,
@@ -471,7 +480,7 @@ class ImageGrouper(object):
 
                     confirmed_library_dups.append(lib_item)
                     confirmed_inbox_dups.append(in_file_name)
-                    logger.debug(f"Inbox {in_file_name} is duplicate to library: {lib_item}")
+                    # logger.debug(f"Inbox {in_file_name} is duplicate to library: {lib_item}")
 
         # mark confirmed duplicates in import batch
         logger.info("mark confirmed duplicates in import batch")
@@ -488,8 +497,8 @@ class ImageGrouper(object):
                 dups_lib_str_list = [str(x) for x in dups_lib_patch]
                 dups_lib_clust_list = [Path(x).parts[-2] for x in dups_lib_patch]
 
-                self.inbox_media_df["duplicated_to"][idx] = dups_lib_str_list  # FIXME
-                self.inbox_media_df["duplicated_cluster"][idx] = dups_lib_clust_list
+                self.inbox_media_df["duplicated_to"][idx] = dups_lib_str_list  # FIXME: SettingWithCopyWarning
+                self.inbox_media_df["duplicated_cluster"][idx] = dups_lib_clust_list # FIXME: SettingWithCopyWarning
 
                 # return first cluster with this duplicated media file (for debug and testing)
                 clusters_with_dups.append(

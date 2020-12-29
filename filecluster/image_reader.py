@@ -190,7 +190,7 @@ class ImageReader(object):
         image_extensions = self.config.image_extensions
         meta = Metadata()
         file_list = list(os.listdir(in_dir_name))
-        for file_name in tqdm(file_list, total=n_files):
+        for file_name in file_list:
             if ut.is_supported_filetype(file_name, ext):
                 new_row = prepare_new_row_with_meta(
                     file_name, image_extensions, Path(in_dir_name), meta
