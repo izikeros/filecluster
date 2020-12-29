@@ -1,6 +1,6 @@
 import pytest
 
-from filecluster.cluster_scaner import is_year_folder
+from filecluster.update_clusters import is_year_folder
 
 
 @pytest.mark.parametrize(

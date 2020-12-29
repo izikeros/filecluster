@@ -235,7 +235,13 @@ def get_media_df(conf: Config) -> Optional[MediaDataFrame]:
     Returns:
         Dataframe with metadata of the contents of directory.
     """
-    im_reader = ImageReader(config=conf)
+    row_list = []
+    f_name = conf.in_dir_name
+    if os.listdir(f_name):
+        im_reader = ImageReader(config=conf)
+    else:
+        logger.debug(f' - directory {f_name} is empty.')
+
     row_list = im_reader.get_data_from_files_as_list_of_rows()
     if row_list:
         df = MediaDataFrame(pd.DataFrame(row_list))

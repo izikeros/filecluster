@@ -3,6 +3,12 @@
 
 Module with function to scan the directories and obtain existing cluster info,
 by reading or creating .cluster.ini files.
+
+Usage:
+./update_clusters.py -f -l tests/zdjecia
+
+    -f force recalculation of inin file
+    -l path to library
 """
 # TODO: KS: 2020-12-28: Consider changing data format from ini to yaml
 
@@ -39,8 +45,8 @@ def str_to_bool(s: str) -> bool:
 
 
 def get_or_create_library_cluster_ini_as_dataframe(
-        library_path: str, pool, force_deep_scan: bool = False
-) -> pd.DataFrame:
+    library_path: str, pool, force_deep_scan: bool = False
+) -> Tuple[pd.DataFrame, List[Path]]:
     """Scan folder for cluster info and return dataframe with clusters.
 
     Args:
@@ -70,26 +76,50 @@ def get_or_create_library_cluster_ini_as_dataframe(
     force_list = n_event_dirs * [force_deep_scan]
     library_path_list = n_event_dirs * [library_path]
 
-    ds2 = pool.starmap(get_this_ini, zip(event_dirs, force_list, library_path_list))
+    res_list = pool.starmap(
+        get_this_ini, zip(event_dirs, force_list, library_path_list)
+    )
     # else:
     #     ds2 = map(get_this_ini, zip(event_dirs, force_list, library_path_list))
-    ds2 = [d for d in ds2 if d is not None]
+    res_dict_list = [d for d in res_list if isinstance(d, dict)]
+    res_empty_dir_list = [d for d in res_list if isinstance(d, Path)]
 
-    df = pd.DataFrame(ds2)
+    df = pd.DataFrame(res_dict_list)
 
     df["target_path"] = None
     df["new_file_count"] = None
-    return df
+    n_clusters = len(df)
+    n_files = df.file_count.sum()
+    logger.debug(f"== Found {n_clusters} clusters. Total file count: {n_files}")
+    return df, res_empty_dir_list
 
 
-def get_this_ini(ed, force_deep_scan, library_path):
-    pth = Path(library_path) / ed[0]
+def get_this_ini(
+    event_dir: str, force_deep_scan: bool, library_path
+) -> Union[dict, Optional[Path]]:
+    """Get stats of event_dir that is subdir of library.
+
+    Returns
+        single object that can be:
+        Dictionary with characterization of the cluster - if directory is not empty and as media files.
+        Path object of the cluster - if directory is empty
+        None - if is not empty but no media files directly in that path."""
+    event_dir_name = event_dir[0]
+    pth = Path(library_path) / event_dir_name
     is_ini = os.path.isfile(Path(pth) / INI_FILENAME)
+    is_empty = False
     if force_deep_scan or not is_ini:
         # calculate ini
         conf = configure_im_reader(in_dir_name=pth)
-        # TODO: check if the folder contains any media
-        media_df = get_media_df(conf)
+
+        f_name = conf.in_dir_name
+        if os.listdir(f_name):
+            media_df = get_media_df(conf)
+        else:
+            logger.debug(f" - directory {f_name} is empty.")
+            media_df = None
+            is_empty = True
+
         if media_df is not None:
             time_granularity = int(conf.time_granularity.total_seconds())
             media_stats = get_media_stats(media_df, time_granularity)
@@ -101,13 +131,19 @@ def get_this_ini(ed, force_deep_scan, library_path):
                 file_count=media_stats["file_count"],
             )
             save_cluster_ini(cluster_ini, pth)
+
     # read existing ini
     cluster_ini_r = read_cluster_ini_as_dict(pth)
     if cluster_ini_r:
-        d = dict_from_ini_range_section(cluster_ini_r, pth)
+        # return dict with cluster characterization
+        ret = dict_from_ini_range_section(cluster_ini_r, pth)
     else:
-        d = None
-    return d
+        # return Path object with empty directory
+        if is_empty:
+            ret = pth
+        else:
+            return None
+    return ret
 
 
 def dict_from_ini_range_section(cluster_ini_r, pth):
@@ -122,11 +158,11 @@ def dict_from_ini_range_section(cluster_ini_r, pth):
 
 
 def initialize_cluster_info_dict(
-        start: str,
-        stop: str,
-        is_continous: bool,
-        median: Optional[int] = None,
-        file_count: Optional[int] = None,
+    start: str,
+    stop: str,
+    is_continous: bool,
+    median: Optional[int] = None,
+    file_count: Optional[int] = None,
 ) -> ConfigParser:
     """Return dictionary that store information on cluster existing on the disk.
 
@@ -151,8 +187,8 @@ def initialize_cluster_info_dict(
 
 
 def save_cluster_ini(
-        cluster_ini: ConfigParser,
-        path: str,
+    cluster_ini: ConfigParser,
+    path: str,
 ) -> None:
     """Save cluster information dictionary.
 
@@ -168,7 +204,7 @@ def save_cluster_ini(
 
 
 def read_cluster_ini_as_dict(
-        path: PosixPath,
+    path: PosixPath,
 ) -> Optional[Dict[str, Dict[str, Union[datetime, str]]]]:
     """Read cluster info from the path and return as dictionary.
 
@@ -379,7 +415,7 @@ if __name__ == "__main__":
         "-f",
         "--force-recalc",
         help="recalculate cluster info even if .cluster.ini files exists",
-        type=bool,
+        action="store_true",
         default=False,
     )
 
@@ -392,5 +428,6 @@ if __name__ == "__main__":
     logger.debug(f"Pool ready to use")
 
     for lib in libs:
-        _ = get_or_create_library_cluster_ini_as_dataframe(library_path=lib, pool=pool,
-                                                           force_deep_scan=args.force_recalc)
+        _ = get_or_create_library_cluster_ini_as_dataframe(
+            library_path=lib, pool=pool, force_deep_scan=args.force_recalc
+        )
