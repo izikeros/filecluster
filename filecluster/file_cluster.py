@@ -86,7 +86,7 @@ def main(
     image_reader = ImageReader(config)
 
     # read timestamps from imported pictures/recordings
-    USE_CSV = True
+    USE_CSV = False
     INBOX_CSV_FILE_NAME = "h:\\incomming\\inbox.csv"
     if USE_CSV and os.path.isfile(INBOX_CSV_FILE_NAME):
         import pandas as pd
@@ -238,6 +238,8 @@ if __name__ == "__main__":
         watch_dirs = [args.watch_dir]
     elif isinstance(args.watch_dir, List):
         watch_dirs = args.watch_dir
+    elif args.watch_dir is None:
+        watch_dirs = []
     else:
         raise TypeError("watch_dirs should be a list")
 
