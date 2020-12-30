@@ -162,8 +162,9 @@ def main(
     image_grouper.add_cluster_info_from_clusters_to_media()
 
     # assign target folder for duplicates
-    logger.info("assign target folder for duplicates")
-    image_grouper.add_target_dir_for_duplicates()
+    if config.skip_duplicated_existing_in_libs:
+        logger.info("assign target folder for duplicates")
+        image_grouper.add_target_dir_for_duplicates()
 
     # Physically move or copy files to folders
     mode = image_grouper.config.mode
