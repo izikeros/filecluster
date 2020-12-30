@@ -312,7 +312,7 @@ def override_config_with_cli_params(
         config.out_dir_name = output_dir
 
     # no_operation overrides copy mode
-    if copy_mode is not None:
+    if copy_mode:
         config.mode = CopyMode.COPY
     if no_operation:
         config.mode = CopyMode.NOP
