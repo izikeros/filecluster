@@ -1,11 +1,12 @@
 """Module for keeping configuration-related code for the filecluster."""
 import logging
 import os
-from dataclasses import dataclass
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
 from typing import List, Tuple, Optional
+
+from pydantic.dataclasses import dataclass
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
