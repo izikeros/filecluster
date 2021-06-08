@@ -1,7 +1,7 @@
 ExifRead==2.3.2
 numpy==1.19.3   # there is Windows problem with numpy==1.19.4
 pandas==1.1.5   # 1.1.5 works ok
-Pillow==8.0.1
+Pillow==8.2.0
 python-dateutil==2.8.1
 pytz==2020.5
 tqdm==4.55.0
