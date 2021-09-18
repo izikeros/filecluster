@@ -5,6 +5,7 @@ Pillow==8.0.1
 python-dateutil==2.8.1
 pytz==2020.5
 tqdm==4.55.0
+pydantic
 
 # Development requirements
 pdoc3==0.9.2
