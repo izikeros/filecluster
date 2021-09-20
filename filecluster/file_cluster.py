@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Main module for image clustering."""
+"""Main module for image grouping by the event."""
 import argparse
 import logging
 import os
 from pathlib import Path
 from typing import List, Optional
+# try:
+#     from gooey import Gooey, GooeyParser
+# except:
+#     pass
 
 from filecluster import version
 from filecluster.configuration import (
@@ -29,15 +33,15 @@ logger.setLevel(logging.DEBUG)
 
 
 def main(
-    inbox_dir: Optional[str] = None,
-    output_dir: Optional[str] = None,
-    watch_dir_list: Optional[List[str]] = None,
-    development_mode: Optional[bool] = None,
-    no_operation: Optional[bool] = None,
-    copy_mode: Optional[bool] = None,
-    force_deep_scan: Optional[bool] = None,
-    drop_duplicates: Optional[bool] = None,
-    use_existing_clusters: Optional[bool] = None,
+        inbox_dir: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        watch_dir_list: Optional[List[str]] = None,
+        development_mode: Optional[bool] = None,
+        no_operation: Optional[bool] = None,
+        copy_mode: Optional[bool] = None,
+        force_deep_scan: Optional[bool] = None,
+        drop_duplicates: Optional[bool] = None,
+        use_existing_clusters: Optional[bool] = None,
 ) -> dict:
     """Run clustering on the media files provided as inbox.
 
@@ -175,9 +179,20 @@ def main(
     return results
 
 
-if __name__ == "__main__":
-    """Main routine to perform grouping process."""
-    parser = argparse.ArgumentParser(description="Purpose of the script")
+# TODO: KS: 2021-09-20: use Gooey to wrap only the parser generation with Gooey
+#@Gooey(program_name="File cluster)
+def argument_parser(parser_type="argparse"):
+    # This is a standard argparse parser.
+    # in case of having other parsers (e.g. for gui building) you can provide other function
+    # returinng proper parser
+    if parser_type == "argparse":
+        parser = argparse.ArgumentParser(description="Group media files by event")
+        return parser
+    elif parser_type == "gooye":
+        raise NotImplementedError("Gooye is not implemented.")
+
+
+def add_args_to_parser(parser):
     parser.add_argument("-i", "--inbox-dir", help="directory with input images")
     parser.add_argument(
         "-o", "--output-dir", help="output directory for clustered images"
@@ -233,6 +248,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {version.__version__}"
     )
+    return parser
+
+
+if __name__ == "__main__":
+    """Main routine to perform grouping process."""
+
+    parser = argument_parser(parser_type="argparse")
+    parser = add_args_to_parser(parser)
     args = parser.parse_args()
 
     if isinstance(args.watch_dir, str):
