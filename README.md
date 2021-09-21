@@ -1,3 +1,5 @@
+[![Black formatter](https://github.com/izikeros/filecluster/actions/workflows/black.yml/badge.svg)](https://github.com/izikeros/filecluster/actions/workflows/black.yml)
+
 # filecluster
 Python library for creating image and video catalog. Catalog is organized by the dates and events.
 Main purpose is to handle task whe you have large number of pictures in flat
