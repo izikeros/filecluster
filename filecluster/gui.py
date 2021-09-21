@@ -91,7 +91,10 @@ layout = [
 ]
 
 window = sg.Window(
-    title="Media cluster by event.", layout=layout, default_element_size=(40, 1), grab_anywhere=False
+    title="Media cluster by event.",
+    layout=layout,
+    default_element_size=(40, 1),
+    grab_anywhere=False,
 )
 
 event, values = window.read()

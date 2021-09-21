@@ -63,7 +63,9 @@ def multiple_timestamps_to_one(
     # normalize date format
     image_df["m_date"] = pd.to_datetime(image_df["m_date"], infer_datetime_format=True)
     image_df["c_date"] = pd.to_datetime(image_df["c_date"], infer_datetime_format=True)
-    image_df["exif_date"] = pd.to_datetime(image_df["exif_date"], infer_datetime_format=True)
+    image_df["exif_date"] = pd.to_datetime(
+        image_df["exif_date"], infer_datetime_format=True
+    )
 
     # TODO: Ensure that any date is assigned to file
     # use exif date as base
@@ -156,7 +158,9 @@ def prepare_new_row_with_meta(
 
 
 class ImageReader(object):
-    def __init__(self, config: Config, media_df: Optional[MediaDataFrame] = None) -> None:
+    def __init__(
+        self, config: Config, media_df: Optional[MediaDataFrame] = None
+    ) -> None:
         """Initialize media database with existing media dataframe or create empty one."""
         # read the config
         self.config = config
@@ -240,7 +244,7 @@ def get_media_df(conf: Config) -> Optional[MediaDataFrame]:
     if os.listdir(f_name):
         im_reader = ImageReader(config=conf)
     else:
-        logger.debug(f' - directory {f_name} is empty.')
+        logger.debug(f" - directory {f_name} is empty.")
 
     row_list = im_reader.get_data_from_files_as_list_of_rows()
     if row_list:
