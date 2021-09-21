@@ -1,4 +1,4 @@
-name: Lint
+name: Black formatter
 
 on:
   push:
