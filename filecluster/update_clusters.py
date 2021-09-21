@@ -98,9 +98,11 @@ def get_this_ini(
 
     Returns
         single object that can be:
-        Dictionary with characterization of the cluster - if directory is not empty and as media files.
+        Dictionary with characterization of the cluster - if directory is
+            not empty and as media files.
         Path object of the cluster - if directory is empty
-        None - if is not empty but no media files directly in that path."""
+        None - if is not empty but no media files directly in that path.
+    """
     event_dir_name = event_dir[0]
     pth = Path(library_path) / event_dir_name
     is_ini = os.path.isfile(Path(pth) / INI_FILENAME)
@@ -313,8 +315,8 @@ def is_event_folder(folder: str) -> bool:
     # is under year-folder
     parrent_part = Path(folder).parts[-2]
     is_parrent_year = is_year_folder(parrent_part)
-    last_part = Path(folder).parts[-1]
-    starts_with_date_timestamp = bool(re.match(r"^\[\d\d\d\d/", last_part))
+    # last_part = Path(folder).parts[-1]
+    # starts_with_date_timestamp = bool(re.match(r"^\[\d\d\d\d/", last_part))
     return is_parrent_year  # and starts_with_date_timestamp
 
 

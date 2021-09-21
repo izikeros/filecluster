@@ -6,11 +6,6 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-# try:
-#     from gooey import Gooey, GooeyParser
-# except:
-#     pass
-
 from filecluster import version
 from filecluster.configuration import (
     CopyMode,
@@ -180,20 +175,8 @@ def main(
     return results
 
 
-# TODO: KS: 2021-09-20: use Gooey to wrap only the parser generation with Gooey
-# @Gooey(program_name="File cluster)
-def argument_parser(parser_type="argparse"):
-    # This is a standard argparse parser.
-    # in case of having other parsers (e.g. for gui building) you can provide other function
-    # returinng proper parser
-    if parser_type == "argparse":
-        parser = argparse.ArgumentParser(description="Group media files by event")
-        return parser
-    elif parser_type == "gooye":
-        raise NotImplementedError("Gooye is not implemented.")
-
-
 def add_args_to_parser(parser):
+    """Add arguments to the parser."""
     parser.add_argument("-i", "--inbox-dir", help="directory with input images")
     parser.add_argument(
         "-o", "--output-dir", help="output directory for clustered images"
@@ -255,7 +238,7 @@ def add_args_to_parser(parser):
 if __name__ == "__main__":
     """Main routine to perform grouping process."""
 
-    parser = argument_parser(parser_type="argparse")
+    parser = argparse.ArgumentParser(description="Group media files by event")
     parser = add_args_to_parser(parser)
     args = parser.parse_args()
 

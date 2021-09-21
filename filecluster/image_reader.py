@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from tqdm import tqdm
 
 import filecluster.utlis as ut
 from filecluster.configuration import (
@@ -23,7 +22,7 @@ logger.setLevel(logging.DEBUG)
 
 
 class Metadata:
-    """ """
+    """Class defining media metadata."""
 
     def __init__(self) -> None:
         self.file_name: str = ""
@@ -158,10 +157,11 @@ def prepare_new_row_with_meta(
 
 
 class ImageReader(object):
+    """Initialize media database with existing media dataframe or create empty one."""
+
     def __init__(
         self, config: Config, media_df: Optional[MediaDataFrame] = None
     ) -> None:
-        """Initialize media database with existing media dataframe or create empty one."""
         # read the config
         self.config = config
 
@@ -189,8 +189,6 @@ class ImageReader(object):
         ext = self.config.image_extensions + self.config.video_extensions
 
         logger.debug(f"Reading data from: {in_dir_name}")
-        list_dir = os.listdir(in_dir_name)
-        n_files = len(list_dir)
         image_extensions = self.config.image_extensions
         meta = Metadata()
         file_list = list(os.listdir(in_dir_name))

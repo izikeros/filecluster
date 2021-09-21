@@ -26,15 +26,10 @@ def get_existing_clusters_info(
     # TODO: Any non-empty subfolder of year folder should contain .cluster.ini
     #  file (see: Runmageddon example). Non-empty means - contains media files
 
-    USE_PARALLEL = True
-    # setting-up pool is time consuming
-    # list_is_short = len(event_dirs) < 50
-
-    # if USE_PARALLEL:
     n_cpu = multiprocessing.cpu_count()
     logger.debug(f"Setting-up multiprocessing pool with {n_cpu} processes")
     pool = multiprocessing.Pool(processes=n_cpu)
-    logger.debug(f"Pool ready to use")
+    logger.debug("Pool ready to use")
 
     watch_folders = config.watch_folders
 

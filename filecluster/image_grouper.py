@@ -91,6 +91,8 @@ def expand_cluster_or_init_new(
 
 
 class TargetPathCreator:
+    """Target path creator."""
+
     def __init__(self, out_dir_name):
         self.out_dir = Path(out_dir_name)
 
@@ -113,18 +115,20 @@ def filter_by_substring_list(string_list: List[str], substr_list: List[str]):
 
 
 class ImageGrouper(object):
+    """Class for clustering media objects by date."""
+
     def __init__(
         self,
         configuration: Config,
         df_clusters: Optional[ClustersDataFrame] = None,
         inbox_media_df: Optional[MediaDataFrame] = None,
     ):
-        """Class for clustering media objects by date.
+        """Init for the class.
 
-        configuration: instance of Configuration
-        media_df: media database (loaded from file or empty)
-        df_clusters: clusters database (loaded from file or empty)
-        inbox_media_df: dataframe with inbox media
+        Args:
+            configuration: instance of Configuration
+            df_clusters: clusters database (loaded from file or empty)
+            inbox_media_df: dataframe with inbox media
         """
         # read the config
         self.config = configuration
@@ -261,6 +265,7 @@ class ImageGrouper(object):
         return self.inbox_media_df[sel_new]["cluster_id"].unique()
 
     def get_existing_to_be_expanded_cluster_ids(self):
+        """Get Id of existing clusters that will be expanded by adding new media."""
         sel_existing = ~(self.df_clusters["path"].isna())
         sel_with_files_to_appened = self.df_clusters["new_file_count"] > 0
         sel = sel_existing & sel_with_files_to_appened
@@ -331,6 +336,7 @@ class ImageGrouper(object):
         return new_folder_names
 
     def move_files_to_cluster_folder(self):
+        """Physical move of the file to the cluster folder."""
         dirs = self.inbox_media_df["target_path"].unique()
         mode = self.config.mode
 
@@ -359,6 +365,7 @@ class ImageGrouper(object):
                 pass
 
     def add_target_dir_for_duplicates(self):
+        """Add target directory for the duplicated media files."""
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
         # add target dir for the duplicates
         sel_dups = self.inbox_media_df.status == Status.DUPLICATE
@@ -369,11 +376,11 @@ class ImageGrouper(object):
                 self.inbox_media_df.loc[
                     idx, "target_path"
                 ] = path_creator.for_duplicates(dup_cluster[0])
-            except Exception as ex:
-                a = 0
+            except Exception:
                 pass
 
     def add_cluster_info_from_clusters_to_media(self):
+        """Add clusters info to media dataframe."""
         # add path info from cluster dir,
         self.inbox_media_df = self.inbox_media_df.merge(
             self.df_clusters[["cluster_id", "target_path"]], on="cluster_id", how="left"
@@ -381,6 +388,7 @@ class ImageGrouper(object):
         return None
 
     def assign_to_existing_clusters(self) -> Tuple[List[str], List[str]]:
+        """Assign media to existing cluster if possible."""
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
 
         check_df_has_all_expected_columns(
@@ -555,6 +563,7 @@ class ImageGrouper(object):
         )  # ,confirmed_lib_dups
 
     def file_name_based_duplicates(self):
+        """Find duplicates that have the same filename."""
         # get files in library
         watch_file_names, watch_full_paths = get_watch_folders_files_path(
             self.config.watch_folders
