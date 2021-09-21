@@ -20,13 +20,8 @@ pytest-mypy
 mypy>=0.910
 data-science-types  # stubs for pandas, numpy, matplotlib
 flake8
-# flake8-commas==2.0.0
 flake8-docstrings>=1.6.0
-flake8-print>=4.0.0
 # darglint # A functional docstring linter which checks whether a docstring's description matches the actual function/method implementation.
-flake8-expression-complexity # An extension for flake8 that validates expression complexity.
-flake8-comprehensions
-flake8-bugbear
 flake8-pytest-style
 flake8-black
 
