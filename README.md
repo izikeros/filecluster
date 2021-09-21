@@ -1,4 +1,3 @@
-[![Build Status](https://semaphoreci.com/api/v1/izikeros/filecluster/branches/master/shields_badge.svg)](https://semaphoreci.com/izikeros/filecluster)
 # filecluster
 Python library for creating image and video catalog. Catalog is organized by the dates and events.
 Main purpose is to handle task whe you have large number of pictures in flat
@@ -54,3 +53,6 @@ optional arguments:
   --version             show program's version number and exit
 
 ```
+# Graphical Interface
+There is available experimental graphical interface: (`filecluster/gui.py`).
+![img](screenshot.png)
