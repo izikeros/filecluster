@@ -46,13 +46,16 @@ def get_existing_clusters_info(
     # is there a reason for using watch folders (library folders)?
     #   do we have enabled duplicates or existing cluster functionalities
     use_watch_folders = (
-        config.skip_duplicated_existing_in_libs or config.assign_to_clusters_existing_in_libs
+        config.skip_duplicated_existing_in_libs
+        or config.assign_to_clusters_existing_in_libs
     )
 
     # Start scanning watch folders to get cluster information
     if use_watch_folders and len(watch_folders):
         tuples = [
-            get_or_create_library_cluster_ini_as_dataframe(lib, pool, config.force_deep_scan)
+            get_or_create_library_cluster_ini_as_dataframe(
+                lib, pool, config.force_deep_scan
+            )
             for lib in watch_folders
         ]
         dfs, empty_folder_list = map(list, zip(*tuples))

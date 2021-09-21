@@ -58,7 +58,7 @@ def get_exif_date(path_name):
         tags = exifread.process_file(
             img_file, details=False, stop_tag="EXIF DateTimeOriginal"
         )
-    except Exception as ex:
+    except Exception:
         tags = {}
 
     try:

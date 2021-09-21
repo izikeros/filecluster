@@ -56,7 +56,6 @@ def get_or_create_library_cluster_ini_as_dataframe(
     Returns:
         None
     """
-
     # strip trailing '/' and '\' if any
     library_path = library_path.rstrip("/").rstrip("\\")
     logger.info(f"Scanning ini files in {library_path}")
@@ -79,8 +78,6 @@ def get_or_create_library_cluster_ini_as_dataframe(
     res_list = pool.starmap(
         get_this_ini, zip(event_dirs, force_list, library_path_list)
     )
-    # else:
-    #     ds2 = map(get_this_ini, zip(event_dirs, force_list, library_path_list))
     res_dict_list = [d for d in res_list if isinstance(d, dict)]
     res_empty_dir_list = [d for d in res_list if isinstance(d, Path)]
 
@@ -316,8 +313,8 @@ def is_event_folder(folder: str) -> bool:
     # is under year-folder
     parrent_part = Path(folder).parts[-2]
     is_parrent_year = is_year_folder(parrent_part)
-    # last_part = Path(folder).parts[-1]
-    # starts_with_date_timestamp = bool(re.match(r"^\[\d\d\d\d/", last_part))
+    last_part = Path(folder).parts[-1]
+    starts_with_date_timestamp = bool(re.match(r"^\[\d\d\d\d/", last_part))
     return is_parrent_year  # and starts_with_date_timestamp
 
 
@@ -425,7 +422,7 @@ if __name__ == "__main__":
     n_cpu = multiprocessing.cpu_count()
     logger.debug(f"Setting-up multiprocessing pool with {n_cpu} processes")
     pool = multiprocessing.Pool(processes=n_cpu)
-    logger.debug(f"Pool ready to use")
+    logger.debug("Pool ready to use")
 
     for lib in libs:
         _ = get_or_create_library_cluster_ini_as_dataframe(

@@ -5,6 +5,7 @@ import logging
 import os
 from pathlib import Path
 from typing import List, Optional
+
 # try:
 #     from gooey import Gooey, GooeyParser
 # except:
@@ -33,15 +34,15 @@ logger.setLevel(logging.DEBUG)
 
 
 def main(
-        inbox_dir: Optional[str] = None,
-        output_dir: Optional[str] = None,
-        watch_dir_list: Optional[List[str]] = None,
-        development_mode: Optional[bool] = None,
-        no_operation: Optional[bool] = None,
-        copy_mode: Optional[bool] = None,
-        force_deep_scan: Optional[bool] = None,
-        drop_duplicates: Optional[bool] = None,
-        use_existing_clusters: Optional[bool] = None,
+    inbox_dir: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    watch_dir_list: Optional[List[str]] = None,
+    development_mode: Optional[bool] = None,
+    no_operation: Optional[bool] = None,
+    copy_mode: Optional[bool] = None,
+    force_deep_scan: Optional[bool] = None,
+    drop_duplicates: Optional[bool] = None,
+    use_existing_clusters: Optional[bool] = None,
 ) -> dict:
     """Run clustering on the media files provided as inbox.
 
@@ -180,7 +181,7 @@ def main(
 
 
 # TODO: KS: 2021-09-20: use Gooey to wrap only the parser generation with Gooey
-#@Gooey(program_name="File cluster)
+# @Gooey(program_name="File cluster)
 def argument_parser(parser_type="argparse"):
     # This is a standard argparse parser.
     # in case of having other parsers (e.g. for gui building) you can provide other function
