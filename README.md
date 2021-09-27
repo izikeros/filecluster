@@ -1,5 +1,7 @@
 [![Black formatter](https://github.com/izikeros/filecluster/actions/workflows/black.yml/badge.svg)](https://github.com/izikeros/filecluster/actions/workflows/black.yml)
 [![flake8](https://github.com/izikeros/filecluster/actions/workflows/flake8.yml/badge.svg)](https://github.com/izikeros/filecluster/actions/workflows/flake8.yml)
+[![Requirements Status](https://requires.io/github/izikeros/filecluster/requirements.svg?branch=master)](https://requires.io/github/izikeros/filecluster/requirements/?branch=master)
+
 # filecluster
 Python library for creating image and video catalog. Catalog is organized by the dates and events.
 Main purpose is to handle task whe you have large number of pictures in flat
@@ -9,8 +11,10 @@ directory for the excursion you make next day after the birthday etc..
 
 ## Features
 - clustering media (images, video) by event
-- detecting duplicate files
+- detecting duplicate files and stores the in separate output dir
+- detecting media belonging to events that are already in the library
 - detect if imported photo belongs to event that is already in database/filesystem
+- mark folders from events that has large amount of media (folder suffix: `_rich`)
 
 ## Installation:
 Clone the repo, install required packages (see `filecluster/requirements.txt`)
