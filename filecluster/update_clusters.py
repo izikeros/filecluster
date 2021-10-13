@@ -56,7 +56,6 @@ def get_or_create_library_cluster_ini_as_dataframe(
     Returns:
         None
     """
-
     # strip trailing '/' and '\' if any
     library_path = library_path.rstrip("/").rstrip("\\")
     logger.info(f"Scanning ini files in {library_path}")
@@ -79,8 +78,6 @@ def get_or_create_library_cluster_ini_as_dataframe(
     res_list = pool.starmap(
         get_this_ini, zip(event_dirs, force_list, library_path_list)
     )
-    # else:
-    #     ds2 = map(get_this_ini, zip(event_dirs, force_list, library_path_list))
     res_dict_list = [d for d in res_list if isinstance(d, dict)]
     res_empty_dir_list = [d for d in res_list if isinstance(d, Path)]
 
@@ -104,9 +101,11 @@ def get_this_ini(
 
     Returns
         single object that can be:
-        Dictionary with characterization of the cluster - if directory is not empty and as media files.
+        Dictionary with characterization of the cluster - if directory is
+            not empty and as media files.
         Path object of the cluster - if directory is empty
-        None - if is not empty but no media files directly in that path."""
+        None - if is not empty but no media files directly in that path.
+    """
     event_dir_name = event_dir[0]
     pth = Path(library_path) / event_dir_name
     is_ini = os.path.isfile(Path(pth) / INI_FILENAME)
@@ -428,7 +427,7 @@ if __name__ == "__main__":
     n_cpu = multiprocessing.cpu_count()
     logger.debug(f"Setting-up multiprocessing pool with {n_cpu} processes")
     pool = multiprocessing.Pool(processes=n_cpu)
-    logger.debug(f"Pool ready to use")
+    logger.debug("Pool ready to use")
 
     for lib in libs:
         _ = get_or_create_library_cluster_ini_as_dataframe(

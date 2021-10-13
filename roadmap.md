@@ -1,23 +1,3 @@
-## APPEND functionality
-
-Add new photos to the repository that already cover time when photos were taken.
-Usually case for late adding photos from iphone when photos from the other 
-'family media devices' were already downloaded and grouped by event.
-        
-
-## DUPLICATES
-check if photos in given directory (e.g. photo_1) were already added to main photo repository. Put duplicates in `checkme_duplicates` and
-unique in `checkme_unique` (in subfolder photo_1 and replicate structure)
-* ISSUES:
-    
- 
-## TOP_EVENTS
-find directories with more than n photos (can be 20 for
-first run and 10 for second run) and put them in special subfolder (e.g 
-`20_plus` or `10_plus` respectively). These directories will be labelled in 
-first place. Alternative scheme can be finding 80th centile - most populated
- folders covering 20% of pictures.
-
 ## HANDLE_SEL
 manual best photo selection on miniatures
     * generate thumbnails of inbox_clustered (in inbox_clustered_mini) to 

@@ -13,11 +13,12 @@
 ;[D105] Missing docstring in magic method (e.g. __repr__())
 ;[D107] Missing docstring in (class) __init__
 ;[W503] line break before binary operator
+;[D208] Docstring is over-indented - (for black is ok)
 
 ; this should be not excluded in more mature version
 ;[D103] Missing docstring in public function
 
-ignore = W503, T003, M502, N802, N806, F405, D105, D107
+ignore = W503, T003, M502, N802, N806, F405, D105, D107, D208
 
 #select = B
 
@@ -55,6 +56,3 @@ count = True
 
 pytest_mark2 = name=test_type,
                value_regex=(integration)|(unit),
-
-
-

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Main module for image clustering."""
+"""Main module for image grouping by the event."""
 import argparse
 import logging
 import os
@@ -175,9 +175,8 @@ def main(
     return results
 
 
-if __name__ == "__main__":
-    """Main routine to perform grouping process."""
-    parser = argparse.ArgumentParser(description="Purpose of the script")
+def add_args_to_parser(parser):
+    """Add arguments to the parser."""
     parser.add_argument("-i", "--inbox-dir", help="directory with input images")
     parser.add_argument(
         "-o", "--output-dir", help="output directory for clustered images"
@@ -233,6 +232,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {version.__version__}"
     )
+    return parser
+
+
+if __name__ == "__main__":
+    """Main routine to perform grouping process."""
+
+    parser = argparse.ArgumentParser(description="Group media files by event")
+    parser = add_args_to_parser(parser)
     args = parser.parse_args()
 
     if isinstance(args.watch_dir, str):

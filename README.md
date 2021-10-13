@@ -1,18 +1,27 @@
-[![Build Status](https://semaphoreci.com/api/v1/izikeros/filecluster/branches/master/shields_badge.svg)](https://semaphoreci.com/izikeros/filecluster)
+[![Black formatter](https://github.com/izikeros/filecluster/actions/workflows/black.yml/badge.svg)](https://github.com/izikeros/filecluster/actions/workflows/black.yml)
+[![flake8](https://github.com/izikeros/filecluster/actions/workflows/flake8.yml/badge.svg)](https://github.com/izikeros/filecluster/actions/workflows/flake8.yml)
+[![Requirements Status](https://requires.io/github/izikeros/filecluster/requirements.svg?branch=master)](https://requires.io/github/izikeros/filecluster/requirements/?branch=master)
+
 # filecluster
-Python library for creating image and video catalog. Media catalog is stored in sqlite database.
+Python library for creating image and video catalog. Catalog is organized by the dates and events.
+Main purpose is to handle task whe you have large number of pictures in flat
+directory and want to automatically group them into separate directories 
+corresponding to events e.g. directory for your daughter's birthday, separate
+directory for the excursion you make next day after the birthday etc.. 
 
 ## Features
 - clustering media (images, video) by event
-- detecting duplicate files
-- detect if imported photo belongs to event already in database/filesystem
+- detecting duplicate files and stores the in separate output dir
+- detecting media belonging to events that are already in the library
+- detect if imported photo belongs to event that is already in database/filesystem
+- mark folders from events that has large amount of media (folder suffix: `_rich`)
 
 ## Installation:
-clone the repo, install required packages (see `filecluster/requirements.txt`)
+Clone the repo, install required packages (see `filecluster/requirements.txt`)
 
 On Windows to have numpy working one might need to install:
 
-https://aka.ms/vs/15/release/vc_redist.x64.exe
+[vc_redist.x64.exe](https://aka.ms/vs/15/release/vc_redist.x64.exe)
 
 ## Usage
 Typical usage:
@@ -27,9 +36,9 @@ $ file_cluster.py -i inbox -w zdjecia -d dataframe
 ```
 Other run options:
 ```
-usage: file_cluster.py [-h] [-i INBOX_DIR] [-o OUTPUT_DIR] [-w WATCH_DIRS] [-d DB_DRIVER] [-t] [-n]
+usage: file_cluster.py [-h] [-i INBOX_DIR] [-o OUTPUT_DIR] [-w WATCH_DIR] [-t] [-n] [-y] [-f] [-d] [-c] [--version]
 
-Purpose of the script
+Group media files by event
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -37,12 +46,19 @@ optional arguments:
                         directory with input images
   -o OUTPUT_DIR, --output-dir OUTPUT_DIR
                         output directory for clustered images
-  -w WATCH_DIRS, --watch-dirs WATCH_DIRS
-                        directories with structured media (official media repository)
-  -d DB_DRIVER, --db-driver DB_DRIVER
-                        technology to use to store cluster and media databases. sqlite|dataframe
+  -w WATCH_DIR, --watch-dir WATCH_DIR
+                        directory with structured media (official media repository)
   -t, --development-mode
                         Run script with development configuration - work on tests directories
   -n, --no-operation    Do not introduce any changes on the disk. Dry run.
+  -y, --copy-mode       Copy instead of default move
+  -f, --force-deep-scan
+                        Force recalculate cluster info for each existing cluster.
+  -d, --drop-duplicates
+  -c, --use-existing-clusters
+  --version             show program's version number and exit
 
 ```
+# Graphical Interface
+There is available experimental graphical interface: (`filecluster/gui.py`).
+![img](screenshot.png)

@@ -18,11 +18,11 @@ class TestMain:
             use_existing_clusters=False,
             force_deep_scan=self.force_deep_scan,
         )
-        n_new_folder_res = len(results['new_folder_names'])
+        n_new_folder_res = len(results["new_folder_names"])
         n_new_folder_exp = 17
         assert n_new_folder_res == n_new_folder_exp
 
-        n_new_cluster_res = len(results['new_cluster_df'])
+        n_new_cluster_res = len(results["new_cluster_df"])
         n_new_cluster_exp = 17
         assert n_new_cluster_res == n_new_cluster_exp
 
@@ -58,11 +58,10 @@ class TestMain:
             use_existing_clusters=True,
             force_deep_scan=self.force_deep_scan,
         )
-        n_new_folder_res = len(results['new_folder_names'])
+        n_new_folder_res = len(results["new_folder_names"])
         n_new_folder_exp = 15
         assert n_new_folder_res == n_new_folder_exp
 
-        n_new_cluster_res = len(results['new_cluster_df'])
+        n_new_cluster_res = len(results["new_cluster_df"])
         n_new_cluster_exp = 15
         assert n_new_cluster_res == n_new_cluster_exp
-

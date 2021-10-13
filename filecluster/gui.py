@@ -5,6 +5,8 @@ import PySimpleGUI as sg
 # TODO: KS: 2020-12-28: read default values from configuration module
 
 # ------ Menu Definition ------ #
+from filecluster.file_cluster import main
+
 menu_def = [
     ["File", ["Load configuration", "Save configuration", "Exit"]],
     ["Help", "About..."],
@@ -20,7 +22,7 @@ layout = [
                         "Do not import duplicates existing in the library",
                         default=True,
                         size=(50, 1),
-                        key="duplicates",
+                        key="drop_duplicates",
                     ),
                 ],
                 [
@@ -32,6 +34,13 @@ layout = [
                 ],
                 [
                     sg.Checkbox("Dry run", default=False, key="dry_run"),
+                ],
+                [
+                    sg.Checkbox(
+                        "Rebuild cluster info in libraries",
+                        default=False,
+                        key="force_deep_scan",
+                    ),
                 ],
                 [sg.Text("Operations used to organize media files")],
                 [
@@ -50,7 +59,7 @@ layout = [
     [sg.Text("Choose folders", size=(35, 1))],
     [
         sg.Text(
-            "Inbox folder",
+            "Inbox dir",
             size=(15, 1),
             auto_size_text=False,
             justification="right",
@@ -59,20 +68,33 @@ layout = [
         sg.FolderBrowse(),
     ],
     [
-        sg.Text("Library 1", size=(15, 1), auto_size_text=False, justification="right"),
+        sg.Text(
+            "Main library dir",
+            size=(15, 1),
+            auto_size_text=False,
+            justification="right",
+        ),
         sg.InputText("h:\\zdjecia", key="lib_1"),
         sg.FolderBrowse(),
     ],
     [
-        sg.Text("Library 2", size=(15, 1), auto_size_text=False, justification="right"),
-        sg.InputText("h:\\incomming\\clustered", key="lib_2"),
+        sg.Text(
+            "Output dir",
+            size=(15, 1),
+            auto_size_text=False,
+            justification="right",
+        ),
+        sg.InputText("h:\\incomming\\clustered", key="output"),
         sg.FolderBrowse(),
     ],
     [sg.Submit(button_text="Run", tooltip="Click to start clustering"), sg.Cancel()],
 ]
 
 window = sg.Window(
-    "Everything bagel", layout, default_element_size=(40, 1), grab_anywhere=False
+    title="Media cluster by event.",
+    layout=layout,
+    default_element_size=(40, 1),
+    grab_anywhere=False,
 )
 
 event, values = window.read()
@@ -86,4 +108,16 @@ sg.popup(
     'The button clicked was "{}"'.format(event),
     "The values are",
     values,
+)
+
+main(
+    inbox_dir=values["inbox"],
+    output_dir=values["output"],
+    watch_dir_list=[values["lib_1"]],
+    development_mode=False,
+    no_operation=values["dry_run"],
+    copy_mode=values["copy"],
+    force_deep_scan=values["force_deep_scan"],
+    drop_duplicates=values["drop_duplicates"],
+    use_existing_clusters=values["use_existing"],
 )
