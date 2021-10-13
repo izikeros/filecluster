@@ -219,14 +219,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "-d",
         "--drop-duplicates",
-        help="",
+        help="Do not cluster duplicates, store them in separate folder.",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "-c",
         "--use-existing-clusters",
-        help="",
+        help="If possible, check watch folders if the inbox media can be assigned to already existing cluster.",
         action="store_true",
         default=False,
     )
