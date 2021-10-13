@@ -1,9 +1,13 @@
 """Setup function for filecluster package."""
 from setuptools import setup, find_packages
 
+with open('filecluster/version.py') as fp:
+    exec(fp.read())
+
+
 setup(
     name="filecluster",
-    version="0.1",
+    version=__version__,
     description="Image clustering by date",
     url="http://github.com/izikeros/filecluster",
     author="Krystian Safjan",
