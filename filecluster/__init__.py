@@ -42,4 +42,3 @@ As name indicates can be helpful during the development phase
 - "copy" operation instead of "move" to protect source files.
 - "delete db" database is usually deleted to ensure "fresh" start
 """
-from .version import __version__

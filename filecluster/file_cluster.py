@@ -225,7 +225,10 @@ def add_args_to_parser(parser):
     parser.add_argument(
         "-c",
         "--use-existing-clusters",
-        help="If possible, check watch folders if the inbox media can be assigned to already existing cluster.",
+        help=(
+            "If possible, check watch folders if the inbox media can be "
+            "assigned to already existing cluster."
+        ),
         action="store_true",
         default=False,
     )
