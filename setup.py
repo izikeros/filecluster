@@ -1,7 +1,7 @@
 """Setup function for filecluster package."""
 from setuptools import setup, find_packages
 
-with open('filecluster/version.py') as fp:
+with open("filecluster/version.py") as fp:
     exec(fp.read())
 
 

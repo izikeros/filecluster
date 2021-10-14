@@ -87,7 +87,9 @@ def get_or_create_library_cluster_ini_as_dataframe(
     df["new_file_count"] = None
     n_clusters = len(df)
     try:
-        n_files = df.file_count.sum()  # FIXME: KS: 2021-02-28: Error here - no file_count
+        n_files = (
+            df.file_count.sum()
+        )  # FIXME: KS: 2021-02-28: Error here - no file_count
         logger.debug(f"== Found {n_clusters} clusters. Total file count: {n_files}")
     except:
         pass
