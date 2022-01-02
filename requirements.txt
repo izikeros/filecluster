@@ -17,6 +17,7 @@ dataenforce>=0.1.2
 MonkeyType>=21.5.0
 pytest-monkeytype
 pytest-mypy
+pytest-icdiff
 
 mypy>=0.910
 data-science-types  # stubs for pandas, numpy, matplotlib
