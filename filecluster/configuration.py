@@ -20,7 +20,7 @@ CLUSTER_DB_FILENAME = ".clusters.csv"
 INI_FILENAME = ".cluster.ini"
 
 # Filename extensions in scope of clustering
-IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".dng", ".cr2", ".tif", ".tiff"]
+IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".dng", ".cr2", ".tif", ".tiff", ".heic"]
 VIDEO_EXTENSIONS = [".mp4", ".3gp", "mov"]
 
 # Locations for media: Inbox/Outbox/Library
