@@ -124,6 +124,11 @@ def prepare_new_row_with_meta(
 
     Returns:
         Dictionary with metadata.
+
+
+    TODO: Better reading metadata from MOV video files - see:
+    # https://stackoverflow.com/questions/21355316/getting-metadata-for-mov-video
+    # data: [2021_10_11]_Hania_...
     """
     meta.file_name = media_file_name
     # full path + file name

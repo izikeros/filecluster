@@ -15,6 +15,7 @@ TODO list
 - [IMPR] take minimum date from mtime, ctime, exif date
 
 FIXMEs:
+- for the iphone videos (or videos in general) take creation date, not modification date
 - why '[2020_01_23]_Wystep_Hani' has no date info. In case exif not available, mdate/cdate should be taken. Is this windows problem?
 seems that under windows do not read creation/modification date
 - E [WinError 183] Nie można utworzyć pliku, który już istnieje: 'h:\\zdjecia\\2020\\[2020_09_26]_Runmageddon\\Piotrek'
