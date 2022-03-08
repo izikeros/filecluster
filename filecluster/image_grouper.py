@@ -3,26 +3,31 @@ import logging
 import os
 import random
 from datetime import timedelta
-from pathlib import Path, PosixPath
-from shutil import copy2, move
-from typing import List, Optional, Tuple, Iterator, Any
+from pathlib import Path
+from pathlib import PosixPath
+from shutil import copy2
+from shutil import move
+from typing import Any
+from typing import Iterator
+from typing import List
+from typing import Optional
+from typing import Tuple
 
 import pandas as pd
+from filecluster import utlis as ut
+from filecluster.configuration import AssignDateToClusterMethod
+from filecluster.configuration import CLUSTER_DF_COLUMNS
+from filecluster.configuration import Config
+from filecluster.configuration import CopyMode
+from filecluster.configuration import Status
+from filecluster.dbase import get_new_cluster_id_from_dataframe
+from filecluster.exceptions import DateStringNoneException
+from filecluster.exceptions import MissingDfClusterColumn
+from filecluster.filecluster_types import ClustersDataFrame
+from filecluster.filecluster_types import MediaDataFrame
 from pandas._libs.tslibs.timedeltas import Timedelta
 from pandas._libs.tslibs.timestamps import Timestamp
 from tqdm import tqdm
-
-from filecluster import utlis as ut
-from filecluster.configuration import (
-    CopyMode,
-    AssignDateToClusterMethod,
-    CLUSTER_DF_COLUMNS,
-    Status,
-    Config,
-)
-from filecluster.dbase import get_new_cluster_id_from_dataframe
-from filecluster.exceptions import DateStringNoneException, MissingDfClusterColumn
-from filecluster.filecluster_types import MediaDataFrame, ClustersDataFrame
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -114,7 +119,7 @@ def filter_by_substring_list(string_list: List[str], substr_list: List[str]):
     return [str for str in string_list if any(sub in str for sub in substr_list)]
 
 
-class ImageGrouper(object):
+class ImageGrouper:
     """Class for clustering media objects by date."""
 
     def __init__(
@@ -319,8 +324,8 @@ class ImageGrouper(object):
                 [
                     date_str,
                     time_str,
-                    "IC_{ic}".format(ic=image_count),
-                    "VC_{vc}".format(vc=video_count),
+                    f"IC_{image_count}",
+                    f"VC_{video_count}",
                     rich_str,
                 ]
             )

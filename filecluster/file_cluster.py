@@ -4,21 +4,16 @@ import argparse
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List
+from typing import Optional
 
 from filecluster import version
-from filecluster.configuration import (
-    CopyMode,
-    override_config_with_cli_params,
-    get_proper_mode_config,
-)
-from filecluster.dbase import (
-    get_existing_clusters_info,
-)
+from filecluster.configuration import CopyMode
+from filecluster.configuration import get_proper_mode_config
+from filecluster.configuration import override_config_with_cli_params
+from filecluster.dbase import get_existing_clusters_info
 from filecluster.image_grouper import ImageGrouper
-from filecluster.image_reader import (
-    ImageReader,
-)
+from filecluster.image_reader import ImageReader
 
 # TODO: KS: 2020-12-17: There are copies of config in the classes.
 #  In extreme case various configs can be modified in different way.

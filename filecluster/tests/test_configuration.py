@@ -1,13 +1,11 @@
-from filecluster.configuration import (
-    get_default_config,
-    Config,
-    configure_watch_folder_paths,
-    get_proper_mode_config,
-    get_development_config,
-    override_config_with_cli_params,
-    CopyMode,
-    configure_paths_for_this_os,
-)
+from filecluster.configuration import Config
+from filecluster.configuration import CopyMode
+from filecluster.configuration import configure_paths_for_this_os
+from filecluster.configuration import configure_watch_folder_paths
+from filecluster.configuration import get_default_config
+from filecluster.configuration import get_development_config
+from filecluster.configuration import get_proper_mode_config
+from filecluster.configuration import override_config_with_cli_params
 
 
 def test_get_default_config():

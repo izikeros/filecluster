@@ -1,5 +1,4 @@
 import pytest
-
 from filecluster.configuration import get_development_config
 from filecluster.dbase import get_existing_clusters_info
 

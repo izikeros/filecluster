@@ -5,9 +5,9 @@
 # filecluster
 Python library for creating image and video catalog. Catalog is organized by the dates and events.
 Main purpose is to handle task whe you have large number of pictures in flat
-directory and want to automatically group them into separate directories 
+directory and want to automatically group them into separate directories
 corresponding to events e.g. directory for your daughter's birthday, separate
-directory for the excursion you make next day after the birthday etc.. 
+directory for the excursion you make next day after the birthday etc..
 
 ## Features
 - clustering media (images, video) by event

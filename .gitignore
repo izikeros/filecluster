@@ -18,5 +18,3 @@ gui.build
 gui.dist
 *.egg-info
 filecluster/monkeytype.sqlite3
-
-

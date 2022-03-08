@@ -2,25 +2,18 @@ import os
 
 import pandas as pd
 import pytest
-from numpy import dtype
-
 from filecluster.configuration import get_development_config
 from filecluster.filecluster_types import MediaDataFrame
-from filecluster.image_grouper import (
-    get_watch_folders_files_path,
-    get_files_from_folder,
-)
-from filecluster.image_reader import (
-    ImageReader,
-    Metadata,
-    multiple_timestamps_to_one,
-    initialize_row_dict,
-    prepare_new_row_with_meta,
-    configure_im_reader,
-    get_media_df,
-    get_media_stats,
-)
-from filecluster.tests.test_dbase import check_lists_equal
+from filecluster.image_grouper import get_files_from_folder
+from filecluster.image_reader import ImageReader
+from filecluster.image_reader import Metadata
+from filecluster.image_reader import configure_im_reader
+from filecluster.image_reader import get_media_df
+from filecluster.image_reader import get_media_stats
+from filecluster.image_reader import initialize_row_dict
+from filecluster.image_reader import multiple_timestamps_to_one
+from filecluster.image_reader import prepare_new_row_with_meta
+from numpy import dtype
 
 TEST_INBOX_DIR = "inbox_test_a"
 

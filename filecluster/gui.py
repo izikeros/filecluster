@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Simple GUI to configure and run filecluster. EXPERIMENTAL."""
 import PySimpleGUI as sg
+from filecluster.file_cluster import main
 
 # TODO: KS: 2020-12-28: read default values from configuration module
 
 # ------ Menu Definition ------ #
-from filecluster.file_cluster import main
 
 menu_def = [
     ["File", ["Load configuration", "Save configuration", "Exit"]],
@@ -105,7 +105,7 @@ window.close()
 sg.popup(
     "Title",
     "The results of the window.",
-    'The button clicked was "{}"'.format(event),
+    f'The button clicked was "{event}"',
     "The values are",
     values,
 )

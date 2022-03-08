@@ -3,15 +3,17 @@ import itertools
 import logging
 import multiprocessing
 from pathlib import Path
+from typing import List
+from typing import Tuple
+from typing import Union
 
 import pandas as pd
-
-from filecluster.configuration import Config, CLUSTER_DF_COLUMNS
+from filecluster.configuration import CLUSTER_DF_COLUMNS
+from filecluster.configuration import Config
 from filecluster.filecluster_types import ClustersDataFrame
 from filecluster.update_clusters import get_or_create_library_cluster_ini_as_dataframe
 from numpy import int64
 from pandas.core.frame import DataFrame
-from typing import Union, List, Tuple
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)

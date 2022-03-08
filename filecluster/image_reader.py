@@ -2,17 +2,17 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-import pandas as pd
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 import filecluster.utlis as ut
-from filecluster.configuration import (
-    Config,
-    get_default_config,
-    CopyMode,
-    Status,
-)
+import pandas as pd
+from filecluster.configuration import Config
+from filecluster.configuration import CopyMode
+from filecluster.configuration import Status
+from filecluster.configuration import get_default_config
 from filecluster.filecluster_types import MediaDataFrame
 
 log_fmt = "%(levelname).1s %(message)s"
@@ -161,7 +161,7 @@ def prepare_new_row_with_meta(
     return new_row
 
 
-class ImageReader(object):
+class ImageReader:
     """Initialize media database with existing media dataframe or create empty one."""
 
     def __init__(
@@ -272,7 +272,7 @@ def get_media_stats(df: pd.DataFrame, time_granularity: int) -> dict:
     date_median = df["date"].iloc[int(len(df) / 2)]
 
     df = df[["file_name", "date"]].copy()
-    df["date_int"] = df["date"].apply(lambda x: x.value / 10 ** 9)
+    df["date_int"] = df["date"].apply(lambda x: x.value / 10**9)
     df = df.sort_values("date_int")
     df["delta"] = df.date_int.diff()
     is_normal = not (any(df.delta.values > time_granularity))

@@ -19,13 +19,19 @@ import os
 import re
 from configparser import ConfigParser
 from datetime import datetime
-from pathlib import Path, PosixPath
-from typing import Optional, Dict, Union, List, Tuple
+from pathlib import Path
+from pathlib import PosixPath
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Tuple
+from typing import Union
 
 import pandas as pd
-
 from filecluster.configuration import INI_FILENAME
-from filecluster.image_reader import configure_im_reader, get_media_df, get_media_stats
+from filecluster.image_reader import configure_im_reader
+from filecluster.image_reader import get_media_df
+from filecluster.image_reader import get_media_stats
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)

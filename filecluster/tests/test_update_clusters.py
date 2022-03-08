@@ -1,5 +1,4 @@
 import pytest
-
 from filecluster.update_clusters import is_year_folder
 
 
