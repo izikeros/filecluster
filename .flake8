@@ -1,24 +1,39 @@
+; Configuration for Flake8 with plugins:
+;  flake8-bugbear,
+;  flake8-commas,
+;  flake8-docstrings,
+;  flake8-print,
+;  flake8-pytest,
+;  flake8-pytest-mark
+;  flake8-import-order
+
 [flake8]
-;[T003] use of Django-style assert statement found (instead of regular assert): assertTrue
 ;[M502] test definition not marked with test_type
 ;[N802] function name 'setUpTestData' should be lowercase
-;[N806] variable 'NUM_DIGITS' in function should be lowercase
 ;[F405] xyz may be undefined, or defined from star imports
 ;[T001] print found.
 ;[D100] Missing docstring in public module
 ;[D101] Missing docstring in public class (e.g. Models' Meta)
 ;[D102] Missing docstring in public method
-;[D103] Missing docstring in public function
 ;[D104] Missing docstring in public package
-;[D105] Missing docstring in magic method (e.g. __repr__())
-;[D107] Missing docstring in (class) __init__
-;[W503] line break before binary operator
-;[D208] Docstring is over-indented - (for black is ok)
+;[D105] Missing docstring in magic method
+;[D107] Missing docstring in __init__
+;[E402] module level import not at top of file
+;[W503] line break before binary operator (incompatibility between flake8 and black)
 
 ; this should be not excluded in more mature version
-;[D103] Missing docstring in public function
+; [D103] Missing docstring in public function
 
-ignore = W503, T003, M502, N802, N806, F405, D105, D107, D208
+;Violation families (can be excluded or selected)
+;B - flake8-bugbear
+;C - complexity
+;D - flake8-docstrings
+;F - ?
+;N - ?
+;T - flake8-print
+;M - flake8-pytest-mark
+
+ignore =C, T003, M502, N802, F405, T001, D100, D101, D104, D105, D107, W503
 
 #select = B
 
@@ -37,7 +52,7 @@ exclude =
     test_*.py
 ;enable docstrings for tests eventually
 
-max-line-length = 100
+max-line-length = 130
 
 ;Set the maximum allowed McCabe complexity value for a block of code.
 max-complexity = 10
@@ -54,5 +69,5 @@ statistics = False
 ;total count of violations
 count = True
 
-pytest_mark2 = name=test_type,
-               value_regex=(integration)|(unit),
+;import style order for flake8-import-order plugin
+import-order-style = pep8
