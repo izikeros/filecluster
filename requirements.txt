@@ -12,12 +12,11 @@ pdoc3>=0.9.2
 pytest>=6.2.1
 pytest-icdiff
 jupyter
-great-expectations>=0.13.35
 dataenforce>=0.1.2
 MonkeyType>=21.5.0
 pytest-monkeytype
 pytest-mypy
-pytest-icdiff
+
 
 mypy>=0.910
 data-science-types  # stubs for pandas, numpy, matplotlib
