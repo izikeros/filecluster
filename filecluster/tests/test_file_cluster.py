@@ -1,10 +1,13 @@
+import tempfile
+
 from filecluster.file_cluster import main
 
 
 class TestMain:
     def setup_class(self):
         self.inbox_dir = "inbox_test_a"
-        self.output_dir = "/tmp/output_dir"
+        tmpdir = tempfile.mkdtemp()
+        self.output_dir = tmpdir
         self.development_mode = True
         self.force_deep_scan = True
 

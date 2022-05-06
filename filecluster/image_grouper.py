@@ -381,8 +381,8 @@ class ImageGrouper:
                 self.inbox_media_df.loc[
                     idx, "target_path"
                 ] = path_creator.for_duplicates(dup_cluster[0])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"{e}")
 
     def add_cluster_info_from_clusters_to_media(self):
         """Add clusters info to media dataframe."""
