@@ -1,6 +1,6 @@
 [![Black formatter](https://github.com/izikeros/filecluster/actions/workflows/black.yml/badge.svg)](https://github.com/izikeros/filecluster/actions/workflows/black.yml)
 [![flake8](https://github.com/izikeros/filecluster/actions/workflows/flake8.yml/badge.svg)](https://github.com/izikeros/filecluster/actions/workflows/flake8.yml)
-[![Requirements Status](https://requires.io/github/izikeros/filecluster/requirements.svg?branch=master)](https://requires.io/github/izikeros/filecluster/requirements/?branch=master)
+<!-- [![Requirements Status](https://requires.io/github/izikeros/filecluster/requirements.svg?branch=master)](https://requires.io/github/izikeros/filecluster/requirements/?branch=master) -->
 
 # filecluster
 Python library for creating image and video catalog. Catalog is organized by the dates and events.
