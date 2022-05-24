@@ -27,3 +27,4 @@ flake8-pytest-style
 flake8-black
 
 pysimplegui>=4.48.0
+pandas-stubs>=1.2.0.58  # for mypy and type hints(?)
