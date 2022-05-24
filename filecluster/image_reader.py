@@ -71,7 +71,9 @@ def multiple_timestamps_to_one(
 
     # unless is missing - then use modification date:
     if rule == "m_date":
+        # use exif date if available
         image_df["date"] = image_df["exif_date"]
+        # fill missing (no exif date) with m_date
         image_df["date"] = image_df["date"].fillna(image_df["m_date"])
     elif rule == "earliest":
         image_df["date"] = image_df[["m_date", "c_date", "exif_date"]].min(axis=1)
@@ -142,13 +144,14 @@ def prepare_new_row_with_meta(
     if not is_image:
         pass
     if media_file_name.lower().endswith("mov"):
-        pass
+        meta.c_time, meta.m_time = get_mov_timestamps(path_name)
+
     # file size
     meta.file_size = os.path.getsize(path_name)
     # file hash
     meta.hash_value = ut.hash_file(path_name)
     # placeholder for date representative for file
-    meta.date = None  # to be filled in later
+    meta.date = None  # to be filled in later in: multiple_timestamps_to_one()
     # placeholder for assignment to cluster
     meta.cluster_id = None
     # status
@@ -160,6 +163,52 @@ def prepare_new_row_with_meta(
     new_row = initialize_row_dict(meta)
     return new_row
 
+def get_mov_timestamps(filename):
+    ''' Get the creation and modification date-time from .mov metadata.
+
+        Returns None if a value is not available.
+
+        from: https://stackoverflow.com/a/54683292
+    '''
+    from datetime import datetime as DateTime
+    import struct
+
+    ATOM_HEADER_SIZE = 8
+    # difference between Unix epoch and QuickTime epoch, in seconds
+    EPOCH_ADJUSTER = 2082844800
+
+    creation_time = modification_time = None
+
+    # search for moov item
+    with open(filename, "rb") as f:
+        while True:
+            atom_header = f.read(ATOM_HEADER_SIZE)
+            #~ print('atom header:', atom_header)  # debug purposes
+            if atom_header[4:8] == b'moov':
+                break  # found
+            else:
+                atom_size = struct.unpack('>I', atom_header[0:4])[0]
+                f.seek(atom_size - 8, 1)
+
+        # found 'moov', look for 'mvhd' and timestamps
+        atom_header = f.read(ATOM_HEADER_SIZE)
+        if atom_header[4:8] == b'cmov':
+            raise RuntimeError('moov atom is compressed')
+        elif atom_header[4:8] != b'mvhd':
+            raise RuntimeError('expected to find "mvhd" header.')
+        else:
+            f.seek(4, 1)
+            creation_time = struct.unpack('>I', f.read(4))[0] - EPOCH_ADJUSTER
+            creation_time = DateTime.fromtimestamp(creation_time)
+            if creation_time.year < 1990:  # invalid or censored data
+                creation_time = None
+
+            modification_time = struct.unpack('>I', f.read(4))[0] - EPOCH_ADJUSTER
+            modification_time = DateTime.fromtimestamp(modification_time)
+            if modification_time.year < 1990:  # invalid or censored data
+                modification_time = None
+
+    return creation_time, modification_time
 
 class ImageReader:
     """Initialize media database with existing media dataframe or create empty one."""
