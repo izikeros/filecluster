@@ -98,7 +98,8 @@ def get_or_create_library_cluster_ini_as_dataframe(
         )  # FIXME: KS: 2021-02-28: Error here - no file_count
         logger.debug(f"== Found {n_clusters} clusters. Total file count: {n_files}")
     except Exception:
-        pass
+        logger.error("No 'file_count' column in dataframe")
+
     return df, res_empty_dir_list
 
 

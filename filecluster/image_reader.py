@@ -163,13 +163,14 @@ def prepare_new_row_with_meta(
     new_row = initialize_row_dict(meta)
     return new_row
 
+
 def get_mov_timestamps(filename):
-    ''' Get the creation and modification date-time from .mov metadata.
+    """Get the creation and modification date-time from .mov metadata.
 
-        Returns None if a value is not available.
+    Returns None if a value is not available.
 
-        from: https://stackoverflow.com/a/54683292
-    '''
+    from: https://stackoverflow.com/a/54683292
+    """
     from datetime import datetime as DateTime
     import struct
 
@@ -183,32 +184,33 @@ def get_mov_timestamps(filename):
     with open(filename, "rb") as f:
         while True:
             atom_header = f.read(ATOM_HEADER_SIZE)
-            #~ print('atom header:', atom_header)  # debug purposes
-            if atom_header[4:8] == b'moov':
+            # ~ print('atom header:', atom_header)  # debug purposes
+            if atom_header[4:8] == b"moov":
                 break  # found
             else:
-                atom_size = struct.unpack('>I', atom_header[0:4])[0]
+                atom_size = struct.unpack(">I", atom_header[0:4])[0]
                 f.seek(atom_size - 8, 1)
 
         # found 'moov', look for 'mvhd' and timestamps
         atom_header = f.read(ATOM_HEADER_SIZE)
-        if atom_header[4:8] == b'cmov':
-            raise RuntimeError('moov atom is compressed')
-        elif atom_header[4:8] != b'mvhd':
+        if atom_header[4:8] == b"cmov":
+            raise RuntimeError("moov atom is compressed")
+        elif atom_header[4:8] != b"mvhd":
             raise RuntimeError('expected to find "mvhd" header.')
         else:
             f.seek(4, 1)
-            creation_time = struct.unpack('>I', f.read(4))[0] - EPOCH_ADJUSTER
+            creation_time = struct.unpack(">I", f.read(4))[0] - EPOCH_ADJUSTER
             creation_time = DateTime.fromtimestamp(creation_time)
             if creation_time.year < 1990:  # invalid or censored data
                 creation_time = None
 
-            modification_time = struct.unpack('>I', f.read(4))[0] - EPOCH_ADJUSTER
+            modification_time = struct.unpack(">I", f.read(4))[0] - EPOCH_ADJUSTER
             modification_time = DateTime.fromtimestamp(modification_time)
             if modification_time.year < 1990:  # invalid or censored data
                 modification_time = None
 
     return creation_time, modification_time
+
 
 class ImageReader:
     """Initialize media database with existing media dataframe or create empty one."""
