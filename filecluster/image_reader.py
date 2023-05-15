@@ -57,7 +57,7 @@ def multiple_timestamps_to_one(
       media dataframe with selected single date out of cdate, mdate and exif
 
     """
-    logger.debug("Cleaning-up timestamps in imported media.")
+    # logger.trace("Cleaning-up timestamps in imported media.")
 
     # normalize date format
     image_df["m_date"] = pd.to_datetime(image_df["m_date"], infer_datetime_format=True)
@@ -144,7 +144,10 @@ def prepare_new_row_with_meta(
     if not is_image:
         pass
     if media_file_name.lower().endswith("mov"):
-        meta.c_time, meta.m_time = get_mov_timestamps(path_name)
+        try:
+            meta.c_time, meta.m_time = get_mov_timestamps(path_name)
+        except:
+            logger.error(f"Cannot get dates from MOV file: {path_name}")
 
     # file size
     meta.file_size = os.path.getsize(path_name)
