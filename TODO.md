@@ -1,6 +1,6 @@
 TODO list
 ==========
-
+- [FEAT] write a script that is detecting videos in folder with wrong date (different day)
 - [FEAT] rich directories (with many files) sortable to the top (cover 20%/50%/80% of files? All above 10?)
 - [FEAT] read config from the dot file as here: https://www.foxinfotech.in/2019/01/how-to-read-config-file-in-python.html
 - [FEAT] add mechanism to detect that cluster folder was updated and ini file needs recalculation
