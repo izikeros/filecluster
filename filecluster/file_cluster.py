@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Main module for image grouping by the event."""
+"""Main module for image grouping by the event.
+
+force deep scan
+
+
+use existing clusters
+
+
+"""
 import argparse
 import logging
 import os
