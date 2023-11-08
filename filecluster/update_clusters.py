@@ -58,6 +58,7 @@ def get_or_create_library_cluster_ini_as_dataframe(
     Args:
         library_path:
         force_deep_scan:
+        pool:
 
     Returns:
         None
@@ -69,7 +70,7 @@ def get_or_create_library_cluster_ini_as_dataframe(
     subfolders = fast_scandir(library_path)
 
     # remove library path part from the library subfolders paths
-    subfolders_root = [s.replace(library_path + "/", "") for s in subfolders]
+    subfolders_root = [s.replace(f"{library_path}/", "") for s in subfolders]
 
     subs_labeled = identify_folder_types(subfolders_root)
     # TODO: support more types of events dirs
@@ -143,17 +144,13 @@ def get_this_ini(
             )
             save_cluster_ini(cluster_ini, pth)
 
-    # read existing ini
-    cluster_ini_r = read_cluster_ini_as_dict(pth)
-    if cluster_ini_r:
+    if cluster_ini_r := read_cluster_ini_as_dict(pth):
         # return dict with cluster characterization
         ret = dict_from_ini_range_section(cluster_ini_r, pth)
+    elif is_empty:
+        ret = pth
     else:
-        # return Path object with empty directory
-        if is_empty:
-            ret = pth
-        else:
-            return None
+        return None
     return ret
 
 
