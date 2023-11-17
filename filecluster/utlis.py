@@ -81,9 +81,9 @@ def create_folder_for_cluster(config: Config, date_string: str, mode: CopyMode):
 
     if mode != CopyMode.NOP:
         pth = Path(config.out_dir_name)
-        dir_name = pth / date_string
+        dir_name = pth / date_string # fixme: can raise error: TypeError: unsupported operand type(s) for /: 'WindowsPath' and 'float'
         try:
-            os.makedirs(dir_name)
+            os.makedirs(dir_name, exist_ok=True)
         except OSError as err:
             logger.error(err)
 
