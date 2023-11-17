@@ -7,6 +7,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from tqdm import tqdm
+
 import filecluster.utlis as ut
 import pandas as pd
 from filecluster.configuration import Config
@@ -251,7 +253,7 @@ class ImageReader:
         image_extensions = self.config.image_extensions
         meta = Metadata()
         file_list = list(os.listdir(in_dir_name))
-        for file_name in file_list:
+        for file_name in tqdm(file_list):
             if ut.is_supported_filetype(file_name, ext):
                 new_row = prepare_new_row_with_meta(
                     file_name, image_extensions, Path(in_dir_name), meta
