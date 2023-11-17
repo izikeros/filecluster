@@ -11,4 +11,8 @@
 #  --version             show program's version number and exit
 
 
-python filecluster/file_cluster.py -i h:\incomming\inbox -o h:\incomming\inbox_clust --force-deep-scan --drop-duplicates --use-existing-clusters -w h:\zdjecia\2022
+python filecluster/file_cluster.py -i h:\incomming\inbox -o h:\incomming\inbox_clust \
+--force-deep-scan \
+--drop-duplicates \
+--use-existing-clusters \
+-w h:\zdjecia\2022
