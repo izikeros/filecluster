@@ -40,7 +40,7 @@ def is_image(file_name: str, ext_list_image: List[str]) -> bool:
     return is_image
 
 
-def get_date_from_file(path_name):
+def get_date_from_file(path_name: str):
     """Get date information from photo file."""
     m_time = time.ctime(os.path.getmtime(path_name))
     c_time = time.ctime(os.path.getctime(path_name))
@@ -48,7 +48,7 @@ def get_date_from_file(path_name):
     return m_time, c_time, exif_date
 
 
-def get_exif_date(path_name):
+def get_exif_date(path_name: str):
     """Return exif date or none."""
     # Open image file for reading (binary mode)
     img_file = open(path_name, "rb")
@@ -90,7 +90,7 @@ def create_folder_for_cluster(config: Config, date_string: str, mode: CopyMode):
             logger.error(err)
 
 
-def get_thumbnail(path, width=150, height=150):
+def get_thumbnail(path, width: int = 150, height: int = 150):
     """Read image and create thumbnail of given size."""
     i = Image.open(path)
     i.thumbnail((width, height), Image.LANCZOS)
