@@ -69,7 +69,7 @@ for event_dir in os.listdir(os.path.join(root_dir, year_dir)):
             img = Image.open(dst_path)
             img = img.convert("RGB")
             img.save(dst_path, "JPEG")
-        except:
+        except Exception:
             print(f"Could not convert {dst_path}")
 
     # Resize the selected photo
@@ -80,7 +80,7 @@ for event_dir in os.listdir(os.path.join(root_dir, year_dir)):
             new_h = int(h * max_width / w)
             img = img.resize((max_width, new_h))
             img.save(dst_path)
-    except:
+    except Exception:
         print(f"Could not resize {dst_path}")
 
     # If we have selected the maximum number of photos for this year, break out of the loop

@@ -2,7 +2,7 @@
 manual best photo selection on miniatures
     * generate thumbnails of inbox_clustered (in inbox_clustered_mini) to
 allow manual rename and refine clustering
-    * rearrange original inbox_clusterred to mimic structure in
+    * rearrange original inbox_clustered to mimic structure in
 inbox_clustered_mini after rearrangement (i.e. `sel` and `other`
 subdirectories)
 

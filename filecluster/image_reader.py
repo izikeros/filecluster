@@ -7,8 +7,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from tqdm import tqdm
-
 import filecluster.utlis as ut
 import pandas as pd
 from filecluster.configuration import Config
@@ -16,6 +14,7 @@ from filecluster.configuration import CopyMode
 from filecluster.configuration import Status
 from filecluster.configuration import get_default_config
 from filecluster.filecluster_types import MediaDataFrame
+from tqdm import tqdm
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -148,7 +147,7 @@ def prepare_new_row_with_meta(
     if media_file_name.lower().endswith("mov"):
         try:
             meta.c_time, meta.m_time = get_mov_timestamps(path_name)
-        except:
+        except Exception:
             logger.error(f"Cannot get dates from MOV file: {path_name}")
 
     # file size
