@@ -15,6 +15,7 @@ for y in year_dir:
 
 
 def correct_event(name: str):
+    """Correct event name."""
     d = None
     e = None
     try:
