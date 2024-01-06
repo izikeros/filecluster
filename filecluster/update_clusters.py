@@ -60,7 +60,7 @@ def get_or_create_library_cluster_ini_as_dataframe(
         None
     """
     # strip trailing '/' and '\' if any
-    library_path = library_path.rstrip("/").rstrip("\\")
+    library_path = str(library_path).rstrip("/").rstrip("\\")
     logger.info(f"Scanning ini files in {library_path}")
 
     subfolders = fast_scandir(library_path)
