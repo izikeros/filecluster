@@ -33,11 +33,7 @@ from filecluster.image_reader import configure_im_reader
 from filecluster.image_reader import get_media_df
 from filecluster.image_reader import get_media_stats
 
-log_fmt = "%(levelname).1s %(message)s"
-logging.basicConfig(format=log_fmt)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
+from filecluster import logger
 
 # from: https://stackoverflow.com/a/21732183
 def str_to_bool(s: str) -> bool:

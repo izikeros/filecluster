@@ -15,11 +15,15 @@ from filecluster.configuration import Status
 from filecluster.configuration import get_default_config
 from filecluster.filecluster_types import MediaDataFrame
 from tqdm import tqdm
+from datetime import datetime as dt
+import struct
 
-log_fmt = "%(levelname).1s %(message)s"
-logging.basicConfig(format=log_fmt)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from filecluster import logger
+
+# for extracting timestamp from MOV files
+ATOM_HEADER_SIZE = 8
+# difference between Unix epoch and QuickTime epoch, in seconds
+EPOCH_ADJUSTER = 2082844800
 
 
 class Metadata:
@@ -43,16 +47,16 @@ class Metadata:
 
 
 def multiple_timestamps_to_one(
-    image_df: MediaDataFrame, rule="m_date", drop_columns=True
+    image_df: MediaDataFrame, rule="m_date", drop_columns:bool=True
 ) -> MediaDataFrame:
     """Get timestamp from exif (primary) or m_date. Drop not needed date cols.
 
-    Prepare single timestamp out of cdate, mdate and exif.
+    Prepare single timestamp out of cdate, mdate and exif (disambiguation)
 
     Args:
-      rule:
-      drop_columns:
-      image_df: MediaDataFrame:
+      rule:                         rule used for disambiguation
+      drop_columns:                 whether to drop columns with timestamps or not
+      image_df: MediaDataFrame:     input dataframe with media data
 
     Returns:
       media dataframe with selected single date out of cdate, mdate and exif
@@ -93,8 +97,7 @@ def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
     Returns:
         Dictionary filled-in data from the input Metadata object.
     """
-    # define structure of images dataframe and fill with data
-    row = {
+    return {
         "file_name": meta.file_name,
         "m_date": meta.m_time,
         "c_date": meta.c_time,
@@ -108,7 +111,6 @@ def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
         "duplicated_to": meta.duplicated_to,
         "duplicated_cluster": meta.duplicated_cluster,
     }
-    return row
 
 
 def prepare_new_row_with_meta(
@@ -120,10 +122,10 @@ def prepare_new_row_with_meta(
     """Prepare dictionary with metadata for input media file.
 
     Args:
-      media_file_name:
-      accepted_media_file_extensions:
-      in_dir_name:
-      meta:
+      media_file_name:                  name of the media file
+      accepted_media_file_extensions:   list of accepted media file extensions
+      in_dir_name:                      input directory name
+      meta:                             Metadata object
 
     Returns:
         Dictionary with metadata.
@@ -142,12 +144,10 @@ def prepare_new_row_with_meta(
     # determine if media file is image or other type
     is_image = ut.is_image(path_name, accepted_media_file_extensions)
     meta.is_image = is_image
-    if not is_image:
-        pass
     if media_file_name.lower().endswith("mov"):
         try:
             meta.c_time, meta.m_time = get_mov_timestamps(path_name)
-        except Exception:
+        except Exception as ex:
             logger.error(f"Cannot get dates from MOV file: {path_name}")
 
     # file size
@@ -163,9 +163,7 @@ def prepare_new_row_with_meta(
     # duplication info
     meta.duplicated_to = []
     meta.duplicated_cluster = []
-    # generate new row using data obtained above
-    new_row = initialize_row_dict(meta)
-    return new_row
+    return initialize_row_dict(meta)
 
 
 def get_mov_timestamps(filename):
@@ -175,12 +173,6 @@ def get_mov_timestamps(filename):
 
     from: https://stackoverflow.com/a/54683292
     """
-    from datetime import datetime as DateTime
-    import struct
-
-    ATOM_HEADER_SIZE = 8
-    # difference between Unix epoch and QuickTime epoch, in seconds
-    EPOCH_ADJUSTER = 2082844800
 
     creation_time = modification_time = None
 
@@ -203,17 +195,19 @@ def get_mov_timestamps(filename):
             raise RuntimeError('expected to find "mvhd" header.')
         else:
             f.seek(4, 1)
-            creation_time = struct.unpack(">I", f.read(4))[0] - EPOCH_ADJUSTER
-            creation_time = DateTime.fromtimestamp(creation_time)
-            if creation_time.year < 1990:  # invalid or censored data
-                creation_time = None
-
-            modification_time = struct.unpack(">I", f.read(4))[0] - EPOCH_ADJUSTER
-            modification_time = DateTime.fromtimestamp(modification_time)
-            if modification_time.year < 1990:  # invalid or censored data
-                modification_time = None
-
+            creation_time = get_creation_time(struct, f, dt)
+            modification_time = creation_time
     return creation_time, modification_time
+
+
+# TODO Rename this here and in `get_mov_timestamps`
+def get_creation_time(struct, f, DateTime):
+    result = struct.unpack(">I", f.read(4))[0] - EPOCH_ADJUSTER
+    result = DateTime.fromtimestamp(result)
+    if result.year < 1990:  # invalid or censored data
+        result = None
+
+    return result
 
 
 class ImageReader:
@@ -232,7 +226,7 @@ class ImageReader:
             self.media_df = MediaDataFrame(pd.DataFrame())
         else:
             msg = "Initializing media dataframe in ImageReader with provided df."
-            logger.debug(msg + f"Num records: {len(media_df)}")
+            logger.debug(f"{msg}Num records: {len(media_df)}")
             self.media_df = media_df
 
     def get_data_from_files_as_list_of_rows(self) -> List[dict]:
@@ -297,18 +291,17 @@ def get_media_df(conf: Config) -> Optional[MediaDataFrame]:
     Returns:
         Dataframe with metadata of the contents of directory.
     """
-    row_list = []
     f_name = conf.in_dir_name
     if os.listdir(f_name):
         im_reader = ImageReader(config=conf)
+        if row_list := im_reader.get_data_from_files_as_list_of_rows():
+            df = MediaDataFrame(pd.DataFrame(row_list))
+            return multiple_timestamps_to_one(df)
+        else:
+            logger.debug(f" - directory {f_name} is empty?.")
+            return None
     else:
         logger.debug(f" - directory {f_name} is empty.")
-
-    row_list = im_reader.get_data_from_files_as_list_of_rows()
-    if row_list:
-        df = MediaDataFrame(pd.DataFrame(row_list))
-        return multiple_timestamps_to_one(df)
-    else:
         return None
 
 
@@ -324,15 +317,14 @@ def get_media_stats(df: pd.DataFrame, time_granularity: int) -> dict:
     """
     date_min = df.date.min()
     date_max = df.date.max()
-    date_median = df["date"].iloc[int(len(df) / 2)]
+    # date_median = df["date"].iloc[int(len(df) / 2)]
+    date_median = df["date"].median()
 
     df = df[["file_name", "date"]].copy()
     df["date_int"] = df["date"].apply(lambda x: x.value / 10**9)
     df = df.sort_values("date_int")
     df["delta"] = df.date_int.diff()
     is_normal = not (any(df.delta.values > time_granularity))
-    if not isinstance(is_normal, bool):
-        pass
     file_count = len(df)
     return {
         "date_min": date_min,

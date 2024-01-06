@@ -2,14 +2,9 @@
 """Main module for image grouping by the event.
 
 force deep scan
-
-
 use existing clusters
-
-
 """
 import argparse
-import logging
 import os
 from pathlib import Path
 from typing import List
@@ -22,13 +17,11 @@ from filecluster.configuration import override_config_with_cli_params
 from filecluster.dbase import get_existing_clusters_info
 from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import ImageReader
+from filecluster import logger
 
 # TODO: KS: 2020-12-17: There are copies of config in the classes.
 #  In extreme case various configs can be modified in different way.
-log_fmt = "%(levelname).1s %(message)s"
-logging.basicConfig(format=log_fmt)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+
 
 
 def main(
@@ -47,7 +40,7 @@ def main(
     Input args are default parameters to override and all are optional.
 
     Args:
-        copy_mode:
+        copy_mode:      Copy files instead of move
         inbox_dir:
         output_dir:
         watch_dir_list:
@@ -92,16 +85,7 @@ def main(
     USE_CSV = False
     INBOX_CSV_FILE_NAME = "h:\\incomming\\inbox.csv"
     if USE_CSV and os.path.isfile(INBOX_CSV_FILE_NAME):
-        import pandas as pd
-        from filecluster.configuration import Status
-
-        logger.info("Read inbox info from CSV")
-        image_reader.media_df = pd.read_csv(INBOX_CSV_FILE_NAME)
-        # Revert data types after reading from CSV
-        image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
-        image_reader.media_df.status = image_reader.media_df.status.apply(
-            lambda x: Status[x.replace("Status.", "")]
-        )
+        read_inbox_info_from_csv(INBOX_CSV_FILE_NAME, image_reader)
     else:
         logger.info("Read inbox info from files")
         image_reader.get_media_info_from_inbox_files()
@@ -117,10 +101,10 @@ def main(
 
     # Mark inbox files duplicated with watch folders (if feature enabled)
     dup_files, dup_clusters = image_grouper.mark_inbox_duplicates()
-    results.update({"dup_files": dup_files, "dup_clusters": dup_clusters})
+    results |= {"dup_files": dup_files, "dup_clusters": dup_clusters}
 
     # == Assign to existing ==
-    results.update({"files_existing_cl": None, "existing_cluster_names": None})
+    results |= {"files_existing_cl": None, "existing_cluster_names": None}
     if config.assign_to_clusters_existing_in_libs:
         # try assign media items to clusters already existing in the library
         (
@@ -129,12 +113,10 @@ def main(
         ) = (
             image_grouper.assign_to_existing_clusters()
         )  # TODO: KS: 2020-12-26: should not have assigned target path yet
-        results.update(
-            {
-                "files_existing_cl": files_assigned_to_existing_cl,
-                "existing_cluster_names": existing_cluster_names,
-            }
-        )
+        results |= {
+            "files_existing_cl": files_assigned_to_existing_cl,
+            "existing_cluster_names": existing_cluster_names,
+        }
 
     # == Handle not-clustered items ==
     # Calculate gaps for non-clustered items
@@ -144,7 +126,7 @@ def main(
     # create new clusters, assign media
     logger.info("run_clustering")
     new_cluster_df = image_grouper.run_clustering()
-    results.update({"new_cluster_df": new_cluster_df})
+    results["new_cluster_df"] = new_cluster_df
 
     # assign target folder for new clusters (update media_df)
     logger.info("assign_target_folder_name_to_new_clusters")
@@ -153,7 +135,7 @@ def main(
             method=config.assign_date_to_clusters_method
         )
     )
-    results.update({"new_folder_names": new_folder_names})
+    results["new_folder_names"] = new_folder_names
 
     # assign target folder for existing clusters
     logger.info("assign_target_folder_name_to_existing_clusters")
@@ -176,6 +158,20 @@ def main(
     else:
         logger.debug("No copy/move operation performed since 'nop' option selected.")
     return results
+
+
+# TODO Rename this here and in `main`
+def read_inbox_info_from_csv(INBOX_CSV_FILE_NAME, image_reader):
+    import pandas as pd
+    from filecluster.configuration import Status
+
+    logger.info("Read inbox info from CSV")
+    image_reader.media_df = pd.read_csv(INBOX_CSV_FILE_NAME)
+    # Revert data types after reading from CSV
+    image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
+    image_reader.media_df.status = image_reader.media_df.status.apply(
+        lambda x: Status[x.replace("Status.", "")]
+    )
 
 
 def add_args_to_parser(parser):
@@ -236,9 +232,25 @@ def add_args_to_parser(parser):
         default=False,
     )
     parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {version.__version__}"
+        "-v",
+        "--version",
+        help="Display program version",
+        action="version",
+        version=f"%(prog)s {version.__version__}",
     )
     return parser
+
+
+def ensure_watch_dir_is_list(arguments):
+    if isinstance(arguments.watch_dir, str):
+        watch_dirs = [arguments.watch_dir]
+    elif isinstance(arguments.watch_dir, List):
+        watch_dirs = arguments.watch_dir
+    elif arguments.watch_dir is None:
+        watch_dirs = []
+    else:
+        raise TypeError("watch_dirs should be a list")
+    return watch_dirs
 
 
 if __name__ == "__main__":
@@ -248,14 +260,7 @@ if __name__ == "__main__":
     parser = add_args_to_parser(parser)
     args = parser.parse_args()
 
-    if isinstance(args.watch_dir, str):
-        watch_dirs = [args.watch_dir]
-    elif isinstance(args.watch_dir, List):
-        watch_dirs = args.watch_dir
-    elif args.watch_dir is None:
-        watch_dirs = []
-    else:
-        raise TypeError("watch_dirs should be a list")
+    watch_dirs = ensure_watch_dir_is_list(args)
 
     main(
         inbox_dir=str(Path(args.inbox_dir)),

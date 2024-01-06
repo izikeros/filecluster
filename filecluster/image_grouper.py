@@ -29,11 +29,7 @@ from pandas._libs.tslibs.timedeltas import Timedelta
 from pandas._libs.tslibs.timestamps import Timestamp
 from tqdm import tqdm
 
-log_fmt = "%(levelname).1s %(message)s"
-logging.basicConfig(format=log_fmt)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
+from filecluster import logger
 
 def expand_cluster_or_init_new(
     delta_from_previous: Timedelta,
@@ -214,11 +210,10 @@ class ImageGrouper:
             is_this_image_too_far_from_other_in_the_cluster = (
                 delta_from_previous > max_gap
             )
-            is_new_cluster = (
+            if is_new_cluster := (
                 is_this_image_too_far_from_other_in_the_cluster
                 or is_first_image_analysed
-            )
-            if is_new_cluster:
+            ):
                 # == We are starting new cluster here ==
                 if not is_first_image_analysed:
                     cluster_idx += 1
@@ -307,12 +302,12 @@ class ImageGrouper:
             try:
                 date_str = exif_date.strftime("[%Y_%m_%d]")
             except ValueError:
-                date_str = f"[NaT_]_{str(random.randint(100000, 999999))}"
+                date_str = f"[NaT_]_{random.randint(100000, 999999)}"
 
             try:
                 time_str = exif_date.strftime("%H%M%S")
             except ValueError:
-                time_str = f"{str(random.randint(100000, 999999))}"
+                time_str = f"{random.randint(100000, 999999)}"
 
             image_count = df.loc[df["is_image"]].shape[0]
             video_count = df.loc[~df["is_image"]].shape[0]
@@ -366,8 +361,6 @@ class ImageGrouper:
                 copy2(src, dst)
             elif mode == CopyMode.MOVE:
                 move(src, dst)
-            elif mode == CopyMode.NOP:
-                pass
 
     def add_target_dir_for_duplicates(self):
         """Add target directory for the duplicated media files."""
@@ -537,10 +530,9 @@ class ImageGrouper:
             self.inbox_media_df.loc[
                 idx, "status"
             ] = Status.DUPLICATE  # Fixme: copy of a slice
-            dups_lib_patch = list(
+            if dups_lib_patch := list(
                 filter(lambda x: _row.file_name in str(x), confirmed_library_dups)
-            )
-            if dups_lib_patch:
+            ):
                 dups_lib_str_list = [str(x) for x in dups_lib_patch]
                 dups_lib_clust_list = [Path(x).parts[-2] for x in dups_lib_patch]
 

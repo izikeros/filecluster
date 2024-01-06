@@ -16,13 +16,10 @@ from filecluster.configuration import Config
 from filecluster.configuration import CopyMode
 from filecluster.exceptions import DateStringNoneException
 
-log_fmt = "%(levelname).1s %(message)s"
-logging.basicConfig(format=log_fmt)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from filecluster import logger
 
 # TODO: optimize this parameter for speed
-block_size_for_hashing = 4096 * 32
+BLOCK_SIZE_FOR_HASHING = 4096 * 32
 
 
 def is_supported_filetype(file_name: str, ext_list: List[str]) -> bool:
@@ -36,8 +33,7 @@ def is_image(file_name: str, ext_list_image: List[str]) -> bool:
     """Determine if file is image based on known file name extensions."""
     ext_list_lower = [ext.lower() for ext in ext_list_image]
     fn_lower = file_name.lower()
-    is_image = fn_lower.endswith(tuple(ext_list_lower))
-    return is_image
+    return fn_lower.endswith(tuple(ext_list_lower))
 
 
 def get_date_from_file(path_name: str):
@@ -113,42 +109,12 @@ def image_formatter(im_base64):
     )
 
 
-# Print iterations progress
-# from: https://gist.github.com/aubricus/f91fb55dc6ba5557fbab06119420dd6a
-# TODO: KS: 2020-04-17: Consider using tqdm instead
-def print_progress(iteration, total, prefix="", suffix="", decimals=1, bar_length=100):
-    """Call in a loop to create terminal progress bar.
-
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent
-        complete (Int)
-        bar_length  - Optional  : character length of bar (Int)
-    """
-    if total > 0:
-        str_format = "{0:." + str(decimals) + "f}"
-        percents = str_format.format(100 * (iteration / float(total)))
-        filled_length = int(round(bar_length * iteration / float(total)))
-        bar = "█" * filled_length + "-" * (bar_length - filled_length)
-
-        sys.stdout.write(
-            "\r{} |{}| {}{} {}".format(prefix, bar, percents, "%", suffix)
-        ),
-
-        if iteration == total:
-            sys.stdout.write("\n")
-        sys.stdout.flush()
-
-
-# modified version of
-# https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
 def hash_file(fname, hash_funct=hashlib.sha1):
     """Hash function can be e.g.: md5, sha1, sha256,..."""
+    # modified version of
+    # https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
     hash_value = hash_funct()
     with open(fname, "rb") as f:
-        for chunk in iter(lambda: f.read(block_size_for_hashing), b""):
+        for chunk in iter(lambda: f.read(BLOCK_SIZE_FOR_HASHING), b""):
             hash_value.update(chunk)
     return hash_value.hexdigest()

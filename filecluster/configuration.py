@@ -15,9 +15,6 @@ logging.basicConfig(format=log_fmt)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# Databases paths and filenames
-CLUSTER_DB_FILENAME = ".clusters.csv"
-
 # standard filename for cluster info file to be placed in cluster directory
 INI_FILENAME = ".cluster.ini"
 
@@ -145,9 +142,10 @@ class Config:
     skip_duplicated_existing_in_libs: bool
 
     def __repr__(self):
-        rep = []
-        for p in self.__dataclass_fields__.keys():
-            rep.append(f"{p}:\t{self.__getattribute__(p)}")
+        rep = [
+            f"{p}:\t{self.__getattribute__(p)}"
+            for p in self.__dataclass_fields__.keys()
+        ]
         return "\n".join(rep)
 
     def __getitem__(self, key):
@@ -188,11 +186,7 @@ def configure_watch_folder_paths() -> List:
     Returns:
         list of default library paths depending on the operating system.
     """
-    if os.name == "nt":
-        pth = LIBRARY_WINDOWS
-    else:
-        pth = LIBRARY_LINUX
-    return pth
+    return LIBRARY_WINDOWS if os.name == "nt" else LIBRARY_LINUX
 
 
 def get_proper_mode_config(is_development_mode: bool) -> Config:
@@ -204,12 +198,7 @@ def get_proper_mode_config(is_development_mode: bool) -> Config:
     Returns:
         Either 'production' or 'development' config object
     """
-    # get proper config
-    if is_development_mode:
-        config = get_development_config()
-    else:
-        config = get_default_config()
-    return config
+    return get_development_config() if is_development_mode else get_default_config()
 
 
 def get_default_config() -> Config:
@@ -239,8 +228,7 @@ def get_default_config() -> Config:
         "assign_to_clusters_existing_in_libs": ASSIGN_TO_CLUSTERS_EXISTING_IN_LIBS,
         "skip_duplicated_existing_in_libs": SKIP_DUPLICATED_EXISTING_IN_LIBS,
     }
-    config = Config(**conf_dict)
-    return config
+    return Config(**conf_dict)
 
 
 def get_development_config(os_name: str = os.name) -> Config:
@@ -266,11 +254,7 @@ def get_development_config(os_name: str = os.name) -> Config:
     config.mode = CopyMode.COPY
 
     # overwrite defaults with development specific params
-    if os_name == "nt":
-        pth = INBOX_PATH_WINDOWS_DEV
-    else:
-        pth = INBOX_PATH_LINUX_DEV
-
+    pth = INBOX_PATH_WINDOWS_DEV if os_name == "nt" else INBOX_PATH_LINUX_DEV
     config.in_dir_name = os.path.join(pth, INBOX_DIR_DEV)
     config.out_dir_name = os.path.join(pth, OUTBOX_DIR_DEV)
 
@@ -336,6 +320,6 @@ def override_config_with_cli_params(
         or config.assign_to_clusters_existing_in_libs
     ):
         assert (
-            len(watch_dir_list) > 0
+            watch_dir_list
         ), "Need to provide watch folders if using 'drop_duplicates' or 'use_existing_clusters'"
     return config

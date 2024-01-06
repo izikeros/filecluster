@@ -14,11 +14,7 @@ from filecluster.filecluster_types import ClustersDataFrame
 from filecluster.update_clusters import get_or_create_library_cluster_ini_as_dataframe
 from numpy import int64
 from pandas.core.frame import DataFrame
-
-log_fmt = "%(levelname).1s %(message)s"
-logging.basicConfig(format=log_fmt)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from filecluster import logger
 
 
 def get_existing_clusters_info(
