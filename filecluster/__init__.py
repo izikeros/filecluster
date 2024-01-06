@@ -42,3 +42,19 @@ As name indicates can be helpful during the development phase
 - "copy" operation instead of "move" to protect source files.
 - "delete db" database is usually deleted to ensure "fresh" start
 """
+import sys
+
+from loguru import logger
+
+# remove existing handlers (or handler?)
+logger.remove()
+
+# ----- add console handler
+logger.add(
+    sys.stdout,
+    # format="<green>{time:HH:mm:ss}</green> <level>{level}</level> {message}",
+    format="<level>{level}</level> {message}",
+    colorize=True,
+    level="INFO",
+)
+logger.info("Logger initialized")
