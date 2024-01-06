@@ -1,19 +1,16 @@
 """Module for file clustering and supporting operations."""
-import logging
 import os
 import random
+from collections.abc import Iterator
 from datetime import timedelta
 from pathlib import Path
 from pathlib import PosixPath
 from shutil import copy2
 from shutil import move
 from typing import Any
-from typing import Iterator
-from typing import List
-from typing import Optional
-from typing import Tuple
 
 import pandas as pd
+from filecluster import logger
 from filecluster import utlis as ut
 from filecluster.configuration import AssignDateToClusterMethod
 from filecluster.configuration import CLUSTER_DF_COLUMNS
@@ -29,14 +26,13 @@ from pandas._libs.tslibs.timedeltas import Timedelta
 from pandas._libs.tslibs.timestamps import Timestamp
 from tqdm import tqdm
 
-from filecluster import logger
 
 def expand_cluster_or_init_new(
     delta_from_previous: Timedelta,
     max_time_delta: timedelta,
     index: int,
     new_cluster_idx: int,
-    list_new_clusters: List[dict],
+    list_new_clusters: list[dict],
     media_date: Timestamp,
     cluster: dict,
 ):
@@ -110,7 +106,7 @@ class TargetPathCreator:
         return str(self.out_dir / "duplicated" / dir_string)
 
 
-def filter_by_substring_list(string_list: List[str], substr_list: List[str]):
+def filter_by_substring_list(string_list: list[str], substr_list: list[str]):
     """Return strings that contains any of substrings from another list."""
     return [str for str in string_list if any(sub in str for sub in substr_list)]
 
@@ -121,8 +117,8 @@ class ImageGrouper:
     def __init__(
         self,
         configuration: Config,
-        df_clusters: Optional[ClustersDataFrame] = None,
-        inbox_media_df: Optional[MediaDataFrame] = None,
+        df_clusters: ClustersDataFrame | None = None,
+        inbox_media_df: MediaDataFrame | None = None,
     ):
         """Init for the class.
 
@@ -273,7 +269,7 @@ class ImageGrouper:
 
     def assign_target_folder_name_and_file_count_to_new_clusters(
         self, method=AssignDateToClusterMethod.MEDIAN
-    ) -> List[str]:
+    ) -> list[str]:
         """Set target_path and new_file_count in clusters_df.
 
         Returns:
@@ -385,7 +381,7 @@ class ImageGrouper:
         )
         return None
 
-    def assign_to_existing_clusters(self) -> Tuple[List[str], List[str]]:
+    def assign_to_existing_clusters(self) -> tuple[list[str], list[str]]:
         """Assign media to existing cluster if possible."""
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
 
@@ -473,7 +469,7 @@ class ImageGrouper:
             pth = path_creator.for_existing_cluster(dir_string=cl)
             self.df_clusters.loc[sel_cluster, "target_path"] = pth
 
-    def mark_inbox_duplicates(self) -> Tuple[List[str], List[str]]:
+    def mark_inbox_duplicates(self) -> tuple[list[str], list[str]]:
         """Check if imported files are not in the library already, if so - skip them.
 
         Returns:
@@ -590,8 +586,8 @@ def get_files_from_folder(folder: str) -> Iterator[Any]:
 
 
 def get_watch_folders_files_path(
-    watch_folders: List[str],
-) -> Tuple[List[str], List[PosixPath]]:
+    watch_folders: list[str],
+) -> tuple[list[str], list[PosixPath]]:
     """Get list of files and files with full paths from the folder (recursively).
 
     Args:
@@ -609,7 +605,7 @@ def get_watch_folders_files_path(
     return watch_file_names, watch_full_paths
 
 
-def check_df_has_all_expected_columns(df: pd.DataFrame, expected_cols: List[str]):
+def check_df_has_all_expected_columns(df: pd.DataFrame, expected_cols: list[str]):
     """Check if data frame has all expected columns."""
     for c in df.columns:
         if c not in expected_cols:

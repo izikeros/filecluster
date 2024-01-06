@@ -1,25 +1,21 @@
 """Module for handling operations on both databases: media and clusters."""
 import itertools
-import logging
 import multiprocessing
 from pathlib import Path
-from typing import List
-from typing import Tuple
-from typing import Union
 
 import pandas as pd
+from filecluster import logger
 from filecluster.configuration import CLUSTER_DF_COLUMNS
 from filecluster.configuration import Config
 from filecluster.filecluster_types import ClustersDataFrame
 from filecluster.update_clusters import get_or_create_library_cluster_ini_as_dataframe
 from numpy import int64
 from pandas.core.frame import DataFrame
-from filecluster import logger
 
 
 def get_existing_clusters_info(
     config: Config,
-) -> Tuple[ClustersDataFrame, List[Path], List[str]]:
+) -> tuple[ClustersDataFrame, list[Path], list[str]]:
     """Scan library, find existing clusters and empty or non-compliant folders."""
     # TODO: Any non-empty subfolder of year folder should contain .cluster.ini
     #  file (see: Runmageddon example). Non-empty means - contains media files
@@ -64,7 +60,7 @@ def get_existing_clusters_info(
     return ClustersDataFrame(df), empty_folder_list, non_compliant_folders
 
 
-def get_new_cluster_id_from_dataframe(df_clusters: DataFrame) -> Union[int64, int]:
+def get_new_cluster_id_from_dataframe(df_clusters: DataFrame) -> int64 | int:
     """Return cluster id value that is greater than all already used cluster ids.
 
     If there are gaps, there will be no first not-used returned.

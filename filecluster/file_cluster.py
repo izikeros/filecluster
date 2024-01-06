@@ -7,9 +7,8 @@ use existing clusters
 import argparse
 import os
 from pathlib import Path
-from typing import List
-from typing import Optional
 
+from filecluster import logger
 from filecluster import version
 from filecluster.configuration import CopyMode
 from filecluster.configuration import get_proper_mode_config
@@ -17,23 +16,21 @@ from filecluster.configuration import override_config_with_cli_params
 from filecluster.dbase import get_existing_clusters_info
 from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import ImageReader
-from filecluster import logger
 
 # TODO: KS: 2020-12-17: There are copies of config in the classes.
 #  In extreme case various configs can be modified in different way.
 
 
-
 def main(
-    inbox_dir: Optional[str] = None,
-    output_dir: Optional[str] = None,
-    watch_dir_list: Optional[List[str]] = None,
-    development_mode: Optional[bool] = None,
-    no_operation: Optional[bool] = None,
-    copy_mode: Optional[bool] = None,
-    force_deep_scan: Optional[bool] = None,
-    drop_duplicates: Optional[bool] = None,
-    use_existing_clusters: Optional[bool] = None,
+    inbox_dir: str | None = None,
+    output_dir: str | None = None,
+    watch_dir_list: list[str] | None = None,
+    development_mode: bool | None = None,
+    no_operation: bool | None = None,
+    copy_mode: bool | None = None,
+    force_deep_scan: bool | None = None,
+    drop_duplicates: bool | None = None,
+    use_existing_clusters: bool | None = None,
 ) -> dict:
     """Run clustering on the media files provided as inbox.
 
@@ -244,7 +241,7 @@ def add_args_to_parser(parser):
 def ensure_watch_dir_is_list(arguments):
     if isinstance(arguments.watch_dir, str):
         watch_dirs = [arguments.watch_dir]
-    elif isinstance(arguments.watch_dir, List):
+    elif isinstance(arguments.watch_dir, list):
         watch_dirs = arguments.watch_dir
     elif arguments.watch_dir is None:
         watch_dirs = []

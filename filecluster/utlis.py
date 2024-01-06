@@ -1,35 +1,31 @@
 """Helper utilities to work with media files, exif data, hashing and base64 images."""
 import base64
 import hashlib
-import logging
 import os
-import sys
 import time
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import List
 
 import exifread
 from PIL import Image
+from filecluster import logger
 from filecluster.configuration import Config
 from filecluster.configuration import CopyMode
 from filecluster.exceptions import DateStringNoneException
-
-from filecluster import logger
 
 # TODO: optimize this parameter for speed
 BLOCK_SIZE_FOR_HASHING = 4096 * 32
 
 
-def is_supported_filetype(file_name: str, ext_list: List[str]) -> bool:
+def is_supported_filetype(file_name: str, ext_list: list[str]) -> bool:
     """Check if filename has one of the allowed extensions from the list."""
     ext_list_lower = [ext.lower() for ext in ext_list]
     fn_lower = file_name.lower()
     return fn_lower.endswith(tuple(ext_list_lower))
 
 
-def is_image(file_name: str, ext_list_image: List[str]) -> bool:
+def is_image(file_name: str, ext_list_image: list[str]) -> bool:
     """Determine if file is image based on known file name extensions."""
     ext_list_lower = [ext.lower() for ext in ext_list_image]
     fn_lower = file_name.lower()

@@ -13,7 +13,6 @@ Usage:
 # TODO: KS: 2020-12-28: Consider changing data format from ini to yaml
 
 import argparse
-import logging
 import multiprocessing
 import os
 import re
@@ -21,21 +20,15 @@ from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
 from pathlib import PosixPath
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
 
 import pandas as pd
+from filecluster import logger
 from filecluster.configuration import INI_FILENAME
 from filecluster.image_reader import configure_im_reader
 from filecluster.image_reader import get_media_df
 from filecluster.image_reader import get_media_stats
 
-from filecluster import logger
 
-# from: https://stackoverflow.com/a/21732183
 def str_to_bool(s: str) -> bool:
     """Convert 'True' or 'False' provided as string to corresponding bool value."""
     if s == "True":
@@ -48,7 +41,7 @@ def str_to_bool(s: str) -> bool:
 
 def get_or_create_library_cluster_ini_as_dataframe(
     library_path: str, pool, force_deep_scan: bool = False
-) -> Tuple[pd.DataFrame, List[Path]]:
+) -> tuple[pd.DataFrame, list[Path]]:
     """Scan folder for cluster info and return dataframe with clusters.
 
     Args:
@@ -102,7 +95,7 @@ def get_or_create_library_cluster_ini_as_dataframe(
 
 def get_this_ini(
     event_dir: str, force_deep_scan: bool, library_path
-) -> Union[dict, Optional[Path]]:
+) -> dict | Path | None:
     """Get stats of event_dir that is subdir of library.
 
     Returns
@@ -165,8 +158,8 @@ def initialize_cluster_info_dict(
     start: str,
     stop: str,
     is_continous: bool,
-    median: Optional[int] = None,
-    file_count: Optional[int] = None,
+    median: int | None = None,
+    file_count: int | None = None,
 ) -> ConfigParser:
     """Return dictionary that store information on cluster existing on the disk.
 
@@ -209,7 +202,7 @@ def save_cluster_ini(
 
 def read_cluster_ini_as_dict(
     path: PosixPath,
-) -> Optional[Dict[str, Dict[str, Union[datetime, str]]]]:
+) -> dict[str, dict[str, datetime | str]] | None:
     """Read cluster info from the path and return as dictionary.
 
     Args:
@@ -248,7 +241,7 @@ def read_cluster_ini_as_dict(
         return None
 
 
-def fast_scandir(dirname: str) -> List[str]:
+def fast_scandir(dirname: str) -> list[str]:
     """Get list of subfolders of given directory.
 
     Args:
@@ -266,7 +259,7 @@ def fast_scandir(dirname: str) -> List[str]:
     return subfolders
 
 
-def identify_folder_types(subfolders_list: List[str]) -> List[Tuple[str, str]]:
+def identify_folder_types(subfolders_list: list[str]) -> list[tuple[str, str]]:
     """Assign folder-type label.
 
     Args:
@@ -388,7 +381,7 @@ def validate_library_structure(library_dir):
     # check if there are no 'unknown-type' folders in the structure.
 
 
-def is_event(item: Tuple[str, str]) -> bool:
+def is_event(item: tuple[str, str]) -> bool:
     """Check item from labelled list of folders if it is event folder.
 
     Args:

@@ -4,9 +4,6 @@ import os
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-from typing import List
-from typing import Optional
-from typing import Tuple
 
 from pydantic.dataclasses import dataclass
 
@@ -130,9 +127,9 @@ class Config:
 
     in_dir_name: Path
     out_dir_name: Path
-    watch_folders: List[str]
-    image_extensions: List[str]
-    video_extensions: List[str]
+    watch_folders: list[str]
+    image_extensions: list[str]
+    video_extensions: list[str]
     time_granularity: timedelta
     assign_date_to_clusters_method: AssignDateToClusterMethod
     clustering_method: ClusteringMethod
@@ -155,7 +152,7 @@ class Config:
         return setattr(self, key, value)
 
 
-def configure_paths_for_this_os() -> Tuple[str, str, List[str]]:
+def configure_paths_for_this_os() -> tuple[str, str, list[str]]:
     """Configure production paths depending on detected operating system.
 
     Paths to configure:
@@ -177,7 +174,7 @@ def configure_paths_for_this_os() -> Tuple[str, str, List[str]]:
     return inbox_path, outbox_path, library_paths
 
 
-def configure_watch_folder_paths() -> List:
+def configure_watch_folder_paths() -> list:
     """Configure watch folder path depending on os.
 
     Watch folder is a location of official folder with media.
@@ -269,13 +266,13 @@ def get_development_config(os_name: str = os.name) -> Config:
 def override_config_with_cli_params(
     config: Config,
     inbox_dir: str,
-    no_operation: Optional[bool],
-    copy_mode: Optional[bool],
+    no_operation: bool | None,
+    copy_mode: bool | None,
     output_dir: str,
-    watch_dir_list: List[str],
-    force_deep_scan: Optional[bool] = None,
-    drop_duplicates: Optional[bool] = None,
-    use_existing_clusters: Optional[bool] = None,
+    watch_dir_list: list[str],
+    force_deep_scan: bool | None = None,
+    drop_duplicates: bool | None = None,
+    use_existing_clusters: bool | None = None,
 ) -> Config:
     """Use CLI arguments to override default configuration.
 

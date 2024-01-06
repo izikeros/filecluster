@@ -1,24 +1,19 @@
 """Module for reading media data on files from given folder."""
-import logging
 import os
+import struct
+from datetime import datetime as dt
 from pathlib import Path
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
 import filecluster.utlis as ut
 import pandas as pd
+from filecluster import logger
 from filecluster.configuration import Config
 from filecluster.configuration import CopyMode
 from filecluster.configuration import Status
 from filecluster.configuration import get_default_config
 from filecluster.filecluster_types import MediaDataFrame
 from tqdm import tqdm
-from datetime import datetime as dt
-import struct
-
-from filecluster import logger
 
 # for extracting timestamp from MOV files
 ATOM_HEADER_SIZE = 8
@@ -35,19 +30,19 @@ class Metadata:
         self.m_time: str = ""
         self.c_time: str = ""
         self.exif_date: str = ""
-        self.date: Optional[str] = ""
+        self.date: str | None = ""
         self.file_size: int = 0
         self.hash_value: int = 0
         self.image: int = 0
         self.is_image: bool = True
-        self.cluster_id: Optional[int] = 0
+        self.cluster_id: int | None = 0
         self.status: Status = Status.UNKNOWN
-        self.duplicated_to: List[str] = []
-        self.duplicated_cluster: List[str] = []
+        self.duplicated_to: list[str] = []
+        self.duplicated_cluster: list[str] = []
 
 
 def multiple_timestamps_to_one(
-    image_df: MediaDataFrame, rule="m_date", drop_columns:bool=True
+    image_df: MediaDataFrame, rule="m_date", drop_columns: bool = True
 ) -> MediaDataFrame:
     """Get timestamp from exif (primary) or m_date. Drop not needed date cols.
 
@@ -88,7 +83,7 @@ def multiple_timestamps_to_one(
     return image_df
 
 
-def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
+def initialize_row_dict(meta: Metadata) -> dict[str, Any]:
     """Generate single row based on values defined in outer method.
 
     Args:
@@ -115,10 +110,10 @@ def initialize_row_dict(meta: Metadata) -> Dict[str, Any]:
 
 def prepare_new_row_with_meta(
     media_file_name: str,
-    accepted_media_file_extensions: List[str],
+    accepted_media_file_extensions: list[str],
     in_dir_name: Path,
     meta: Metadata,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Prepare dictionary with metadata for input media file.
 
     Args:
@@ -173,7 +168,6 @@ def get_mov_timestamps(filename):
 
     from: https://stackoverflow.com/a/54683292
     """
-
     creation_time = modification_time = None
 
     # search for moov item
@@ -213,9 +207,7 @@ def get_creation_time(struct, f, DateTime):
 class ImageReader:
     """Initialize media database with existing media dataframe or create empty one."""
 
-    def __init__(
-        self, config: Config, media_df: Optional[MediaDataFrame] = None
-    ) -> None:
+    def __init__(self, config: Config, media_df: MediaDataFrame | None = None) -> None:
         # read the config
         self.config = config
 
@@ -229,7 +221,7 @@ class ImageReader:
             logger.debug(f"{msg}Num records: {len(media_df)}")
             self.media_df = media_df
 
-    def get_data_from_files_as_list_of_rows(self) -> List[dict]:
+    def get_data_from_files_as_list_of_rows(self) -> list[dict]:
         """Recursively read exif data from files given in path provided in config.
 
         Args:
@@ -282,7 +274,7 @@ def configure_im_reader(in_dir_name: str) -> Config:
     return conf
 
 
-def get_media_df(conf: Config) -> Optional[MediaDataFrame]:
+def get_media_df(conf: Config) -> MediaDataFrame | None:
     """Get data frame with metadata description of media indicated in Config.
 
     Args:

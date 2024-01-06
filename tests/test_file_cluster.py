@@ -1,4 +1,5 @@
 import tempfile
+
 from filecluster import logger
 from filecluster.file_cluster import main
 from tests.conftest import ASSETS_DIR
@@ -36,7 +37,7 @@ class TestMain:
         results = main(
             inbox_dir=self.inbox_dir,
             output_dir=self.output_dir,
-            watch_dir_list=[ASSETS_DIR /"zdjecia", ASSETS_DIR / "clusters"],
+            watch_dir_list=[ASSETS_DIR / "zdjecia", ASSETS_DIR / "clusters"],
             development_mode=self.development_mode,
             drop_duplicates=True,
             use_existing_clusters=False,
