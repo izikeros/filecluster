@@ -19,7 +19,9 @@
 ;[D105] Missing docstring in magic method
 ;[D107] Missing docstring in __init__
 ;[E402] module level import not at top of file
+;[E203] whitespace before ':'
 ;[W503] line break before binary operator (incompatibility between flake8 and black)
+;[FKA01] <function_name> call uses <X> positional arguments, use keyword arguments.
 
 ; this should be not excluded in more mature version
 ; [D103] Missing docstring in public function
@@ -33,9 +35,13 @@
 ;T - flake8-print
 ;M - flake8-pytest-mark
 
-ignore =C, T003, M502, N802, F405, T001, D100, D101, D104, D105, D107, W503
+ignore =C, T003, M502, N802, F405, T001, D100, D101, D104, D105, D107, E203, W503
 
 #select = B
+
+# Do not expect extensive documentation in tests
+per-file-ignores =
+    ./tests/*:D100,D101,D102,D103
 
 exclude =
     .tox,
