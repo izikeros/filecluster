@@ -355,7 +355,7 @@ class ImageGrouper:
             if dir_name is None or isnan:
                 raise DateStringNoneException()
                 # instead, create dummy date
-                #dir_name = "XXXX_XX_XX"
+                # dir_name = "XXXX_XX_XX"
 
             ut.create_folder_for_cluster(
                 config=self.config, date_string=dir_name, mode=mode
