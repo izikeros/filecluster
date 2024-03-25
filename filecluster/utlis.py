@@ -1,8 +1,8 @@
 """Helper utilities to work with media files, exif data, hashing and base64 images."""
+
 import base64
 import hashlib
 import logging
-import math
 import os
 import sys
 import time
@@ -15,7 +15,6 @@ import exifread
 from PIL import Image
 from filecluster.configuration import Config
 from filecluster.configuration import CopyMode
-from filecluster.exceptions import DateStringNoneException
 
 log_fmt = "%(levelname).1s %(message)s"
 logging.basicConfig(format=log_fmt)
@@ -80,7 +79,9 @@ def create_folder_for_cluster(config: Config, date_string: str, mode: CopyMode):
     if mode != CopyMode.NOP:
         pth = Path(config.out_dir_name)
         if not isinstance(date_string, str):
-            logger.error(f"Expected date string got: {date_string} of type: {type(date_string)}")
+            logger.error(
+                f"Expected date string got: {date_string} of type: {type(date_string)}"
+            )
         dir_name = (
             pth / date_string
         )  # fixme: can raise error: TypeError: unsupported operand type(s) for /: 'WindowsPath' and 'float'

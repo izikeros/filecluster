@@ -1,4 +1,5 @@
 """Module for reading media data on files from given folder."""
+
 import logging
 import os
 from pathlib import Path
