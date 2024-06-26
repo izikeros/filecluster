@@ -139,10 +139,7 @@ class Config:
     skip_duplicated_existing_in_libs: bool
 
     def __repr__(self):
-        rep = [
-            f"{p}:\t{self.__getattribute__(p)}"
-            for p in self.__dataclass_fields__
-        ]
+        rep = [f"{p}:\t{self.__getattribute__(p)}" for p in self.__dataclass_fields__]
         return "\n".join(rep)
 
     def __getitem__(self, key):

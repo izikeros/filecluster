@@ -345,7 +345,6 @@ def is_event_subcategory_folder(folder: str) -> bool:
     return False
 
 
-
 def validate_library_structure(library_dir):
     """Check if library has structure following assumed convention.
 

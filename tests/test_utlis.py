@@ -1,7 +1,6 @@
 import hashlib
 
 import pytest
-
 from filecluster.configuration import CopyMode, get_default_config
 from filecluster.utlis import (
     create_folder_for_cluster,

@@ -2,8 +2,6 @@ import os
 
 import pandas as pd
 import pytest
-from numpy import dtype
-
 from filecluster.configuration import get_development_config
 from filecluster.filecluster_types import MediaDataFrame
 from filecluster.image_grouper import get_files_from_folder
@@ -17,6 +15,7 @@ from filecluster.image_reader import (
     multiple_timestamps_to_one,
     prepare_new_row_with_meta,
 )
+from numpy import dtype
 
 TEST_INBOX_DIR = "inbox_test_a"
 

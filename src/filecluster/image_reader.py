@@ -1,4 +1,5 @@
 """Module for reading media data on files from given folder."""
+
 import os
 import struct
 from datetime import datetime as dt

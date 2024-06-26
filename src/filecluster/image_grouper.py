@@ -1,4 +1,5 @@
 """Module for file clustering and supporting operations."""
+
 import os
 import random
 from collections.abc import Iterator
@@ -207,7 +208,8 @@ class ImageGrouper:
             )
             is_new_cluster = (
                 is_this_image_too_far_from_other_in_the_cluster
-                or is_first_image_analysed)
+                or is_first_image_analysed
+            )
             if is_new_cluster:
                 # == We are starting new cluster here ==
                 if not is_first_image_analysed:
@@ -366,9 +368,9 @@ class ImageGrouper:
         for idx, _row in self.inbox_media_df[sel_dups].iterrows():
             dup_cluster = self.inbox_media_df.duplicated_cluster[idx]
             try:
-                self.inbox_media_df.loc[
-                    idx, "target_path"
-                ] = path_creator.for_duplicates(dup_cluster[0])
+                self.inbox_media_df.loc[idx, "target_path"] = (
+                    path_creator.for_duplicates(dup_cluster[0])
+                )
             except Exception as e:
                 logger.error(f"{e}")
 
@@ -522,9 +524,9 @@ class ImageGrouper:
         for idx, _row in tqdm(
             self.inbox_media_df[sel_dups].iterrows(), total=sum(sel_dups)
         ):
-            self.inbox_media_df.loc[
-                idx, "status"
-            ] = Status.DUPLICATE  # Fixme: copy of a slice
+            self.inbox_media_df.loc[idx, "status"] = (
+                Status.DUPLICATE
+            )  # Fixme: copy of a slice
             if dups_lib_patch := list(
                 filter(lambda x: _row.file_name in str(x), confirmed_library_dups)
             ):
