@@ -1,5 +1,5 @@
 """Module for file clustering and supporting operations."""
-
+import logging
 import os
 import random
 from collections.abc import Iterator
@@ -341,6 +341,12 @@ class ImageGrouper:
         for dir_name in dirs:
             if dir_name is None:
                 raise DateStringNoneError()
+
+            isnan = isinstance(dir_name, float) and math.isnan(dir_name)
+            if dir_name is None or isnan:
+                raise DateStringNoneException()
+                # instead, create dummy date
+                #dir_name = "XXXX_XX_XX"
             ut.create_folder_for_cluster(
                 config=self.config, date_string=dir_name, mode=mode
             )

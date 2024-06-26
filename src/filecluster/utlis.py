@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import logging
 import os
 import time
 import tomllib
@@ -75,6 +76,8 @@ def create_folder_for_cluster(config: Config, date_string: str, mode: CopyMode):
 
     if mode != CopyMode.NOP:
         pth = Path(config.out_dir_name)
+        if not isinstance(date_string, str):
+            logger.error(f"Expected date string got: {date_string} of type: {type(date_string)}")
         dir_name = (
             pth / date_string
         )  # fixme: can raise error: TypeError: unsupported operand type(s) for /: 'WindowsPath' and 'float'
