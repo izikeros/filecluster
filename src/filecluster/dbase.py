@@ -4,13 +4,13 @@ import multiprocessing
 from pathlib import Path
 
 import pandas as pd
-from filecluster import logger
-from filecluster.configuration import CLUSTER_DF_COLUMNS
-from filecluster.configuration import Config
-from filecluster.filecluster_types import ClustersDataFrame
-from filecluster.update_clusters import get_or_create_library_cluster_ini_as_dataframe
 from numpy import int64
 from pandas.core.frame import DataFrame
+
+from filecluster import logger
+from filecluster.configuration import CLUSTER_DF_COLUMNS, Config
+from filecluster.filecluster_types import ClustersDataFrame
+from filecluster.update_clusters import get_or_create_library_cluster_ini_as_dataframe
 
 
 def get_existing_clusters_info(
@@ -67,7 +67,7 @@ def get_existing_clusters_info(
             )
             for lib in watch_folders
         ]
-        dfs, empty_folder_list = map(list, zip(*tuples))
+        dfs, empty_folder_list = map(list, zip(*tuples, strict=False))
         df = pd.concat(dfs, axis=0)
         df.index = range(len(df))
         df = df.reset_index()

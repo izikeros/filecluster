@@ -18,16 +18,15 @@ import os
 import re
 from configparser import ConfigParser
 from datetime import datetime
+from multiprocessing.pool import Pool
 from pathlib import Path
-from pathlib import PosixPath
 
 import pandas as pd
+
 from filecluster import logger
 from filecluster.configuration import INI_FILENAME
-from filecluster.image_reader import configure_im_reader
-from filecluster.image_reader import get_media_df
-from filecluster.image_reader import get_media_stats
-from multiprocessing.pool import Pool
+from filecluster.image_reader import configure_im_reader, get_media_df, get_media_stats
+
 
 def str_to_bool(s: str) -> bool:
     """Convert 'True' or 'False' provided as string to corresponding bool value."""
@@ -74,7 +73,7 @@ def get_or_create_library_cluster_ini_as_dataframe(
     library_path_list = n_event_dirs * [library_path]
 
     res_list = pool.starmap(
-        get_this_ini, zip(event_dirs, force_list, library_path_list)
+        get_this_ini, zip(event_dirs, force_list, library_path_list, strict=False)
     )
     res_dict_list = [d for d in res_list if isinstance(d, dict)]
     res_empty_dir_list = [d for d in res_list if isinstance(d, Path)]

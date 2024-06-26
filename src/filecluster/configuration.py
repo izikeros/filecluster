@@ -4,8 +4,10 @@ import os
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-from filecluster import logger
+
 from pydantic.dataclasses import dataclass
+
+from filecluster import logger
 
 # project root directory (using Pathlib)
 ROOT_DIR = Path(__file__).parent.parent
@@ -139,7 +141,7 @@ class Config:
     def __repr__(self):
         rep = [
             f"{p}:\t{self.__getattribute__(p)}"
-            for p in self.__dataclass_fields__.keys()
+            for p in self.__dataclass_fields__
         ]
         return "\n".join(rep)
 

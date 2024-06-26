@@ -3,28 +3,27 @@ import os
 import random
 from collections.abc import Iterator
 from datetime import timedelta
-from pathlib import Path
-from pathlib import PosixPath
-from shutil import copy2
-from shutil import move
+from pathlib import Path, PosixPath
+from shutil import copy2, move
 from typing import Any
 
 import pandas as pd
-from filecluster import logger
-from filecluster import utlis as ut
-from filecluster.configuration import AssignDateToClusterMethod
-from filecluster.configuration import CLUSTER_DF_COLUMNS
-from filecluster.configuration import Config
-from filecluster.configuration import CopyMode
-from filecluster.configuration import Status
-from filecluster.dbase import get_new_cluster_id_from_dataframe
-from filecluster.exceptions import DateStringNoneException
-from filecluster.exceptions import MissingDfClusterColumn
-from filecluster.filecluster_types import ClustersDataFrame
-from filecluster.filecluster_types import MediaDataFrame
 from pandas._libs.tslibs.timedeltas import Timedelta
 from pandas._libs.tslibs.timestamps import Timestamp
 from tqdm import tqdm
+
+from filecluster import logger
+from filecluster import utlis as ut
+from filecluster.configuration import (
+    CLUSTER_DF_COLUMNS,
+    AssignDateToClusterMethod,
+    Config,
+    CopyMode,
+    Status,
+)
+from filecluster.dbase import get_new_cluster_id_from_dataframe
+from filecluster.exceptions import DateStringNoneError, MissingDfClusterColumnError
+from filecluster.filecluster_types import ClustersDataFrame, MediaDataFrame
 
 
 def expand_cluster_or_init_new(
@@ -206,10 +205,10 @@ class ImageGrouper:
             is_this_image_too_far_from_other_in_the_cluster = (
                 delta_from_previous > max_gap
             )
-            if is_new_cluster := (
+            is_new_cluster = (
                 is_this_image_too_far_from_other_in_the_cluster
-                or is_first_image_analysed
-            ):
+                or is_first_image_analysed)
+            if is_new_cluster:
                 # == We are starting new cluster here ==
                 if not is_first_image_analysed:
                     cluster_idx += 1
@@ -339,7 +338,7 @@ class ImageGrouper:
         # prepare directories in advance
         for dir_name in dirs:
             if dir_name is None:
-                raise DateStringNoneException()
+                raise DateStringNoneError()
             ut.create_folder_for_cluster(
                 config=self.config, date_string=dir_name, mode=mode
             )
@@ -609,7 +608,7 @@ def check_df_has_all_expected_columns(df: pd.DataFrame, expected_cols: list[str]
     """Check if data frame has all expected columns."""
     for c in df.columns:
         if c not in expected_cols:
-            raise MissingDfClusterColumn(c)
+            raise MissingDfClusterColumnError(c)
 
 
 def check_df_has_all_expected_columns_and_types(
@@ -618,5 +617,5 @@ def check_df_has_all_expected_columns_and_types(
     """Check if data frame has all expected columns."""
     for c in df.columns:
         if c not in list(col_expectations.keys()):
-            raise MissingDfClusterColumn(c)
+            raise MissingDfClusterColumnError(c)
         # TODO: KS: 2020-12-26: check dtype

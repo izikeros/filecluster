@@ -3,19 +3,18 @@ import base64
 import hashlib
 import os
 import time
+import tomllib
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-import tomllib
 
 import exifread
+from configuration import ROOT_DIR
 from PIL import Image
 
-from configuration import ROOT_DIR
 from filecluster import logger
-from filecluster.configuration import Config
-from filecluster.configuration import CopyMode
-from filecluster.exceptions import DateStringNoneException
+from filecluster.configuration import Config, CopyMode
+from filecluster.exceptions import DateStringNoneError
 
 # TODO: optimize this parameter for speed
 BLOCK_SIZE_FOR_HASHING = 4096 * 32
@@ -46,15 +45,14 @@ def get_date_from_file(path_name: str):
 def get_exif_date(path_name: str):
     """Return exif date or none."""
     # Open image file for reading (binary mode)
-    img_file = open(path_name, "rb")
-
-    # Return Exif tags
-    try:
-        tags = exifread.process_file(
-            img_file, details=False, stop_tag="EXIF DateTimeOriginal"
-        )
-    except Exception:
-        tags = {}
+    with open(path_name, "rb") as img_file:
+        # Return Exif tags
+        try:
+            tags = exifread.process_file(
+                img_file, details=False, stop_tag="EXIF DateTimeOriginal"
+            )
+        except Exception:
+            tags = {}
 
     try:
         exif_date_str = tags["EXIF DateTimeOriginal"].values
@@ -72,7 +70,7 @@ def get_exif_date(path_name: str):
 def create_folder_for_cluster(config: Config, date_string: str, mode: CopyMode):
     """Create destination folder that for all pictures from the cluster."""
     if date_string is None:
-        raise DateStringNoneException()
+        raise DateStringNoneError()
 
     if mode != CopyMode.NOP:
         pth = Path(config.out_dir_name)
@@ -103,9 +101,7 @@ def image_base64(img):
 
 def image_formatter(im_base64):
     """HTML template to display base64 image."""
-    return '<img src="data:image/jpeg;base64,{image_tn}">'.format(
-        image_tn=image_base64(im_base64)
-    )
+    return f'<img src="data:image/jpeg;base64,{image_base64(im_base64)}">'
 
 
 def hash_file(fname, hash_funct=hashlib.sha1):

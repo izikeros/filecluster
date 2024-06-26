@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Simple GUI to configure and run filecluster. EXPERIMENTAL."""
-import PySimpleGUI as sg
+import PySimpleGUI as sg  # noqa: N813
+
 from filecluster.file_cluster import main
 
 # TODO: KS: 2020-12-28: read default values from configuration module

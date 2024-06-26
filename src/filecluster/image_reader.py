@@ -5,16 +5,14 @@ from datetime import datetime as dt
 from pathlib import Path
 from typing import Any
 
-import filecluster.utlis as ut
 import pandas as pd
 from pandas import DataFrame
-from filecluster import logger
-from filecluster.configuration import Config
-from filecluster.configuration import CopyMode
-from filecluster.configuration import Status
-from filecluster.configuration import get_default_config
-from filecluster.filecluster_types import MediaDataFrame
 from tqdm import tqdm
+
+import filecluster.utlis as ut
+from filecluster import logger
+from filecluster.configuration import Config, CopyMode, Status, get_default_config
+from filecluster.filecluster_types import MediaDataFrame
 
 # for extracting timestamp from MOV files
 ATOM_HEADER_SIZE = 8
@@ -143,7 +141,7 @@ def prepare_new_row_with_meta(
     if media_file_name.lower().endswith("mov"):
         try:
             meta.c_time, meta.m_time = get_mov_timestamps(path_name)
-        except Exception as ex:
+        except Exception:
             logger.error(f"Cannot get dates from MOV file: {path_name}")
 
     # file size
@@ -190,15 +188,15 @@ def get_mov_timestamps(filename):
             raise RuntimeError('expected to find "mvhd" header.')
         else:
             f.seek(4, 1)
-            creation_time = get_creation_time(struct, f, dt)
+            creation_time = get_creation_time(struct, f)
             modification_time = creation_time
     return creation_time, modification_time
 
 
 # TODO Rename this here and in `get_mov_timestamps`
-def get_creation_time(struct, f, DateTime):
+def get_creation_time(struct, f):
     result = struct.unpack(">I", f.read(4))[0] - EPOCH_ADJUSTER
-    result = DateTime.fromtimestamp(result)
+    result = dt.fromtimestamp(result)
     if result.year < 1990:  # invalid or censored data
         result = None
 

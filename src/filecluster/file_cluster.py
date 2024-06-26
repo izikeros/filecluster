@@ -8,15 +8,17 @@ import argparse
 import os
 from pathlib import Path
 
+from utlis import read_version
+
 from filecluster import logger
-from filecluster.configuration import CopyMode
-from filecluster.configuration import get_proper_mode_config
-from filecluster.configuration import override_config_with_cli_params
+from filecluster.configuration import (
+    CopyMode,
+    get_proper_mode_config,
+    override_config_with_cli_params,
+)
 from filecluster.dbase import get_existing_clusters_info
 from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import ImageReader
-from utlis import read_version
-
 
 # TODO: KS: 2020-12-17: There are copies of config in the classes.
 #  In extreme case various configs can be modified in different way.
@@ -81,15 +83,15 @@ def main(
     image_reader = ImageReader(config)
 
     # read timestamps from imported pictures/recordings
-    USE_CSV = False
-    INBOX_CSV_FILE_NAME = "h:\\incomming\\inbox.csv"
-    if USE_CSV and os.path.isfile(INBOX_CSV_FILE_NAME):
-        read_inbox_info_from_csv(INBOX_CSV_FILE_NAME, image_reader)
+    use_csv = False
+    inbox_csv_file_name = "h:\\incomming\\inbox.csv"
+    if use_csv and os.path.isfile(inbox_csv_file_name):
+        read_inbox_info_from_csv(inbox_csv_file_name, image_reader)
     else:
         logger.info("Read inbox info from files")
         image_reader.get_media_info_from_inbox_files()
-        if USE_CSV:
-            image_reader.media_df.to_csv(INBOX_CSV_FILE_NAME, index=False)
+        if use_csv:
+            image_reader.media_df.to_csv(inbox_csv_file_name, index=False)
 
     # configure media grouper, initialize internal dataframes
     image_grouper = ImageGrouper(
@@ -160,12 +162,13 @@ def main(
 
 
 # TODO Rename this here and in `main`
-def read_inbox_info_from_csv(INBOX_CSV_FILE_NAME, image_reader):
+def read_inbox_info_from_csv(inbox_csv_file_name, image_reader):
     import pandas as pd
+
     from filecluster.configuration import Status
 
     logger.info("Read inbox info from CSV")
-    image_reader.media_df = pd.read_csv(INBOX_CSV_FILE_NAME)
+    image_reader.media_df = pd.read_csv(inbox_csv_file_name)
     # Revert data types after reading from CSV
     image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
     image_reader.media_df.status = image_reader.media_df.status.apply(
