@@ -1,16 +1,14 @@
 """Module for keeping configuration-related code for the filecluster."""
-import logging
+
 import os
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-
+from filecluster import logger
 from pydantic.dataclasses import dataclass
 
-log_fmt = "%(levelname).1s %(message)s"
-logging.basicConfig(format=log_fmt)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# project root directory (using Pathlib)
+ROOT_DIR = Path(__file__).parent.parent
 
 # standard filename for cluster info file to be placed in cluster directory
 INI_FILENAME = ".cluster.ini"
