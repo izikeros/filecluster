@@ -6,9 +6,12 @@ import time
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+import tomllib
 
 import exifread
 from PIL import Image
+
+from configuration import ROOT_DIR
 from filecluster import logger
 from filecluster.configuration import Config
 from filecluster.configuration import CopyMode
@@ -114,3 +117,10 @@ def hash_file(fname, hash_funct=hashlib.sha1):
         for chunk in iter(lambda: f.read(BLOCK_SIZE_FOR_HASHING), b""):
             hash_value.update(chunk)
     return hash_value.hexdigest()
+
+
+def read_version():
+    with open(ROOT_DIR / "pyproject.toml", "rb") as f:
+        pyproject = tomllib.load(f)
+
+    return pyproject["project"]["version"]
