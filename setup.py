@@ -1,6 +1,5 @@
 """Setup function for filecluster package."""
-from setuptools import find_packages
-from setuptools import setup
+from setuptools import find_packages, setup
 
 setup(
     name="filecluster",

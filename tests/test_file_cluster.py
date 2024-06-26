@@ -34,7 +34,7 @@ class TestMain:
         assert n_new_cluster_res == n_new_cluster_exp
 
     def test_main__with_skip_duplicates(self):
-        results = main(
+        _ = main(
             inbox_dir=self.inbox_dir,
             output_dir=self.output_dir,
             watch_dir_list=[ASSETS_DIR / "zdjecia", ASSETS_DIR / "clusters"],
@@ -45,7 +45,7 @@ class TestMain:
         )
 
     def test_main__with_use_existing_clusters(self):
-        results = main(
+        _ = main(
             inbox_dir=self.inbox_dir,
             output_dir=self.output_dir,
             watch_dir_list=[ASSETS_DIR / "zdjecia", ASSETS_DIR / "clusters"],

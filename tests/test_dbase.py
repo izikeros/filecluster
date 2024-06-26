@@ -1,4 +1,5 @@
 import pytest
+
 from filecluster.configuration import get_development_config
 from filecluster.dbase import get_existing_clusters_info
 
@@ -39,4 +40,4 @@ def test_get_existing_clusters_info__ids_are_uniq():
 
 @pytest.mark.skip(reason="not implemented")
 def test_get_new_cluster_id_from_dataframe():
-    assert False
+    raise AssertionError

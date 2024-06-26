@@ -36,13 +36,11 @@ class TestImageGrouper:
 
     def test_calculate_gaps(self):
         self.image_grouper.calculate_gaps()
-        pass
         # TODO: KS: 2020-12-12: add assertions
 
     def test_calculate_gaps__for_partially_clustered_media(self):
         # handle case
         self.image_grouper.calculate_gaps()
-        pass
         # TODO: KS: 2020-12-12: add assertions
 
     def test_add_cluster_id_to_files_in_data_frame(self):

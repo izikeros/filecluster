@@ -1,17 +1,19 @@
 import hashlib
 
 import pytest
-from filecluster.configuration import CopyMode
-from filecluster.configuration import get_default_config
-from filecluster.utlis import create_folder_for_cluster
-from filecluster.utlis import get_date_from_file
-from filecluster.utlis import get_exif_date
-from filecluster.utlis import get_thumbnail
-from filecluster.utlis import hash_file
-from filecluster.utlis import image_base64
-from filecluster.utlis import image_formatter
-from filecluster.utlis import is_image
-from filecluster.utlis import is_supported_filetype
+
+from filecluster.configuration import CopyMode, get_default_config
+from filecluster.utlis import (
+    create_folder_for_cluster,
+    get_date_from_file,
+    get_exif_date,
+    get_thumbnail,
+    hash_file,
+    image_base64,
+    image_formatter,
+    is_image,
+    is_supported_filetype,
+)
 
 EXT_IMG = [".jpg", ".CR2"]
 EXT_VID = [".mp4", ".3gp"]

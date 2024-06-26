@@ -2,18 +2,21 @@ import os
 
 import pandas as pd
 import pytest
+from numpy import dtype
+
 from filecluster.configuration import get_development_config
 from filecluster.filecluster_types import MediaDataFrame
 from filecluster.image_grouper import get_files_from_folder
-from filecluster.image_reader import ImageReader
-from filecluster.image_reader import Metadata
-from filecluster.image_reader import configure_im_reader
-from filecluster.image_reader import get_media_df
-from filecluster.image_reader import get_media_stats
-from filecluster.image_reader import initialize_row_dict
-from filecluster.image_reader import multiple_timestamps_to_one
-from filecluster.image_reader import prepare_new_row_with_meta
-from numpy import dtype
+from filecluster.image_reader import (
+    ImageReader,
+    Metadata,
+    configure_im_reader,
+    get_media_df,
+    get_media_stats,
+    initialize_row_dict,
+    multiple_timestamps_to_one,
+    prepare_new_row_with_meta,
+)
 
 TEST_INBOX_DIR = "inbox_test_a"
 
@@ -33,7 +36,7 @@ class TestImageReader:
 
     @pytest.mark.skip(reason="not implemented")
     def test_check_import_for_duplicates_in_existing_clusters(self):
-        assert False
+        raise AssertionError
 
     def test_get_media_info_from_inbox_files(self):
         self.imreader.get_media_info_from_inbox_files()
@@ -77,11 +80,10 @@ def test_multiple_timestamps_to_one():
     inbox_media_df_out = multiple_timestamps_to_one(
         inbox_media_df_in.copy(), drop_columns=False
     )
-    sel_cols_out = ["file_name", "date"]
+    # _ = ["file_name", "date"]
 
     # keep only most important results for analysis in testing
-    inbox_media_df_out = inbox_media_df_out[sel_cols]
-    pass
+    _ = inbox_media_df_out[sel_cols]
 
 
 def test_initialize_row_dict():
@@ -95,7 +97,7 @@ def test_initialize_row_dict():
 def test_prepare_new_row_with_meta():
     # TODO: KS: 2020-12-09: Create dummy image or mock it
     empty_meta = Metadata()
-    row = prepare_new_row_with_meta(
+    _ = prepare_new_row_with_meta(
         media_file_name="my_file_name",
         accepted_media_file_extensions=["jpg", "png"],
         in_dir_name="my_dir_name",
@@ -114,4 +116,4 @@ def test_dir_scanner():
     conf = configure_im_reader(in_dir_name="inbox_test_a")
     media_df = get_media_df(conf)
     time_granularity = int(conf.time_granularity.total_seconds())
-    media_stats = get_media_stats(media_df, time_granularity)
+    _ = get_media_stats(media_df, time_granularity)
