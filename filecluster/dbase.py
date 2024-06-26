@@ -16,7 +16,22 @@ from pandas.core.frame import DataFrame
 def get_existing_clusters_info(
     config: Config,
 ) -> tuple[ClustersDataFrame, list[Path], list[str]]:
-    """Scan library, find existing clusters and empty or non-compliant folders."""
+    """Scan library, find existing clusters and empty or non-compliant folders.
+
+    Args:
+        config: Config object
+
+    Returns:
+        Tuple of:
+            - ClustersDataFrame object with columns: ['cluster_id', 'start_date', 'end_date', 'median', 'is_continous',
+                  'path', 'target_path', 'file_count', 'new_file_count'], where
+                  path - path to the folder with media files
+                  target_path - path to the folder where media files should be moved
+
+            - list of empty folders
+            - list of non-compliant folders (folders that contain only subfolders
+                instead of media files) - not implemented yet
+    """
     # TODO: Any non-empty subfolder of year folder should contain .cluster.ini
     #  file (see: Runmageddon example). Non-empty means - contains media files
 
@@ -27,11 +42,14 @@ def get_existing_clusters_info(
 
     watch_folders = config.watch_folders
 
-    # NOTE: these requires refactoring in scan_library_dir()
-    # TODO: KS: 2020-12-26: folders than contains no media files but subfolders
+    # NOTE: this requires refactoring in scan_library_dir()
+
+    # TODO: KS: 2020-12-26: non-compliant - folders than contains no media files but subfolders
     non_compliant_folders = []
+
     # totally empty folders (no files, no dirs)
     empty_folder_list = []
+
     # is there a reason for using watch folders (library folders)?
     #   do we have enabled duplicates or existing cluster functionalities
     use_watch_folders = (
@@ -41,6 +59,8 @@ def get_existing_clusters_info(
 
     # Start scanning watch folders to get cluster information
     if use_watch_folders and len(watch_folders):
+
+        # tuples of
         tuples = [
             get_or_create_library_cluster_ini_as_dataframe(
                 lib, pool, config.force_deep_scan
@@ -66,9 +86,7 @@ def get_new_cluster_id_from_dataframe(df_clusters: DataFrame) -> int64 | int:
     If there are gaps, there will be no first not-used returned.
     """
     cluster_ids = df_clusters.cluster_id.dropna().values
-    if len(cluster_ids) > 0:
-        last_cluster = max(cluster_ids)
-        new_cluster_id = last_cluster + 1
-    else:
-        new_cluster_id = 1
-    return new_cluster_id
+    if len(cluster_ids) <= 0:
+        return 1
+    last_cluster = max(cluster_ids)
+    return last_cluster + 1

@@ -27,7 +27,7 @@ from filecluster.configuration import INI_FILENAME
 from filecluster.image_reader import configure_im_reader
 from filecluster.image_reader import get_media_df
 from filecluster.image_reader import get_media_stats
-
+from multiprocessing.pool import Pool
 
 def str_to_bool(s: str) -> bool:
     """Convert 'True' or 'False' provided as string to corresponding bool value."""
@@ -40,7 +40,7 @@ def str_to_bool(s: str) -> bool:
 
 
 def get_or_create_library_cluster_ini_as_dataframe(
-    library_path: str, pool, force_deep_scan: bool = False
+    library_path: str | Path, pool: Pool, force_deep_scan: bool = False
 ) -> tuple[pd.DataFrame, list[Path]]:
     """Scan folder for cluster info and return dataframe with clusters.
 
@@ -50,7 +50,9 @@ def get_or_create_library_cluster_ini_as_dataframe(
         pool:
 
     Returns:
-        None
+        Tuple of:
+            - dataframe with cluster info
+            - list of empty directories
     """
     # strip trailing '/' and '\' if any
     library_path = str(library_path).rstrip("/").rstrip("\\")
@@ -185,7 +187,7 @@ def initialize_cluster_info_dict(
 
 def save_cluster_ini(
     cluster_ini: ConfigParser,
-    path: str,
+    path: str | Path,
 ) -> None:
     """Save cluster information dictionary.
 
@@ -201,8 +203,8 @@ def save_cluster_ini(
 
 
 def read_cluster_ini_as_dict(
-    path: PosixPath,
-) -> dict[str, dict[str, datetime | str]] | None:
+    path: Path,
+) -> dict[str, dict[str, datetime | str | None]] | None:
     """Read cluster info from the path and return as dictionary.
 
     Args:
@@ -214,41 +216,41 @@ def read_cluster_ini_as_dict(
     cluster_ini = ConfigParser()
     cluster_ini.read(Path(path) / ".cluster.ini")
 
-    # convert parser object to dict
-    cluster_dict = {
-        section: dict(cluster_ini.items(section)) for section in cluster_ini.sections()
-    }
-
-    if cluster_dict:
-        # correct timestamps
-        dt_start = cluster_dict["Range"]["start_date"]
-        dt_end = cluster_dict["Range"]["end_date"]
-
-        try:
-            cluster_dict["Range"]["start_date"] = datetime.strptime(
-                dt_start, "%Y-%m-%d %H:%M:%S"
-            )
-        except ValueError:
-            cluster_dict["Range"]["start_date"] = None
-        try:
-            cluster_dict["Range"]["end_date"] = datetime.strptime(
-                dt_end, "%Y-%m-%d %H:%M:%S"
-            )
-        except ValueError:
-            cluster_dict["Range"]["end_date"] = None
-        return cluster_dict
-    else:
+    if not (
+        cluster_dict := {
+            section: dict(cluster_ini.items(section))
+            for section in cluster_ini.sections()
+        }
+    ):
         return None
+    # correct timestamps
+    dt_start = cluster_dict["Range"]["start_date"]
+    dt_end = cluster_dict["Range"]["end_date"]
+
+    try:
+        cluster_dict["Range"]["start_date"] = datetime.strptime(
+            dt_start, "%Y-%m-%d %H:%M:%S"
+        )
+    except ValueError:
+        cluster_dict["Range"]["start_date"] = None
+
+    try:
+        cluster_dict["Range"]["end_date"] = datetime.strptime(
+            dt_end, "%Y-%m-%d %H:%M:%S"
+        )
+    except ValueError:
+        cluster_dict["Range"]["end_date"] = None
+    return cluster_dict
 
 
 def fast_scandir(dirname: str) -> list[str]:
-    """Get list of subfolders of given directory.
+    """Get list of folders of given directory.
 
     Args:
-        dirname: directory nam that has to be scanned for subfolders
+        dirname: directory names that has to be scanned for folders
 
     Returns:
-        list of subfolders
+        list of folders
     """
     if dirname:
         subfolders = [f.path for f in os.scandir(dirname) if f.is_dir()]
@@ -295,8 +297,7 @@ def is_year_folder(folder: str) -> bool:
         True if folder is year-folder
     """
     last_part = Path(folder).parts[-1]
-    is_four_digits = bool(re.match(r"^(19|20)\d{2}$", last_part))
-    return is_four_digits
+    return bool(re.match(r"^(19|20)\d{2}$", last_part))
 
 
 def is_event_folder(folder: str) -> bool:
@@ -312,10 +313,7 @@ def is_event_folder(folder: str) -> bool:
     """
     # is under year-folder
     parrent_part = Path(folder).parts[-2]
-    is_parrent_year = is_year_folder(parrent_part)
-    # last_part = Path(folder).parts[-1]
-    # starts_with_date_timestamp = bool(re.match(r"^\[\d\d\d\d/", last_part))
-    return is_parrent_year  # and starts_with_date_timestamp
+    return is_year_folder(parrent_part)
 
 
 def is_sel_folder(folder: str) -> bool:
@@ -347,20 +345,6 @@ def is_event_subcategory_folder(folder: str) -> bool:
     # FIXME: Implement
     return False
 
-
-def is_video_folder(folder: str) -> bool:
-    """Check if given folder is a video folder.
-
-    Sometimes, videos can be kept in separate video folder.
-
-    Args:
-      folder: path to folder that has to be examined.
-
-    Returns:
-        True if folder is event-folder
-    """
-    # check if name is sel
-    pass
 
 
 def validate_library_structure(library_dir):

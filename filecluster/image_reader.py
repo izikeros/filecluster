@@ -7,6 +7,7 @@ from typing import Any
 
 import filecluster.utlis as ut
 import pandas as pd
+from pandas import DataFrame
 from filecluster import logger
 from filecluster.configuration import Config
 from filecluster.configuration import CopyMode
@@ -215,7 +216,7 @@ class ImageReader:
             logger.debug(
                 f"Initializing empty media dataframe in ImageReader ({config.in_dir_name})"
             )
-            self.media_df = MediaDataFrame(pd.DataFrame())
+            self.media_df = MediaDataFrame(DataFrame())
         else:
             msg = "Initializing media dataframe in ImageReader with provided df."
             logger.debug(f"{msg}Num records: {len(media_df)}")
@@ -251,12 +252,12 @@ class ImageReader:
         row_list = self.get_data_from_files_as_list_of_rows()
         logger.debug(f"Read info from {len(row_list)} files.")
         # convert list of rows to data frame
-        inbox_media_df = MediaDataFrame(pd.DataFrame(row_list))
+        inbox_media_df = MediaDataFrame(DataFrame(row_list))
         inbox_media_df = multiple_timestamps_to_one(inbox_media_df)
         self.media_df = inbox_media_df
 
 
-def configure_im_reader(in_dir_name: str) -> Config:
+def configure_im_reader(in_dir_name: str | Path) -> Config:
     """Customize configuration for purpose of scanning the media library.
 
     Args:
@@ -267,7 +268,7 @@ def configure_im_reader(in_dir_name: str) -> Config:
     """
     conf = get_default_config()
     # modify config
-    conf.__setattr__("in_dir_name", in_dir_name)
+    conf.__setattr__("in_dir_name", str(in_dir_name))
     conf.__setattr__("out_dir_name", "")
     conf.__setattr__("mode", CopyMode.NOP)
     conf.__setattr__("delete_db", False)
@@ -287,7 +288,7 @@ def get_media_df(conf: Config) -> MediaDataFrame | None:
     if os.listdir(f_name):
         im_reader = ImageReader(config=conf)
         if row_list := im_reader.get_data_from_files_as_list_of_rows():
-            df = MediaDataFrame(pd.DataFrame(row_list))
+            df = MediaDataFrame(DataFrame(row_list))
             return multiple_timestamps_to_one(df)
         else:
             logger.debug(f" - directory {f_name} is empty?.")
@@ -297,8 +298,10 @@ def get_media_df(conf: Config) -> MediaDataFrame | None:
         return None
 
 
-def get_media_stats(df: pd.DataFrame, time_granularity: int) -> dict:
+def get_media_stats(df: DataFrame, time_granularity: int) -> dict:
     """Get statistics of media data represented in data frame.
+
+        Get statistics of media folder.
 
     Args:
       df: pd.DataFrame:
@@ -316,12 +319,17 @@ def get_media_stats(df: pd.DataFrame, time_granularity: int) -> dict:
     df["date_int"] = df["date"].apply(lambda x: x.value / 10**9)
     df = df.sort_values("date_int")
     df["delta"] = df.date_int.diff()
-    is_normal = not (any(df.delta.values > time_granularity))
+
+    # check all media in the folder are compliant with the assumption that
+    # all the media from the same event are not more than 1 hour apart
+    # from each other
+    is_time_consistent = not (any(df.delta.values > time_granularity))
+
     file_count = len(df)
     return {
         "date_min": date_min,
         "date_max": date_max,
         "date_median": date_median,
-        "is_normal": is_normal,
+        "is_time_consistent": is_time_consistent,
         "file_count": file_count,
     }
