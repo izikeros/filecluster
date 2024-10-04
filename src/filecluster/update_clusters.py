@@ -128,7 +128,7 @@ def get_this_ini(
             cluster_ini = initialize_cluster_info_dict(
                 start=media_stats["date_min"],
                 stop=media_stats["date_max"],
-                is_continous=media_stats["is_normal"],
+                is_continous=media_stats["is_time_consistent"],
                 median=media_stats["date_median"],
                 file_count=media_stats["file_count"],
             )
