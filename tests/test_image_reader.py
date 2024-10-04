@@ -112,7 +112,7 @@ def test_get_files_from_watch_folder():
 
 
 def test_dir_scanner():
-    conf = configure_im_reader(in_dir_name="inbox_test_a")
+    conf = configure_im_reader(in_dir_name="assets/set_1")
     media_df = get_media_df(conf)
     time_granularity = int(conf.time_granularity.total_seconds())
     _ = get_media_stats(media_df, time_granularity)

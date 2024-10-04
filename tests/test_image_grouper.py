@@ -2,7 +2,6 @@ from filecluster.configuration import get_development_config
 from filecluster.dbase import get_existing_clusters_info
 from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import ImageReader
-from filecluster.tests.test_dbase import check_lists_equal
 
 
 def test_image_grouper__instantinates_for_dev_config():
@@ -55,7 +54,7 @@ class TestImageGrouper:
         ) = self.image_grouper.assign_to_existing_clusters()
 
         expected = ["IMG_4029.JPG", "IMG_4031.JPG", "IMG_3957.JPG", "IMG_3955.JPG"]
-        assert check_lists_equal(files, expected)
+        assert files == expected
 
     def test_run_clustering(self):
         self.image_grouper.calculate_gaps()
@@ -68,4 +67,4 @@ class TestImageGrouper:
         # check if duplicates removed from dataframe
         exp_dups = ["IMG_4029.JPG", "IMG_3957.JPG", "IMG_3955.JPG"]
         result = list(set(files))
-        assert check_lists_equal(exp_dups, result)
+        assert exp_dups == result

@@ -16,7 +16,8 @@ from filecluster.utlis import (
 
 EXT_IMG = [".jpg", ".CR2"]
 EXT_VID = [".mp4", ".3gp"]
-IMG_PTH = "inbox_test_a_orig/20181117_121813.jpg"
+# IMG_PTH = "inbox_test_a_orig/20181117_121813.jpg"
+IMG_PTH = "assets/set_1/IMG_3784.jpg"
 
 
 def test_is_supported_filetype_jpg_lower_case():
