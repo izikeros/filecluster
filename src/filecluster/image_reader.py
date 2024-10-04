@@ -60,11 +60,9 @@ def multiple_timestamps_to_one(
     # logger.trace("Cleaning-up timestamps in imported media.")
 
     # normalize date format
-    image_df["m_date"] = pd.to_datetime(image_df["m_date"], infer_datetime_format=True)
-    image_df["c_date"] = pd.to_datetime(image_df["c_date"], infer_datetime_format=True)
-    image_df["exif_date"] = pd.to_datetime(
-        image_df["exif_date"], infer_datetime_format=True
-    )
+    image_df["m_date"] = pd.to_datetime(image_df["m_date"])
+    image_df["c_date"] = pd.to_datetime(image_df["c_date"])
+    image_df["exif_date"] = pd.to_datetime(image_df["exif_date"])
 
     # TODO: Ensure that any date is assigned to file
     # use exif date as base
