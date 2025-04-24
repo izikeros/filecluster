@@ -1,0 +1,24 @@
+name: Example
+
+jobs:
+  uv-example:
+    name: python
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Verify import order with isort
+        run: |
+          uv run isort --check-only src tests
+      - name: Verify code formatting with black
+        run: |
+          uv run black --check --config pyproject.toml src tests
+      - name: Verify code style with ruff
+        run: |
+          uv run ruff check src
