@@ -1,13 +1,13 @@
 import pytest
+
 from filecluster.configuration import get_development_config
 from filecluster.dbase import get_existing_clusters_info
-
 from tests.conftest import ASSETS_DIR
 
 
 def check_lists_equal(list_1, list_2) -> bool:
     """Check if two lists are equal."""
-    return len(list_1)==len(list_2) and sorted(list_1)==sorted(list_2)
+    return len(list_1) == len(list_2) and sorted(list_1) == sorted(list_2)
 
 
 def test_get_existing_clusters_info__gives_the_same_dataframe_cols():
@@ -35,7 +35,7 @@ def test_get_existing_clusters_info__ids_are_uniq():
 
     ids = df_clusters.cluster_id.values
 
-    ids_are_unique = len(ids)==len(set(ids))
+    ids_are_unique = len(ids) == len(set(ids))
     assert ids_are_unique
 
 
