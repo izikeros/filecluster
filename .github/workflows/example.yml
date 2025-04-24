@@ -1,9 +1,5 @@
 name: uv, isort, black, ruff
 
-on:
-  push:
-  pull_request:
-
 jobs:
   uv-example:
     name: python
