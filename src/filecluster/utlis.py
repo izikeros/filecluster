@@ -61,8 +61,13 @@ def get_exif_date(path_name: str):
         try:
             exif_date = datetime.strptime(exif_date_str, "%Y:%m:%d %H:%M:%S")
         except ValueError:
-            logger.error(f"Invalid date for file: {path_name}. Setting: None")
-            exif_date = None
+            try:
+                exif_date = datetime.strptime(exif_date_str, "%Y:%m:%d %H:%M:%S.%f")
+            except ValueError:
+                logger.error(
+                    f"Invalid date {exif_date_str} for file: {path_name}. Setting: None"
+                )
+                exif_date = None
     except KeyError:
         exif_date = None
 
