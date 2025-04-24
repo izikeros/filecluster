@@ -6,13 +6,13 @@ help: ## Show all Makefile targets
 .PHONY: format lint type style clean run-benchmarks
 format: ## Running code formatter: black and isort
 	@echo "(isort) Ordering imports..."
-	@isort .
+	@isort src
 	@echo "(black) Formatting codebase..."
 	@black --config pyproject.toml src tests
 	@echo "(black) Formatting stubs..."
 	@find src -name "*.pyi" ! -name "*_pb2*" -exec black --pyi --config pyproject.toml {} \;
 	@echo "(ruff) Running fix only..."
-	@ruff check src docs tests --fix-only
+	@ruff check src tests --fix-only
 lint: ## Running lint checker: ruff
 	@echo "(ruff) Linting development project..."
 	@ruff check src tests
