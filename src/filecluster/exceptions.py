@@ -9,7 +9,7 @@ class DateStringNoneError(Exception):
 
 
 class MissingDfClusterColumnError(Exception):
-    """Exception for the case when there is missing cluster column."""
+    """Exception for the case when there is a missing cluster column."""
 
     def __init__(self, column_name):
         self.message = f"Column {column_name} is missing in data frame."
