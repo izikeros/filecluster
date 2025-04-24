@@ -2,7 +2,6 @@
 
 import base64
 import hashlib
-import logging
 import os
 import time
 from datetime import datetime
@@ -10,7 +9,6 @@ from io import BytesIO
 from pathlib import Path
 
 import exifread
-from configuration import ROOT_DIR
 from PIL import Image
 
 from filecluster import logger
