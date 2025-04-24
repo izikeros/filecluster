@@ -1,5 +1,6 @@
 """Module for file clustering and supporting operations."""
-import logging
+
+import math
 import os
 import random
 from collections.abc import Iterator
@@ -53,7 +54,7 @@ def expand_cluster_or_init_new(
         cluster:                cluster dictionary with description of current "buffer" cluster
     :return:
     """
-    # check if new cluster encountered
+    # check if a new cluster encountered
     is_first_image_analysed = index == 0
     is_this_image_too_far_from_other_in_the_cluster = (
         delta_from_previous > max_time_delta
@@ -126,7 +127,7 @@ class ImageGrouper:
 
         Args:
             configuration: instance of Configuration
-            df_clusters: clusters database (loaded from file or empty)
+            df_clusters: clusters database (loaded from a file or empty)
             inbox_media_df: dataframe with inbox media
         """
         # read the config
@@ -180,7 +181,7 @@ class ImageGrouper:
                 "cluster_id": cluster_idx,
                 "start_date": None,
                 "end_date": None,
-                "is_continous": True,  # FIXME: rename `is_continous` to `is_continuous`
+                "is_continuous": True,
             }
         )
 
@@ -228,7 +229,7 @@ class ImageGrouper:
                         "cluster_id": cluster_idx,
                         "start_date": media_date,
                         "end_date": media_date,
-                        "is_continous": True,
+                        "is_continuous": True,
                     }
                 )
             else:
@@ -264,7 +265,7 @@ class ImageGrouper:
         return self.inbox_media_df[sel_new]["cluster_id"].unique()
 
     def get_existing_to_be_expanded_cluster_ids(self):
-        """Get Id of existing clusters that will be expanded by adding new media."""
+        """Get id of existing clusters that will be expanded by adding new media."""
         sel_existing = ~(self.df_clusters["path"].isna())
         sel_with_files_to_appened = self.df_clusters["new_file_count"] > 0
         sel = sel_existing & sel_with_files_to_appened
@@ -409,7 +410,7 @@ class ImageGrouper:
             range_ok = not_too_old_clusters & not_too_new_clusters
 
             # condition for the continuity
-            continuous = self.df_clusters.is_continous
+            continuous = self.df_clusters.is_continuous
 
             sel = range_ok & continuous
             n_sel = sum(sel.values)
