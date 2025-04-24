@@ -8,8 +8,6 @@ import argparse
 import os
 from pathlib import Path
 
-from utlis import read_version
-
 from filecluster import logger
 from filecluster.configuration import (
     CopyMode,
@@ -19,6 +17,9 @@ from filecluster.configuration import (
 from filecluster.dbase import get_existing_clusters_info
 from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import ImageReader
+
+# from utlis import read_version
+
 
 # TODO: KS: 2020-12-17: There are copies of config in the classes.
 #  In extreme case various configs can be modified in different way.
@@ -233,13 +234,13 @@ def add_args_to_parser(parser):
         action="store_true",
         default=False,
     )
-    parser.add_argument(
-        "-v",
-        "--version",
-        help="Display program version",
-        action="version",
-        version=f"%(prog)s {read_version()}",
-    )
+    # parser.add_argument(
+    #     "-v",
+    #     "--version",
+    #     help="Display program version",
+    #     action="version",
+    #     version=f"%(prog)s {read_version()}",
+    # )
     return parser
 
 
