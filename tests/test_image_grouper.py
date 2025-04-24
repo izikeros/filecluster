@@ -4,7 +4,6 @@ from filecluster.configuration import get_development_config
 from filecluster.dbase import get_existing_clusters_info
 from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import ImageReader
-from tests.conftest import assets_dir
 
 
 def test_image_grouper__instantinates_for_dev_config():
@@ -63,7 +62,12 @@ class TestImageGrouper:
             clusters,
         ) = self.image_grouper.assign_to_existing_clusters()
 
-        expected = ["IMG_4029.JPG", "IMG_4031.JPG", "IMG_3957.JPG", "IMG_3955.JPG"]  # FIXME: KS: 2025-04-24: fix expected
+        expected = [
+            "IMG_4029.JPG",
+            "IMG_4031.JPG",
+            "IMG_3957.JPG",
+            "IMG_3955.JPG",
+        ]  # FIXME: KS: 2025-04-24: fix expected
         assert files == expected
 
     def test_run_clustering(self):

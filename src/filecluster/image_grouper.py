@@ -10,12 +10,11 @@ from shutil import copy2, move
 from typing import Any
 
 import pandas as pd
-from configuration import FileClusterSettings
+from configuration import FileClusterSettings, default_settings
 from pandas._libs.tslibs.timedeltas import Timedelta
 from pandas._libs.tslibs.timestamps import Timestamp
 from tqdm import tqdm
 
-from configuration import default_settings
 from filecluster import logger
 from filecluster import utlis as ut
 from filecluster.configuration import (
@@ -408,7 +407,6 @@ class ImageGrouper:
     def assign_to_existing_clusters(self) -> tuple[list[str], list[str]]:
         """Assign media to an existing cluster if possible."""
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
-
 
         check_df_has_all_expected_columns(
             df=self.df_clusters, expected_cols=default_settings.CLUSTER_DF_COLUMNS

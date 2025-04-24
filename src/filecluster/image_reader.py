@@ -11,9 +11,14 @@ from pandas import DataFrame
 from tqdm import tqdm
 
 import filecluster.utlis as ut
-from filecluster.configuration import default_settings
 from filecluster import logger
-from filecluster.configuration import Config, CopyMode, Status, get_default_config
+from filecluster.configuration import (
+    Config,
+    CopyMode,
+    Status,
+    default_settings,
+    get_default_config,
+)
 from filecluster.filecluster_types import MediaDataFrame
 
 # for extracting timestamp from MOV files
