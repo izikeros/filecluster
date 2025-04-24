@@ -2,28 +2,30 @@
 [![flake8](https://github.com/izikeros/filecluster/actions/workflows/flake8.yml/badge.svg)](https://github.com/izikeros/filecluster/actions/workflows/flake8.yml)
 <!-- [![Requirements Status](https://requires.io/github/izikeros/filecluster/requirements.svg?branch=master)](https://requires.io/github/izikeros/filecluster/requirements/?branch=master) -->
 
-# filecluster
-Python library for creating image and video catalog. Catalog is organized by the dates and events.
-Main purpose is to handle task whe you have large number of pictures in flat
-directory and want to automatically group them into separate directories
-corresponding to events e.g. directory for your daughter's birthday, separate
-directory for the excursion you make next day after the birthday etc..
 
-## Features
+## filecluster
+Python library for creating image and video catalog. Catalog is organized by the dates and events. The main purpose is to handle a task when you have a large number of pictures in a flat directory and want to automatically group them into separate directories corresponding to events e.g., directory for your daughter's birthday, separate directory for the excursion you make the next day after the birthday, etc..
+
+### Features
 - clustering media (images, video) by event
-- detecting duplicate files and stores the in separate output dir
+- detecting duplicate files and stores them in a separate output dir
 - detecting media belonging to events that are already in the library
-- detect if imported photo belongs to event that is already in database/filesystem
+- detect if an imported photo belongs to an event already in database/filesystem
 - mark folders from events that has large amount of media (folder suffix: `_rich`)
 
-## Installation:
+### Installation:
 Clone the repo, install required packages (see `filecluster/requirements.txt`)
 
-On Windows to have numpy working one might need to install:
+The recommended way to install the package is to use `uv`:
+
+```bash
+uv lock && uv sync
+```
+On Windows to have numpy working, one might need to install:
 
 [vc_redist.x64.exe](https://aka.ms/vs/15/release/vc_redist.x64.exe)
 
-## Usage
+### Usage
 Typical usage:
 ```bash
 $ file_cluster.py --inbox-dir inbox --watch-dirs zdjecia --db-driver dataframe
@@ -59,6 +61,6 @@ optional arguments:
   --version             show program's version number and exit
 
 ```
-# Graphical Interface
+## Graphical Interface
 There is available experimental graphical interface: (`filecluster/gui.py`).
 ![img](screenshot.png)
