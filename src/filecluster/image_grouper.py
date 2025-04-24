@@ -347,7 +347,7 @@ class ImageGrouper:
 
             isnan = isinstance(dir_name, float) and math.isnan(dir_name)
             if dir_name is None or isnan:
-                raise DateStringNoneException()
+                raise DateStringNoneError()
                 # instead, create dummy date
                 # dir_name = "XXXX_XX_XX"
             ut.create_folder_for_cluster(
