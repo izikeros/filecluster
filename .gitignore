@@ -7,16 +7,10 @@ __pycache__
 *.pyc
 *.m
 *venv
-filecluster/tests/clusters
-filecluster/tests/inbox_mini
-filecluster/tests/inbox_test_a
-filecluster/tests/inbox_test_a_orig
-filecluster/tests/inbox_test_b
-filecluster/tests/inbox_test_b_orig
-filecluster/tests/zdjecia
 tests/assets
 gui.build
 gui.dist
 *.egg-info
 filecluster/monkeytype.sqlite3
 .aider*
+.env
