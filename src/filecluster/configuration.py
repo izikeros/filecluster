@@ -294,7 +294,7 @@ class ConfigFactory:
             skip_duplicated_existing_in_libs=self.settings.SKIP_DUPLICATED_EXISTING_IN_LIBS,
         )
 
-    def override_from_cli(
+    def override_from_cli(  # noqa: C901 too complex
         self,
         config: Config,
         inbox_dir: str | None = None,

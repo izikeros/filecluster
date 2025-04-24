@@ -96,7 +96,7 @@ def test_config_override_from_cli():
     assert updated_config.in_dir_name == Path("/test/inbox")
     assert updated_config.out_dir_name == Path("/test/output")
     assert updated_config.watch_folders == ["/test/watch1", "/test/watch2"]
-    assert updated_config.force_deep_scan == True
+    assert updated_config.force_deep_scan is True
     assert updated_config.mode == CopyMode.NOP  # No operation mode
 
 
@@ -149,8 +149,8 @@ def test_backwards_compatibility_override_config():
     assert updated_config.out_dir_name == Path("/test/output")
     assert updated_config.watch_folders == ["/test/library"]
     assert updated_config.mode == CopyMode.NOP
-    assert updated_config.skip_duplicated_existing_in_libs == True
-    assert updated_config.assign_to_clusters_existing_in_libs == True
+    assert updated_config.skip_duplicated_existing_in_libs is True
+    assert updated_config.assign_to_clusters_existing_in_libs is True
 
 
 def test_field_validator():
