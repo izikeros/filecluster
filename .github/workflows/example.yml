@@ -1,5 +1,9 @@
 name: Example
 
+on:
+  push:
+  pull_request:
+
 jobs:
   uv-example:
     name: python
