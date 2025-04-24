@@ -23,21 +23,21 @@ BLOCK_SIZE_FOR_HASHING = 4096 * 32
 
 
 def is_supported_filetype(file_name: str, ext_list: list[str]) -> bool:
-    """Check if filename has one of the allowed extensions from the list."""
+    """Check if the filename has one of the allowed extensions from the list."""
     ext_list_lower = [ext.lower() for ext in ext_list]
     fn_lower = file_name.lower()
     return fn_lower.endswith(tuple(ext_list_lower))
 
 
 def is_image(file_name: str, ext_list_image: list[str]) -> bool:
-    """Determine if file is image based on known file name extensions."""
+    """Determine if a file is an image based on known file name extensions."""
     ext_list_lower = [ext.lower() for ext in ext_list_image]
     fn_lower = file_name.lower()
     return fn_lower.endswith(tuple(ext_list_lower))
 
 
 def get_date_from_file(path_name: str):
-    """Get date information from photo file."""
+    """Get date information from a photo file."""
     m_time = time.ctime(os.path.getmtime(path_name))
     c_time = time.ctime(os.path.getctime(path_name))
     exif_date = get_exif_date(path_name)
@@ -46,7 +46,7 @@ def get_date_from_file(path_name: str):
 
 def get_exif_date(path_name: str):
     """Return exif date or none."""
-    # Open image file for reading (binary mode)
+    # Open the image file for reading (binary mode)
     with open(path_name, "rb") as img_file:
         # Return Exif tags
         try:
@@ -70,7 +70,7 @@ def get_exif_date(path_name: str):
 
 
 def create_folder_for_cluster(config: Config, date_string: str, mode: CopyMode):
-    """Create destination folder that for all pictures from the cluster."""
+    """Create a destination folder that for all pictures from the cluster."""
     if date_string is None:
         raise DateStringNoneError()
 

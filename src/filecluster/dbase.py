@@ -24,7 +24,7 @@ def get_existing_clusters_info(
 
     Returns:
         Tuple of:
-            - ClustersDataFrame object with columns: ['cluster_id', 'start_date', 'end_date', 'median', 'is_continous',
+            - ClustersDataFrame object with columns: ['cluster_id', 'start_date', 'end_date', 'median', 'is_continuous',
                   'path', 'target_path', 'file_count', 'new_file_count'], where
                   path - path to the folder with media files
                   target_path - path to the folder where media files should be moved

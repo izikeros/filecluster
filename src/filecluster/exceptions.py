@@ -2,7 +2,7 @@
 
 
 class DateStringNoneError(Exception):
-    """Exception for case when date string is none."""
+    """Exception for a case when the date string is none."""
 
     def __init__(self):
         self.message = "date_string is None"

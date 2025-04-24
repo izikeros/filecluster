@@ -128,7 +128,7 @@ def get_this_ini(
             cluster_ini = initialize_cluster_info_dict(
                 start=media_stats["date_min"],
                 stop=media_stats["date_max"],
-                is_continous=media_stats["is_time_consistent"],
+                is_continuous=media_stats["is_time_consistent"],
                 median=media_stats["date_median"],
                 file_count=media_stats["file_count"],
             )
@@ -148,8 +148,11 @@ def dict_from_ini_range_section(cluster_ini_r, pth):
     """Read data from ini section and adjust data types."""
     d = cluster_ini_r["Range"]
     # convert types
-    d["is_continous"] = str_to_bool(d["is_continous"])
-    d["median"] = datetime.strptime(d["median"], "%Y-%m-%d %H:%M:%S")
+    d["is_continuous"] = str_to_bool(d["is_continuous"])
+    try:
+        d["median"] = datetime.strptime(d["median"], "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        d["median"] = datetime.strptime(d["median"], "%Y-%m-%d %H:%M:%S.%f")
     d["file_count"] = int(d["file_count"])
     d["path"] = pth
     return d
@@ -158,7 +161,7 @@ def dict_from_ini_range_section(cluster_ini_r, pth):
 def initialize_cluster_info_dict(
     start: str,
     stop: str,
-    is_continous: bool,
+    is_continuous: bool,
     median: int | None = None,
     file_count: int | None = None,
 ) -> ConfigParser:
@@ -169,7 +172,7 @@ def initialize_cluster_info_dict(
       file_count:
       start:        Cluster start datetime
       stop:         Cluster end datetime
-      is_continous: Indicate if there are not gaps (larger than allowed) in the cluster
+      is_continuous: Indicate if there are not gaps (larger than allowed) in the cluster
 
     Returns:
         configparser object with predefined structure of information
@@ -178,7 +181,7 @@ def initialize_cluster_info_dict(
     cluster_ini["Range"] = {}
     cluster_ini["Range"]["start_date"] = str(start)
     cluster_ini["Range"]["end_date"] = str(stop)
-    cluster_ini["Range"]["is_continous"] = str(is_continous)
+    cluster_ini["Range"]["is_continuous"] = str(is_continuous)
     cluster_ini["Range"]["median"] = str(median)
     cluster_ini["Range"]["file_count"] = str(file_count)
     return cluster_ini

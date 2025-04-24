@@ -48,7 +48,7 @@ CLUSTER_DF_COLUMNS = [
     "start_date",
     "end_date",
     "median",
-    "is_continous",
+    "is_continuous",
     "path",
     "target_path",
     "file_count",
