@@ -5,7 +5,6 @@ import hashlib
 import logging
 import os
 import time
-import tomllib
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -126,8 +125,8 @@ def hash_file(fname, hash_funct=hashlib.sha1):
     return hash_value.hexdigest()
 
 
-def read_version():
-    with open(ROOT_DIR / "pyproject.toml", "rb") as f:
-        pyproject = tomllib.load(f)
-
-    return pyproject["project"]["version"]
+# def read_version():
+#     with open(ROOT_DIR / "pyproject.toml", "rb") as f:
+#         pyproject = tomllib.load(f)
+#
+#     return pyproject["project"]["version"]
