@@ -11,6 +11,7 @@ from pandas import DataFrame
 from tqdm import tqdm
 
 import filecluster.utlis as ut
+from filecluster.configuration import default_settings
 from filecluster import logger
 from filecluster.configuration import Config, CopyMode, Status, get_default_config
 from filecluster.filecluster_types import MediaDataFrame
@@ -203,15 +204,18 @@ def get_creation_time(struct, f):
 
 
 class ImageReader:
-    """Initialize media database with existing media dataframe or create empty one."""
+    """Initialize a media database with existing media dataframe or create empty one."""
 
-    def __init__(self, config: Config, media_df: MediaDataFrame | None = None) -> None:
+    def __init__(self, in_dir_name, media_df: MediaDataFrame | None = None) -> None:
         # read the config
-        self.config = config
+
+        self.in_dir_name = in_dir_name
+        self.image_extensions = default_settings.image_extensions
+        self.video_extensions = default_settings.video_extensions
 
         if media_df is None:
             logger.debug(
-                f"Initializing empty media dataframe in ImageReader ({config.in_dir_name})"
+                f"Initializing empty media dataframe in ImageReader ({in_dir_name})"
             )
             self.media_df = MediaDataFrame(DataFrame())
         else:
@@ -229,11 +233,11 @@ class ImageReader:
 
         """
         list_of_rows = []
-        in_dir_name = self.config.in_dir_name
-        ext = self.config.image_extensions + self.config.video_extensions
+        in_dir_name = self.in_dir_name
+        ext = self.image_extensions + self.video_extensions
 
         logger.debug(f"Reading data from: {in_dir_name}")
-        image_extensions = self.config.image_extensions
+        image_extensions = self.image_extensions
         meta = Metadata()
         file_list = list(os.listdir(in_dir_name))
         for file_name in tqdm(file_list):
@@ -245,10 +249,10 @@ class ImageReader:
         return list_of_rows
 
     def get_media_info_from_inbox_files(self) -> None:
-        """Read data from files, return media info in dataframe."""
+        """Read data from files, return media info in a dataframe."""
         row_list = self.get_data_from_files_as_list_of_rows()
         logger.debug(f"Read info from {len(row_list)} files.")
-        # convert list of rows to data frame
+        # convert a list of rows to data frame
         inbox_media_df = MediaDataFrame(DataFrame(row_list))
         inbox_media_df = multiple_timestamps_to_one(inbox_media_df)
         self.media_df = inbox_media_df
@@ -272,7 +276,7 @@ def configure_im_reader(in_dir_name: str | Path) -> Config:
     return conf
 
 
-def get_media_df(conf: Config) -> MediaDataFrame | None:
+def get_media_df(in_dir_name) -> MediaDataFrame | None:
     """Get data frame with metadata description of media indicated in Config.
 
     Args:
@@ -281,17 +285,16 @@ def get_media_df(conf: Config) -> MediaDataFrame | None:
     Returns:
         Dataframe with metadata of the contents of directory.
     """
-    f_name = conf.in_dir_name
-    if os.listdir(f_name):
-        im_reader = ImageReader(config=conf)
+    if os.listdir(in_dir_name):
+        im_reader = ImageReader(in_dir_name)
         if row_list := im_reader.get_data_from_files_as_list_of_rows():
             df = MediaDataFrame(DataFrame(row_list))
             return multiple_timestamps_to_one(df)
         else:
-            logger.debug(f" - directory {f_name} is empty?.")
+            logger.debug(f" - directory {in_dir_name} is empty?.")
             return None
     else:
-        logger.debug(f" - directory {f_name} is empty.")
+        logger.debug(f" - directory {in_dir_name} is empty.")
         return None
 
 

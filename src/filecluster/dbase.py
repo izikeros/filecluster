@@ -5,22 +5,22 @@ import multiprocessing
 from pathlib import Path
 
 import pandas as pd
+from configuration import FileClusterSettings
 from numpy import int64
 from pandas.core.frame import DataFrame
 
 from filecluster import logger
-from filecluster.configuration import CLUSTER_DF_COLUMNS, Config
 from filecluster.filecluster_types import ClustersDataFrame
 from filecluster.update_clusters import get_or_create_library_cluster_ini_as_dataframe
 
 
 def get_existing_clusters_info(
-    config: Config,
+    watch_folders: list[Path],
+    skip_duplicated_existing_in_libs: bool,
+    assign_to_clusters_existing_in_libs: bool,
+    force_deep_scan: bool,
 ) -> tuple[ClustersDataFrame, list[Path], list[str]]:
-    """Scan library, find existing clusters and empty or non-compliant folders.
-
-    Args:
-        config: Config object
+    """Scan the library, find existing clusters and empty or non-compliant folders.
 
     Returns:
         Tuple of:
@@ -41,8 +41,6 @@ def get_existing_clusters_info(
     pool = multiprocessing.Pool(processes=n_cpu)
     logger.debug("Pool ready to use")
 
-    watch_folders = config.watch_folders
-
     # NOTE: this requires refactoring in scan_library_dir()
 
     # TODO: KS: 2020-12-26: non-compliant - folders than contains no media files but subfolders
@@ -54,8 +52,7 @@ def get_existing_clusters_info(
     # is there a reason for using watch folders (library folders)?
     #   do we have enabled duplicates or existing cluster functionalities
     use_watch_folders = (
-        config.skip_duplicated_existing_in_libs
-        or config.assign_to_clusters_existing_in_libs
+        skip_duplicated_existing_in_libs or assign_to_clusters_existing_in_libs
     )
 
     # Start scanning watch folders to get cluster information
@@ -63,9 +60,7 @@ def get_existing_clusters_info(
 
         # tuples of
         tuples = [
-            get_or_create_library_cluster_ini_as_dataframe(
-                lib, pool, config.force_deep_scan
-            )
+            get_or_create_library_cluster_ini_as_dataframe(lib, pool, force_deep_scan)
             for lib in watch_folders
         ]
         dfs, empty_folder_list = map(list, zip(*tuples, strict=False))
@@ -77,7 +72,10 @@ def get_existing_clusters_info(
         # Flatten the list of empty directories:
         empty_folder_list = list(itertools.chain(*empty_folder_list))
     else:
-        df = pd.DataFrame(columns=CLUSTER_DF_COLUMNS)
+        settings = (
+            FileClusterSettings()
+        )  # FIXME: KS: 2025-04-24: are these proper settings?
+        df = pd.DataFrame(columns=settings.CLUSTER_DF_COLUMNS)
     return ClustersDataFrame(df), empty_folder_list, non_compliant_folders
 
 

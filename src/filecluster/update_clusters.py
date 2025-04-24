@@ -24,12 +24,14 @@ from pathlib import Path
 import pandas as pd
 
 from filecluster import logger
-from filecluster.configuration import INI_FILENAME
+
+# from filecluster.configuration import ini_filename
+from filecluster.configuration import FileClusterSettings
 from filecluster.image_reader import configure_im_reader, get_media_df, get_media_stats
 
 
 def str_to_bool(s: str) -> bool:
-    """Convert 'True' or 'False' provided as string to corresponding bool value."""
+    """Convert 'True' or 'False' provided as string to the corresponding bool value."""
     if s == "True":
         return True
     elif s == "False":
@@ -108,7 +110,10 @@ def get_this_ini(
     """
     event_dir_name = event_dir[0]
     pth = Path(library_path) / event_dir_name
-    is_ini = os.path.isfile(Path(pth) / INI_FILENAME)
+    settings = (
+        FileClusterSettings()
+    )  # FIXME: KS: 2025-04-24: are these proper settings?
+    is_ini = os.path.isfile(Path(pth) / settings.ini_filename)
     is_empty = False
     if force_deep_scan or not is_ini:
         # calculate ini
@@ -116,7 +121,7 @@ def get_this_ini(
 
         f_name = conf.in_dir_name
         if os.listdir(f_name):
-            media_df = get_media_df(conf)
+            media_df = get_media_df(conf.in_dir_name)
         else:
             logger.debug(f" - directory {f_name} is empty.")
             media_df = None
@@ -195,12 +200,15 @@ def save_cluster_ini(
 
     Args:
       cluster_ini:      cluster info object to be saved on disk
-      path:             path, where object has to be saved
+      path:             path, where an object has to be saved
 
     Returns:
         None
     """
-    with open(Path(path) / INI_FILENAME, "w") as cluster_ini_file:
+    settings = (
+        FileClusterSettings()
+    )  # FIXME: KS: 2025-04-24: are these proper settings?
+    with open(Path(path) / settings.ini_filename, "w") as cluster_ini_file:
         cluster_ini.write(cluster_ini_file)
 
 
@@ -246,10 +254,10 @@ def read_cluster_ini_as_dict(
 
 
 def fast_scandir(dirname: str) -> list[str]:
-    """Get list of folders of given directory.
+    """Get a list of folders of a given directory.
 
     Args:
-        dirname: directory names that has to be scanned for folders
+        dirname: directory names that have to be scanned for folders
 
     Returns:
         list of folders
@@ -264,7 +272,7 @@ def fast_scandir(dirname: str) -> list[str]:
 
 
 def identify_folder_types(subfolders_list: list[str]) -> list[tuple[str, str]]:
-    """Assign folder-type label.
+    """Assign a folder-type label.
 
     Args:
       subfolders_list: list of subfolders to be labelled.
@@ -288,30 +296,30 @@ def identify_folder_types(subfolders_list: list[str]) -> list[tuple[str, str]]:
 
 
 def is_year_folder(folder: str) -> bool:
-    """Check if given folder is a folder that store all media from given year.
+    """Check if a given folder is a folder that stores all media from a given year.
 
     Valid year-folder starts with 19 or 20 followed by two digits
 
     Args:
-      folder: path to folder that has to be examined.
+      folder: path to the folder that has to be examined.
 
     Returns:
-        True if folder is year-folder
+        True if the folder is year-folder
     """
     last_part = Path(folder).parts[-1]
     return bool(re.match(r"^(19|20)\d{2}$", last_part))
 
 
 def is_event_folder(folder: str) -> bool:
-    """Check if given folder is a top-level event folder.
+    """Check if a given folder is a top-level event folder.
 
-    Check if given folder is directly under year folder
+    Check if a given folder is directly under year folder
 
     Args:
-      folder: path to folder that has to be examined.
+      folder: path to the folder that has to be examined.
 
     Returns:
-        True if folder is event-folder
+        True if the folder is event-folder
     """
     # is under year-folder
     parrent_part = Path(folder).parts[-2]
@@ -321,11 +329,11 @@ def is_event_folder(folder: str) -> bool:
 def is_sel_folder(folder: str) -> bool:
     """Check if given folder is a sel-type folder.
 
-    Sel-type folder is a sub-folder of event folder dedicated for keeping
+    Sel-type folder is a subfolder of the event folder dedicated to keeping
     best, selected images or videos.
 
     Args:
-      folder: path to folder that has to be examined.
+      folder: path to the folder that has to be examined.
 
     Returns:
         True if folder is sel-folder
@@ -334,13 +342,13 @@ def is_sel_folder(folder: str) -> bool:
 
 
 def is_event_subcategory_folder(folder: str) -> bool:
-    """Check if given folder is a event sub-folder folder.
+    """Check if given folder is an event subfolder folder.
 
     Args:
-      folder: path to folder that has to be examined.
+      folder: path to the folder that has to be examined.
 
     Returns:
-        True if folder is a event sub-folder folder.
+        True if folder is an event subfolder folder.
     """
     # TODO: KS: 2020-12-23: add separator (for given system - / or \) after year
     # is_year_in_the_path = bool(re.match(r"(19|20)\d{2}", folder))
@@ -349,7 +357,7 @@ def is_event_subcategory_folder(folder: str) -> bool:
 
 
 def validate_library_structure(library_dir):
-    """Check if library has structure following assumed convention.
+    """Check if a library has structure following the assumed convention.
 
     Folder types:
     - year
@@ -370,10 +378,10 @@ def is_event(item: tuple[str, str]) -> bool:
     """Check item from labelled list of folders if it is event folder.
 
     Args:
-      item: item from labelled list of folders
+      item: item from a labelled list of folders
 
     Returns:
-        True if folder in tuple is event-type
+        True if the folder in tuple is event-type
     """
     i_type = item[1]
     return i_type == "event"

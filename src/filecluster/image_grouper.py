@@ -10,14 +10,15 @@ from shutil import copy2, move
 from typing import Any
 
 import pandas as pd
+from configuration import FileClusterSettings
 from pandas._libs.tslibs.timedeltas import Timedelta
 from pandas._libs.tslibs.timestamps import Timestamp
 from tqdm import tqdm
 
+from configuration import default_settings
 from filecluster import logger
 from filecluster import utlis as ut
 from filecluster.configuration import (
-    CLUSTER_DF_COLUMNS,
     AssignDateToClusterMethod,
     Config,
     CopyMode,
@@ -72,7 +73,10 @@ def expand_cluster_or_init_new(
             list_new_clusters.append(cluster)
 
         # initialize record for a new cluster
-        cluster = dict.fromkeys(CLUSTER_DF_COLUMNS)
+        settings = (
+            FileClusterSettings()
+        )  # FIXME: KS: 2025-04-24: are these proper settings?
+        cluster = dict.fromkeys(settings.CLUSTER_DF_COLUMNS)
         cluster.update(
             {
                 "cluster_id": new_cluster_idx,
@@ -175,7 +179,10 @@ class ImageGrouper:
 
         # prepare placeholder for first cluster row (as dict).
         #   First cluster for the media that are not clustered yet.
-        current_cluster_dict = dict.fromkeys(CLUSTER_DF_COLUMNS)
+        settings = (
+            FileClusterSettings()
+        )  # FIXME: KS: 2025-04-24: are these proper settings?
+        current_cluster_dict = dict.fromkeys(settings.CLUSTER_DF_COLUMNS)
         current_cluster_dict.update(
             {
                 "cluster_id": cluster_idx,
@@ -223,7 +230,8 @@ class ImageGrouper:
                     list_new_cluster_dictionaries.append(current_cluster_dict)
 
                 # initialize record for a new cluster
-                current_cluster_dict = dict.fromkeys(CLUSTER_DF_COLUMNS)
+                settings = FileClusterSettings()
+                current_cluster_dict = dict.fromkeys(settings.CLUSTER_DF_COLUMNS)
                 current_cluster_dict.update(
                     {
                         "cluster_id": cluster_idx,
@@ -385,7 +393,13 @@ class ImageGrouper:
 
     def add_cluster_info_from_clusters_to_media(self):
         """Add clusters info to media dataframe."""
-        # add path info from the cluster dir,
+
+        # Ensure both columns have the same data type
+        self.inbox_media_df["cluster_id"] = self.inbox_media_df["cluster_id"].astype(
+            str
+        )
+        self.df_clusters["cluster_id"] = self.df_clusters["cluster_id"].astype(str)
+
         self.inbox_media_df = self.inbox_media_df.merge(
             self.df_clusters[["cluster_id", "target_path"]], on="cluster_id", how="left"
         )
@@ -395,8 +409,9 @@ class ImageGrouper:
         """Assign media to an existing cluster if possible."""
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
 
+
         check_df_has_all_expected_columns(
-            df=self.df_clusters, expected_cols=CLUSTER_DF_COLUMNS
+            df=self.df_clusters, expected_cols=default_settings.CLUSTER_DF_COLUMNS
         )
 
         margin = self.config.time_granularity

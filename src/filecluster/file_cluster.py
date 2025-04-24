@@ -1,137 +1,130 @@
 #!/usr/bin/env python3
 """Main module for image grouping by the event.
 
-force deep scan
-use existing clusters
+This module provides functionality to cluster media files (images and videos)
+based on their timestamps, helping organize them into event-based folders.
 """
+
 import argparse
-import os
 from pathlib import Path
+from typing import Any
 
 from filecluster import logger
 from filecluster.configuration import (
     CopyMode,
-    get_proper_mode_config,
-    override_config_with_cli_params,
+    default_factory,
 )
 from filecluster.dbase import get_existing_clusters_info
 from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import ImageReader
-
-# from utlis import read_version
-
-
-# TODO: KS: 2020-12-17: There are copies of config in the classes.
-#  In extreme case various configs can be modified in different way.
 
 
 def main(
     inbox_dir: str | None = None,
     output_dir: str | None = None,
     watch_dir_list: list[str] | None = None,
-    development_mode: bool | None = None,
-    no_operation: bool | None = None,
-    copy_mode: bool | None = None,
+    development_mode: bool = False,
+    no_operation: bool = False,
+    copy_mode: bool = False,
     force_deep_scan: bool | None = None,
     drop_duplicates: bool | None = None,
     use_existing_clusters: bool | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Run clustering on the media files provided as inbox.
 
-    Input args are default parameters to override and all are optional.
+    Groups media files based on their timestamps, organizing them into event-based folders.
+    Can optionally check for duplicates and existing clusters in watch directories.
 
     Args:
-        copy_mode:      Copy files instead of move
-        inbox_dir:
-        output_dir:
-        watch_dir_list:
-        development_mode:
-        no_operation:
-        force_deep_scan:
-        drop_duplicates:
-        use_existing_clusters:
+        inbox_dir: Input directory containing media files to process
+        output_dir: Output directory where clustered media will be placed
+        watch_dir_list: List of directories to check for existing clusters and duplicates
+        development_mode: Whether to use development configuration
+        no_operation: Perform a dry run without making changes to the filesystem
+        copy_mode: Copy files instead of moving them
+        force_deep_scan: Force recalculation of cluster info for existing clusters
+        drop_duplicates: Skip clustering duplicates and store them in a separate folder
+        use_existing_clusters: Try to assign media to existing clusters in watch folders
 
     Returns:
-        dictionary with diagnostics data
+        Dictionary with diagnostic data from the clustering process
     """
-    # get development or production config
-    config = get_proper_mode_config(development_mode)
+    # Get appropriate configuration based on mode
+    config = default_factory.get_config(is_development_mode=development_mode)
 
-    # override config with CLI params
-    logger.info("Override config with CLI params")
-    config = override_config_with_cli_params(
+    # Override configuration with CLI parameters
+    logger.info("Applying CLI parameter overrides to configuration")
+    config = default_factory.override_from_cli(
         config=config,
         inbox_dir=inbox_dir,
-        no_operation=no_operation,
-        copy_mode=copy_mode,
         output_dir=output_dir,
         watch_dir_list=watch_dir_list,
         force_deep_scan=force_deep_scan,
+        no_operation=no_operation,
+        copy_mode=copy_mode,
         drop_duplicates=drop_duplicates,
         use_existing_clusters=use_existing_clusters,
     )
 
-    # read cluster info from clusters in libraries (or empty dataframe)
-    logger.info("Read cluster info from clusters in libraries")
-    df_clusters, empty, non_compliant = get_existing_clusters_info(config)
+    # Read cluster info from libraries (or get empty DataFrame if none found)
+    logger.info("Reading cluster information from watch directories")
+    df_clusters, empty_folders, non_compliant_folders = get_existing_clusters_info(
+        config.watch_folders,
+        config.skip_duplicated_existing_in_libs,
+        config.assign_to_clusters_existing_in_libs,
+        config.force_deep_scan,
+    )
     results = {
         "df_clusters": df_clusters,
-        "empty": empty,
-        "non_compliant": non_compliant,
+        "empty": empty_folders,
+        "non_compliant": non_compliant_folders,
     }
 
-    # Configure image reader, initialize media database
-    image_reader = ImageReader(config)
+    # Configure image reader and initialize media database
+    image_reader = ImageReader(in_dir_name=config.in_dir_name)
+    logger.info("Reading media information from inbox files")
+    image_reader.get_media_info_from_inbox_files()
 
-    # read timestamps from imported pictures/recordings
-    use_csv = False
-    inbox_csv_file_name = "h:\\incomming\\inbox.csv"
-    if use_csv and os.path.isfile(inbox_csv_file_name):
-        read_inbox_info_from_csv(inbox_csv_file_name, image_reader)
-    else:
-        logger.info("Read inbox info from files")
-        image_reader.get_media_info_from_inbox_files()
-        if use_csv:
-            image_reader.media_df.to_csv(inbox_csv_file_name, index=False)
-
-    # configure media grouper, initialize internal dataframes
+    # Configure media grouper and initialize internal dataframes
     image_grouper = ImageGrouper(
         configuration=config,
         df_clusters=df_clusters,  # existing clusters
         inbox_media_df=image_reader.media_df.copy(),  # inbox media
     )
 
-    # Mark inbox files duplicated with watch folders (if feature enabled)
-    dup_files, dup_clusters = image_grouper.mark_inbox_duplicates()
-    results |= {"dup_files": dup_files, "dup_clusters": dup_clusters}
+    # Mark duplicates if enabled
+    if config.skip_duplicated_existing_in_libs and config.watch_folders:
+        logger.info("Identifying duplicates against watch directories")
+        dup_files, dup_clusters = image_grouper.mark_inbox_duplicates()
+        results.update({"dup_files": dup_files, "dup_clusters": dup_clusters})
+    else:
+        results.update({"dup_files": 0, "dup_clusters": 0})
 
-    # == Assign to existing ==
-    results |= {"files_existing_cl": None, "existing_cluster_names": None}
-    if config.assign_to_clusters_existing_in_libs:
-        # try assign media items to clusters already existing in the library
-        (
-            files_assigned_to_existing_cl,
-            existing_cluster_names,
-        ) = (
+    # Assign to existing clusters if enabled
+    results.update({"files_existing_cl": None, "existing_cluster_names": None})
+    if config.assign_to_clusters_existing_in_libs and config.watch_folders:
+        logger.info("Assigning media to existing clusters")
+        files_assigned, existing_cluster_names = (
             image_grouper.assign_to_existing_clusters()
-        )  # TODO: KS: 2020-12-26: should not have assigned target path yet
-        results |= {
-            "files_existing_cl": files_assigned_to_existing_cl,
-            "existing_cluster_names": existing_cluster_names,
-        }
+        )
+        results.update(
+            {
+                "files_existing_cl": files_assigned,
+                "existing_cluster_names": existing_cluster_names,
+            }
+        )
 
-    # == Handle not-clustered items ==
-    # Calculate gaps for non-clustered items
-    logger.info("Calculating gaps for creating new clusters")
+    # Handle non-clustered items
+    logger.info("Calculating time gaps for creating new clusters")
     image_grouper.calculate_gaps()
 
-    # create new clusters, assign media
-    logger.info("run_clustering")
+    # Create new clusters and assign media
+    logger.info("Running clustering algorithm")
     new_cluster_df = image_grouper.run_clustering()
     results["new_cluster_df"] = new_cluster_df
 
-    # assign target folder for new clusters (update media_df)
-    logger.info("assign_target_folder_name_to_new_clusters")
+    # Assign target folder names for new clusters
+    logger.info("Assigning target folder names to new clusters")
     new_folder_names = (
         image_grouper.assign_target_folder_name_and_file_count_to_new_clusters(
             method=config.assign_date_to_clusters_method
@@ -139,135 +132,139 @@ def main(
     )
     results["new_folder_names"] = new_folder_names
 
-    # assign target folder for existing clusters
-    logger.info("assign_target_folder_name_to_existing_clusters")
+    # Assign target folder names for existing clusters
+    logger.info("Assigning target folder names to existing clusters")
     image_grouper.assign_target_folder_name_to_existing_clusters()
 
-    # left-merge clusters to media_df (to add "cluster_id" and "target_path")
-    # from clusters_df to media_df
-    logger.info("add_cluster_info_from_clusters_to_media")
+    # Add cluster info to media records
+    logger.info("Adding cluster information to media records")
     image_grouper.add_cluster_info_from_clusters_to_media()
 
-    # assign target folder for duplicates
+    # Add target directories for duplicates if enabled
     if config.skip_duplicated_existing_in_libs:
-        logger.info("assign target folder for duplicates")
+        logger.info("Assigning target directories for duplicates")
         image_grouper.add_target_dir_for_duplicates()
 
-    # Physically move or copy files to folders
-    mode = image_grouper.config.mode
-    if mode != CopyMode.NOP:
+    # Move or copy files to their target folders
+    if config.mode != CopyMode.NOP:
+        logger.info(
+            f"{'Copying' if config.mode == CopyMode.COPY else 'Moving'} files to cluster folders"
+        )
         image_grouper.move_files_to_cluster_folder()
     else:
-        logger.debug("No copy/move operation performed since 'nop' option selected.")
+        logger.info("Dry run mode - no files were moved or copied")
+
     return results
 
 
-# TODO Rename this here and in `main`
-def read_inbox_info_from_csv(inbox_csv_file_name, image_reader):
-    import pandas as pd
+def create_argument_parser() -> argparse.ArgumentParser:
+    """Create and configure the argument parser for CLI usage.
 
-    from filecluster.configuration import Status
-
-    logger.info("Read inbox info from CSV")
-    image_reader.media_df = pd.read_csv(inbox_csv_file_name)
-    # Revert data types after reading from CSV
-    image_reader.media_df.date = pd.to_datetime(image_reader.media_df.date)
-    image_reader.media_df.status = image_reader.media_df.status.apply(
-        lambda x: Status[x.replace("Status.", "")]
+    Returns:
+        Configured argument parser
+    """
+    parser = argparse.ArgumentParser(
+        description="Group media files by event based on their timestamps",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-
-def add_args_to_parser(parser):
-    """Add arguments to the parser."""
-    parser.add_argument("-i", "--inbox-dir", help="directory with input images")
     parser.add_argument(
-        "-o", "--output-dir", help="output directory for clustered images"
+        "-i", "--inbox-dir", help="Directory with input media files to process"
+    )
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        help="Output directory where clustered media will be placed",
     )
     parser.add_argument(
         "-w",
         "--watch-dir",
-        help="directory with structured media (official media repository)",
+        help="Directory with structured media (official media repository)",
         action="append",
+        dest="watch_dirs",
     )
     parser.add_argument(
         "-t",
         "--development-mode",
-        help="Run script with development configuration - work on tests directories",
+        help="Run with development configuration using test directories",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "-n",
         "--no-operation",
-        help="Do not introduce any changes on the disk. Dry run.",
+        help="Perform a dry run without making changes to the filesystem",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "-y",
         "--copy-mode",
-        help="Copy instead of default move",
+        help="Copy files instead of moving them",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "-f",
         "--force-deep-scan",
-        help="Force recalculate cluster info for each existing cluster.",
+        help="Force recalculation of cluster info for each existing cluster",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "-d",
         "--drop-duplicates",
-        help="Do not cluster duplicates, store them in separate folder.",
+        help="Do not cluster duplicates, store them in a separate folder",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "-c",
         "--use-existing-clusters",
-        help=(
-            "If possible, check watch folders if the inbox media can be "
-            "assigned to already existing cluster."
-        ),
+        help="Try to assign media to existing clusters in watch folders",
         action="store_true",
         default=False,
     )
-    # parser.add_argument(
-    #     "-v",
-    #     "--version",
-    #     help="Display program version",
-    #     action="version",
-    #     version=f"%(prog)s {read_version()}",
-    # )
+
     return parser
 
 
-def ensure_watch_dir_is_list(arguments):
-    if isinstance(arguments.watch_dir, str):
-        watch_dirs = [arguments.watch_dir]
-    elif isinstance(arguments.watch_dir, list):
-        watch_dirs = arguments.watch_dir
-    elif arguments.watch_dir is None:
-        watch_dirs = []
+def process_watch_dirs(watch_dirs: list[str] | None) -> list[str]:
+    """Process and validate watch directories.
+
+    Args:
+        watch_dirs: List of watch directories or None
+
+    Returns:
+        Validated list of watch directories (empty list if None)
+
+    Raises:
+        TypeError: If watch_dirs is not a list or None
+    """
+    if watch_dirs is None:
+        return []
+    elif isinstance(watch_dirs, list):
+        return watch_dirs
     else:
-        raise TypeError("watch_dirs should be a list")
-    return watch_dirs
+        raise TypeError("Watch directories must be provided as a list")
 
 
-if __name__ == "__main__":
-    """Main routine to perform grouping process."""
-
-    parser = argparse.ArgumentParser(description="Group media files by event")
-    parser = add_args_to_parser(parser)
+def run_from_cli():
+    """Execute the application from command line interface."""
+    parser = create_argument_parser()
     args = parser.parse_args()
 
-    watch_dirs = ensure_watch_dir_is_list(args)
+    # Process and validate arguments
+    watch_dirs = process_watch_dirs(args.watch_dirs)
 
+    # Convert path strings to ensure they're valid
+    inbox_dir = str(Path(args.inbox_dir)) if args.inbox_dir else None
+    output_dir = str(Path(args.output_dir)) if args.output_dir else None
+
+    # Run the main function with parsed arguments
     main(
-        inbox_dir=str(Path(args.inbox_dir)),
-        output_dir=str(Path(args.output_dir)),
+        inbox_dir=inbox_dir,
+        output_dir=output_dir,
         watch_dir_list=watch_dirs,
         development_mode=args.development_mode,
         no_operation=args.no_operation,
@@ -276,3 +273,7 @@ if __name__ == "__main__":
         drop_duplicates=args.drop_duplicates,
         use_existing_clusters=args.use_existing_clusters,
     )
+
+
+if __name__ == "__main__":
+    run_from_cli()

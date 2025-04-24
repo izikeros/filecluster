@@ -1,6 +1,7 @@
 import hashlib
 
 import pytest
+
 from filecluster.configuration import CopyMode, get_default_config
 from filecluster.utlis import (
     create_folder_for_cluster,
@@ -16,8 +17,10 @@ from filecluster.utlis import (
 
 EXT_IMG = [".jpg", ".CR2"]
 EXT_VID = [".mp4", ".3gp"]
-# IMG_PTH = "inbox_test_a_orig/20181117_121813.jpg"
-IMG_PTH = "assets/set_1/IMG_3784.jpg"
+# img_pth = "inbox_test_a_orig/20181117_121813.jpg"
+
+
+# img_pth = ASSETS_DIR / "set_1" / "IMG_3784.jpg"
 
 
 def test_is_supported_filetype_jpg_lower_case():
@@ -52,12 +55,14 @@ def test_is_image__video():
     assert is_image("img.mov", EXT_IMG) is False
 
 
-def test_get_date_from_file():
-    get_date_from_file(path_name=IMG_PTH)
+def test_get_date_from_file(assets_dir):
+    img_pth = assets_dir / "set_1" / "IMG_3784.jpg"
+    get_date_from_file(path_name=img_pth)
 
 
-def test_get_exif_date():
-    get_exif_date(path_name=IMG_PTH)
+def test_get_exif_date(assets_dir):
+    img_pth = assets_dir / "set_1" / "IMG_3784.jpg"
+    get_exif_date(path_name=img_pth)
 
 
 @pytest.mark.skip()
@@ -68,17 +73,21 @@ def test_create_folder_for_cluster():
     )
 
 
-def test_get_thumbnail():
-    get_thumbnail(path=IMG_PTH)
+def test_get_thumbnail(assets_dir):
+    img_pth = assets_dir / "set_1" / "IMG_3784.jpg"
+    get_thumbnail(path=img_pth)
 
 
-def test_image_base64():
-    image_base64(img=IMG_PTH)
+def test_image_base64(assets_dir):
+    img_pth = assets_dir / "set_1" / "IMG_3784.jpg"
+    image_base64(img=str(img_pth))
 
 
-def test_image_formatter():
-    image_formatter(im_base64=IMG_PTH)
+def test_image_formatter(assets_dir):
+    img_pth = assets_dir / "set_1" / "IMG_3784.jpg"
+    image_formatter(im_base64=str(img_pth))
 
 
-def test_hash_file():
-    hash_file(fname=IMG_PTH, hash_funct=hashlib.sha1)
+def test_hash_file(assets_dir):
+    img_pth = assets_dir / "set_1" / "IMG_3784.jpg"
+    hash_file(fname=str(img_pth), hash_funct=hashlib.sha1)
