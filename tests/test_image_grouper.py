@@ -2,7 +2,7 @@
 
 Covers ImageGrouper clustering logic, gap calculation, cluster creation,
 target folder naming, duplicate handling, assignment to existing clusters,
-file-move logic, and supporting helpers (TargetPathCreator, filter_by_substring_list,
+file-move logic, and supporting helpers (TargetPathCreator,
 check_df_has_all_expected_columns).
 """
 
@@ -25,7 +25,6 @@ from filecluster.image_grouper import (
     ImageGrouper,
     TargetPathCreator,
     check_df_has_all_expected_columns,
-    filter_by_substring_list,
     get_files_from_folder,
     get_watch_folders_files_path,
 )
@@ -61,30 +60,6 @@ class TestTargetPathCreator:
         creator = TargetPathCreator(out_dir_name="/out")
         result = creator.for_duplicates("/lib/2020/[2020_01_01]_event")
         assert result == str(Path("duplicated") / "[2020_01_01]_event")
-
-
-# ---------------------------------------------------------------------------
-# filter_by_substring_list
-# ---------------------------------------------------------------------------
-class TestFilterBySubstringList:
-    """Tests for the substring filtering helper."""
-
-    def test_filters_matching_strings(self):
-        """Only strings containing at least one substring are returned."""
-        strings = ["IMG_001.jpg", "IMG_002.jpg", "VIDEO_001.mp4"]
-        result = filter_by_substring_list(strings, ["IMG_001"])
-        assert result == ["IMG_001.jpg"]
-
-    def test_returns_empty_for_no_matches(self):
-        """No matches => empty list."""
-        result = filter_by_substring_list(["a", "b"], ["x"])
-        assert result == []
-
-    def test_multiple_substrings_or_logic(self):
-        """Any substring match includes the string."""
-        strings = ["alpha.jpg", "beta.jpg", "gamma.jpg"]
-        result = filter_by_substring_list(strings, ["alpha", "gamma"])
-        assert set(result) == {"alpha.jpg", "gamma.jpg"}
 
 
 # ---------------------------------------------------------------------------
@@ -494,7 +469,9 @@ class TestMoveFiles:
         )
         grouper.calculate_gaps()
         grouper.run_clustering()
-        # target_path is not set yet => should raise
+        # target_path is not set yet => should raise when building a non-NOP plan
         grouper.inbox_media_df["target_path"] = None
+        # Switch to COPY mode so the plan builder validates target_path
+        grouper.config.mode = CopyMode.COPY
         with pytest.raises(DateStringNoneError):
-            grouper.move_files_to_cluster_folder()
+            grouper.build_file_operation_plan()

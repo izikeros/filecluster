@@ -230,8 +230,7 @@ def read_cluster_ini_as_dict(
     cluster_ini.read(Path(path) / settings.ini_filename)
 
     raw_dict = {
-        section: dict(cluster_ini.items(section))
-        for section in cluster_ini.sections()
+        section: dict(cluster_ini.items(section)) for section in cluster_ini.sections()
     }
     if not raw_dict:
         return None

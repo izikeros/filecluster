@@ -1,11 +1,12 @@
 """Module for file clustering and supporting operations."""
 
-import math
+from __future__ import annotations
+
+import hashlib
 import os
 import random
 from collections.abc import Iterator
 from pathlib import Path, PosixPath
-from shutil import copy2, move
 from typing import Any
 
 import pandas as pd
@@ -13,17 +14,17 @@ from pandas._libs.tslibs.timestamps import Timestamp
 from tqdm import tqdm
 
 from filecluster import logger
-from filecluster import utlis as ut
 from filecluster.configuration import (
     AssignDateToClusterMethod,
     Config,
-    CopyMode,
     Status,
     default_settings,
 )
 from filecluster.dbase import get_new_cluster_id_from_dataframe
-from filecluster.exceptions import DateStringNoneError, MissingDfClusterColumnError
+from filecluster.exceptions import MissingDfClusterColumnError
+from filecluster.file_operations import FileOperationPlan, build_file_operation_plan
 from filecluster.filecluster_types import ClustersDataFrame, MediaDataFrame
+from filecluster.utlis import hash_file
 
 
 class TargetPathCreator:
@@ -45,13 +46,6 @@ class TargetPathCreator:
         """Path creator for duplicated clusters folder."""
         cluster_name = Path(dir_string).name
         return str(Path("duplicated") / cluster_name)
-
-
-def filter_by_substring_list(string_list: list[str], substr_list: list[str]):
-    """Return strings that contain any of the substrings from another list."""
-    return [
-        string for string in string_list if any(sub in string for sub in substr_list)
-    ]
 
 
 class ImageGrouper:
@@ -257,38 +251,28 @@ class ImageGrouper:
             new_folder_names.append(pth)
         return new_folder_names
 
+    def build_file_operation_plan(self) -> FileOperationPlan:
+        """Build a plan of file operations without executing them.
+
+        Returns:
+            A FileOperationPlan that can be inspected or executed separately.
+        """
+        return build_file_operation_plan(
+            inbox_media_df=self.inbox_media_df,
+            in_dir=Path(self.config.in_dir_name),
+            out_dir=Path(self.config.out_dir_name),
+            mode=self.config.mode,
+        )
+
     def move_files_to_cluster_folder(self):
-        """Physical move of the file to the cluster folder."""
-        dirs = self.inbox_media_df["target_path"].unique()
-        mode = self.config.mode
+        """Physical move of the file to the cluster folder.
 
-        # prepare directories in advance
-        for dir_name in dirs:
-            if dir_name is None:
-                raise DateStringNoneError()
+        Delegates to the file_operations module: builds a plan, then executes it.
+        """
+        from filecluster.file_operations import execute_plan
 
-            isnan = isinstance(dir_name, float) and math.isnan(dir_name)
-            if dir_name is None or isnan:
-                raise DateStringNoneError()
-                # instead, create dummy date
-                # dir_name = "XXXX_XX_XX"
-            ut.create_folder_for_cluster(
-                config=self.config, date_string=dir_name, mode=mode
-            )
-
-        # Move or copy items to a dedicated folder."""
-        pth_out = self.config.out_dir_name
-        pth_in = self.config.in_dir_name
-        n_files = len(self.inbox_media_df)
-        for _, row in tqdm(self.inbox_media_df.iterrows(), total=n_files):
-            date_string = row["target_path"]
-            file_name = row["file_name"]
-            src = os.path.join(pth_in, file_name)
-            dst = os.path.join(pth_out, str(date_string), file_name)
-            if mode == CopyMode.COPY:
-                copy2(src, dst)
-            elif mode == CopyMode.MOVE:
-                move(src, dst)
+        plan = self.build_file_operation_plan()
+        execute_plan(plan)
 
     def add_target_dir_for_duplicates(self):
         """Add a target directory for the duplicated media files."""
@@ -493,9 +477,6 @@ class ImageGrouper:
 
             potential_matches = library_by_size[inbox_size]
 
-            # Helper for partial hashing
-            import hashlib
-
             def get_partial_hash(filepath, size=1024 * 1024):
                 try:
                     with open(filepath, "rb") as f:
@@ -509,8 +490,6 @@ class ImageGrouper:
             if pd.isna(inbox_hash) or not inbox_hash:
                 # We need to compute it if not present
                 try:
-                    from filecluster.utlis import hash_file
-
                     inbox_path = os.path.join(self.config.in_dir_name, inbox_file_name)
                     inbox_hash = hash_file(inbox_path)
                 except OSError:
@@ -526,8 +505,6 @@ class ImageGrouper:
 
                 if inbox_partial and lib_partial and inbox_partial == lib_partial:
                     # 3. Full hash match
-                    from filecluster.utlis import hash_file
-
                     try:
                         lib_hash = hash_file(lib_path)
 
@@ -555,23 +532,6 @@ class ImageGrouper:
                         continue
 
         return list(set(confirmed_inbox_dups)), list(set(clusters_with_dups))
-
-    def file_name_based_duplicates(self):
-        """Find duplicates that have the same filename."""
-        # get files in a library
-        watch_file_names, watch_full_paths = get_watch_folders_files_path(
-            self.config.watch_folders
-        )
-        # get files in the inbox
-        new_names = self.inbox_media_df.file_name.values.tolist()
-        # commons - list of new names that appear in watch folders
-        #   potential dups - inbox files with the same name as files in a library (no other criterion)
-        potential_inbox_dups = [f for f in new_names if f in watch_file_names]
-        watch_full_paths_str = [str(x) for x in watch_full_paths]
-        potential_library_dups = filter_by_substring_list(
-            watch_full_paths_str, potential_inbox_dups
-        )
-        return potential_inbox_dups, potential_library_dups, watch_full_paths
 
 
 def get_files_from_folder(folder: str | Path) -> Iterator[Any]:

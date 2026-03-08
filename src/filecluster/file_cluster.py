@@ -145,12 +145,19 @@ def main(
         logger.info("Assigning target directories for duplicates")
         image_grouper.add_target_dir_for_duplicates()
 
-    # Move or copy files to their target folders
+    # Build file operation plan (always, for diagnostics)
+    from filecluster.file_operations import execute_plan
+
+    plan = image_grouper.build_file_operation_plan()
+    results["file_operation_plan"] = plan
+    logger.info(plan.summary())
+
+    # Execute the plan (unless NOP)
     if config.mode != CopyMode.NOP:
         logger.info(
             f"{'Copying' if config.mode == CopyMode.COPY else 'Moving'} files to cluster folders"
         )
-        image_grouper.move_files_to_cluster_folder()
+        execute_plan(plan)
     else:
         logger.info("Dry run mode - no files were moved or copied")
 
