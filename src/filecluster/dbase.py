@@ -5,11 +5,11 @@ import multiprocessing
 from pathlib import Path
 
 import pandas as pd
-from configuration import FileClusterSettings
 from numpy import int64
 from pandas.core.frame import DataFrame
 
 from filecluster import logger
+from filecluster.configuration import default_settings
 from filecluster.filecluster_types import ClustersDataFrame
 from filecluster.update_clusters import get_or_create_library_cluster_ini_as_dataframe
 
@@ -38,8 +38,6 @@ def get_existing_clusters_info(
 
     n_cpu = multiprocessing.cpu_count()
     logger.debug(f"Setting-up multiprocessing pool with {n_cpu} processes")
-    pool = multiprocessing.Pool(processes=n_cpu)
-    logger.debug("Pool ready to use")
 
     # NOTE: this requires refactoring in scan_library_dir()
 
@@ -57,12 +55,14 @@ def get_existing_clusters_info(
 
     # Start scanning watch folders to get cluster information
     if use_watch_folders and len(watch_folders):
-
-        # tuples of
-        tuples = [
-            get_or_create_library_cluster_ini_as_dataframe(lib, pool, force_deep_scan)
-            for lib in watch_folders
-        ]
+        with multiprocessing.Pool(processes=n_cpu) as pool:
+            logger.debug("Pool ready to use")
+            tuples = [
+                get_or_create_library_cluster_ini_as_dataframe(
+                    lib, pool, force_deep_scan
+                )
+                for lib in watch_folders
+            ]
         dfs, empty_folder_list = map(list, zip(*tuples, strict=False))
         df = pd.concat(dfs, axis=0)
         df.index = range(len(df))
@@ -72,10 +72,7 @@ def get_existing_clusters_info(
         # Flatten the list of empty directories:
         empty_folder_list = list(itertools.chain(*empty_folder_list))
     else:
-        settings = (
-            FileClusterSettings()
-        )  # FIXME: KS: 2025-04-24: are these proper settings?
-        df = pd.DataFrame(columns=settings.CLUSTER_DF_COLUMNS)
+        df = pd.DataFrame(columns=default_settings.cluster_df_columns)
     return ClustersDataFrame(df), empty_folder_list, non_compliant_folders
 
 

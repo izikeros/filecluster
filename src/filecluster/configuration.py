@@ -85,41 +85,41 @@ class FileClusterSettings(BaseSettings):
     video_extensions: list[str] = [".mp4", ".3gp", "mov"]
 
     # Path settings (production)
-    INBOX_DIR: str = "inbox"
-    OUTBOX_DIR: str = "outbox_clust"
+    inbox_dir: Path = Path("inbox")
+    outbox_dir: Path = Path("outbox_clust")
 
     # Windows paths
-    WINDOWS_BASE_PATH: str = "h:\\incomming\\"
-    WINDOWS_LIBRARY_PATHS: list[str] = ["h:\\zdjecia\\"]
+    windows_base_path: Path = Path("h:\\incomming\\")
+    windows_library_paths: list[Path] = [Path("h:\\zdjecia\\")]
 
     # Linux paths
-    LINUX_BASE_PATH: str = "/media/root/Foto/incomming/"
-    LINUX_LIBRARY_PATHS: list[str] = ["/media/root/Foto/zdjecia/"]
+    linux_base_path: Path = Path("/media/root/Foto/incomming/")
+    linux_library_paths: list[Path] = [Path("/media/root/Foto/zdjecia/")]
 
     # Development settings
-    DEV_INBOX_DIR: str = "set_1"
-    DEV_OUTBOX_DIR: str = "inbox_clust_test"
-    DEV_WINDOWS_BASE_PATH: str = "h:\\incomming"
-    DEV_WINDOWS_LIBRARY_PATHS: list[str] = [""]
-    DEV_LINUX_BASE_PATH: str = "./"
-    DEV_LINUX_LIBRARY_PATHS: list[str] = ["zdjecia", "clusters"]
+    dev_inbox_dir: Path = Path("set_1")
+    dev_outbox_dir: Path = Path("inbox_clust_test")
+    dev_windows_base_path: Path = Path("h:\\incomming")
+    dev_windows_library_paths: list[Path] = [Path("")]
+    dev_linux_base_path: Path = Path("./")
+    dev_linux_library_paths: list[Path] = [Path("zdjecia"), Path("clusters")]
 
     # Feature flags
-    FORCE_DEEP_SCAN: bool = False
-    ASSIGN_TO_CLUSTERS_EXISTING_IN_LIBS: bool = False
-    SKIP_DUPLICATED_EXISTING_IN_LIBS: bool = False
+    force_deep_scan: bool = False
+    assign_to_clusters_existing_in_libs: bool = False
+    skip_duplicated_existing_in_libs: bool = False
 
     # Time settings
-    TIME_GRANULARITY_MINUTES: int = 60
+    time_granularity_minutes: int = 60
 
     # Default methods
-    DEFAULT_ASSIGN_DATE_METHOD: AssignDateToClusterMethod = (
+    default_assign_date_method: AssignDateToClusterMethod = (
         AssignDateToClusterMethod.MEDIAN
     )
-    DEFAULT_CLUSTERING_METHOD: ClusteringMethod = ClusteringMethod.TIME_GAP
+    default_clustering_method: ClusteringMethod = ClusteringMethod.TIME_GAP
 
     # Columns definitions
-    CLUSTER_DF_COLUMNS: list[str] = [
+    cluster_df_columns: list[str] = [
         "cluster_id",
         "start_date",
         "end_date",
@@ -131,7 +131,7 @@ class FileClusterSettings(BaseSettings):
         "new_file_count",
     ]
 
-    MEDIA_DF_COLUMNS: list[str] = [
+    media_df_columns: list[str] = [
         "file_name",
         "m_date",
         "c_date",
@@ -155,6 +155,7 @@ class FileClusterSettings(BaseSettings):
     class Config:
         env_prefix = "FILECLUSTER_"
         env_file = ".env"
+        extra = "ignore"
 
 
 @dataclass
@@ -178,7 +179,7 @@ class Config:
 
     in_dir_name: Path
     out_dir_name: Path
-    watch_folders: list[str]
+    watch_folders: list[Path]
     image_extensions: list[str]
     video_extensions: list[str]
     time_granularity: timedelta
@@ -235,37 +236,37 @@ class ConfigFactory:
         # Determine base path and library paths based on OS and mode
         if os_name == "nt":  # Windows
             base_path = (
-                self.settings.DEV_WINDOWS_BASE_PATH
+                self.settings.dev_windows_base_path
                 if is_development_mode
-                else self.settings.WINDOWS_BASE_PATH
+                else self.settings.windows_base_path
             )
             library_paths = (
-                self.settings.DEV_WINDOWS_LIBRARY_PATHS
+                self.settings.dev_windows_library_paths
                 if is_development_mode
-                else self.settings.WINDOWS_LIBRARY_PATHS
+                else self.settings.windows_library_paths
             )
         else:  # Linux/Unix
             base_path = (
-                self.settings.DEV_LINUX_BASE_PATH
+                self.settings.dev_linux_base_path
                 if is_development_mode
-                else self.settings.LINUX_BASE_PATH
+                else self.settings.linux_base_path
             )
             library_paths = (
-                self.settings.DEV_LINUX_LIBRARY_PATHS
+                self.settings.dev_linux_library_paths
                 if is_development_mode
-                else self.settings.LINUX_LIBRARY_PATHS
+                else self.settings.linux_library_paths
             )
 
         # Determine directory names based on mode
         inbox_dir = (
-            self.settings.DEV_INBOX_DIR
+            self.settings.dev_inbox_dir
             if is_development_mode
-            else self.settings.INBOX_DIR
+            else self.settings.inbox_dir
         )
         outbox_dir = (
-            self.settings.DEV_OUTBOX_DIR
+            self.settings.dev_outbox_dir
             if is_development_mode
-            else self.settings.OUTBOX_DIR
+            else self.settings.outbox_dir
         )
 
         # Build full paths
@@ -285,21 +286,21 @@ class ConfigFactory:
             watch_folders=library_paths,
             image_extensions=self.settings.image_extensions,
             video_extensions=self.settings.video_extensions,
-            time_granularity=timedelta(minutes=self.settings.TIME_GRANULARITY_MINUTES),
-            assign_date_to_clusters_method=self.settings.DEFAULT_ASSIGN_DATE_METHOD,
-            clustering_method=self.settings.DEFAULT_CLUSTERING_METHOD,
+            time_granularity=timedelta(minutes=self.settings.time_granularity_minutes),
+            assign_date_to_clusters_method=self.settings.default_assign_date_method,
+            clustering_method=self.settings.default_clustering_method,
             mode=mode,
-            force_deep_scan=self.settings.FORCE_DEEP_SCAN,
-            assign_to_clusters_existing_in_libs=self.settings.ASSIGN_TO_CLUSTERS_EXISTING_IN_LIBS,
-            skip_duplicated_existing_in_libs=self.settings.SKIP_DUPLICATED_EXISTING_IN_LIBS,
+            force_deep_scan=self.settings.force_deep_scan,
+            assign_to_clusters_existing_in_libs=self.settings.assign_to_clusters_existing_in_libs,
+            skip_duplicated_existing_in_libs=self.settings.skip_duplicated_existing_in_libs,
         )
 
+    @staticmethod
     def override_from_cli(  # noqa: C901 too complex
-        self,
         config: Config,
-        inbox_dir: str | None = None,
-        output_dir: str | None = None,
-        watch_dir_list: list[str] | None = None,
+        inbox_dir: Path | None = None,
+        output_dir: Path | None = None,
+        watch_dir_list: list[Path] | None = None,
         force_deep_scan: bool | None = None,
         no_operation: bool | None = None,
         copy_mode: bool | None = None,

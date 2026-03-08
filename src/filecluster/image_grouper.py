@@ -4,14 +4,11 @@ import math
 import os
 import random
 from collections.abc import Iterator
-from datetime import timedelta
 from pathlib import Path, PosixPath
 from shutil import copy2, move
 from typing import Any
 
 import pandas as pd
-from configuration import FileClusterSettings, default_settings
-from pandas._libs.tslibs.timedeltas import Timedelta
 from pandas._libs.tslibs.timestamps import Timestamp
 from tqdm import tqdm
 
@@ -22,73 +19,11 @@ from filecluster.configuration import (
     Config,
     CopyMode,
     Status,
+    default_settings,
 )
 from filecluster.dbase import get_new_cluster_id_from_dataframe
 from filecluster.exceptions import DateStringNoneError, MissingDfClusterColumnError
 from filecluster.filecluster_types import ClustersDataFrame, MediaDataFrame
-
-
-def expand_cluster_or_init_new(
-    delta_from_previous: Timedelta,
-    max_time_delta: timedelta,
-    index: int,
-    new_cluster_idx: int,
-    list_new_clusters: list[dict],
-    media_date: Timestamp,
-    cluster: dict,
-):
-    """Add new item to the existing cluster and update cluster info or init a new cluster.
-
-    If this image is too far (in time) from the previous image - it means that
-      a cluster can be created from the images in the "buffer"/"backlog".
-
-    Args:
-        delta_from_previous:    distance of this image to previous (on an image list sorted by time)
-        max_time_delta:         max allowed time delta to for images from the same event
-        index:                  image index from "inbox" media dataframe. Used only to
-                                    check if we are starting clustering.
-        new_cluster_idx:        new cluster id in case we need to create new cluster
-        list_new_clusters:      list of new cluster dictionaries
-        start_date:             current "buffer" start date
-        end_date:               current "buffer" end date
-        cluster:                cluster dictionary with description of current "buffer" cluster
-    :return:
-    """
-    # check if a new cluster encountered
-    is_first_image_analysed = index == 0
-    is_this_image_too_far_from_other_in_the_cluster = (
-        delta_from_previous > max_time_delta
-    )
-    is_new_cluster = (
-        is_this_image_too_far_from_other_in_the_cluster or is_first_image_analysed
-    )
-    if is_new_cluster:
-        new_cluster_idx += 1
-        # == We are starting a new cluster here ==
-        # append the previous cluster date to the list
-        if not is_first_image_analysed:
-            # the previous cluster is completed, add previous cluster info
-            #  to the list of clusters
-            list_new_clusters.append(cluster)
-
-        # initialize record for a new cluster
-        settings = (
-            FileClusterSettings()
-        )  # FIXME: KS: 2025-04-24: are these proper settings?
-        cluster = dict.fromkeys(settings.CLUSTER_DF_COLUMNS)
-        cluster.update(
-            {
-                "cluster_id": new_cluster_idx,
-                "start_date": media_date,
-                "end_date": media_date,
-            }
-        )
-    else:
-        cluster["start_date"] = media_date
-
-    # update cluster stop date
-    cluster["end_date"] = media_date
-    return cluster, new_cluster_idx, list_new_clusters
 
 
 class TargetPathCreator:
@@ -99,15 +34,17 @@ class TargetPathCreator:
 
     def for_new_cluster(self, date_string):
         """Path creator for new clusters' folder."""
-        return str(self.out_dir / "new" / date_string)
+        return str(Path("new") / date_string)
 
     def for_existing_cluster(self, dir_string):
         """Path creator for existing clusters' folder."""
-        return str(self.out_dir / "existing" / dir_string)
+        cluster_name = Path(dir_string).name
+        return str(Path("existing") / cluster_name)
 
     def for_duplicates(self, dir_string):
         """Path creator for duplicated clusters folder."""
-        return str(self.out_dir / "duplicated" / dir_string)
+        cluster_name = Path(dir_string).name
+        return str(Path("duplicated") / cluster_name)
 
 
 def filter_by_substring_list(string_list: list[str], substr_list: list[str]):
@@ -159,9 +96,9 @@ class ImageGrouper:
         # calculate breaks between the non-clustered images
         self.inbox_media_df[delta_col] = None
         self.inbox_media_df[date_col] = pd.to_datetime(self.inbox_media_df[date_col])
-        self.inbox_media_df[delta_col][sel] = self.inbox_media_df[date_col][
-            sel
-        ].diff()  # FIXME: SettingWithCopyWarning
+        self.inbox_media_df.loc[sel, delta_col] = self.inbox_media_df.loc[
+            sel, date_col
+        ].diff()
 
     def run_clustering(self) -> ClustersDataFrame:
         """Identify clusters in media not clustered so far.
@@ -178,10 +115,7 @@ class ImageGrouper:
 
         # prepare placeholder for first cluster row (as dict).
         #   First cluster for the media that are not clustered yet.
-        settings = (
-            FileClusterSettings()
-        )  # FIXME: KS: 2025-04-24: are these proper settings?
-        current_cluster_dict = dict.fromkeys(settings.CLUSTER_DF_COLUMNS)
+        current_cluster_dict = dict.fromkeys(default_settings.cluster_df_columns)
         current_cluster_dict.update(
             {
                 "cluster_id": cluster_idx,
@@ -229,8 +163,7 @@ class ImageGrouper:
                     list_new_cluster_dictionaries.append(current_cluster_dict)
 
                 # initialize record for a new cluster
-                settings = FileClusterSettings()
-                current_cluster_dict = dict.fromkeys(settings.CLUSTER_DF_COLUMNS)
+                current_cluster_dict = dict.fromkeys(default_settings.cluster_df_columns)
                 current_cluster_dict.update(
                     {
                         "cluster_id": cluster_idx,
@@ -369,7 +302,7 @@ class ImageGrouper:
             date_string = row["target_path"]
             file_name = row["file_name"]
             src = os.path.join(pth_in, file_name)
-            dst = os.path.join(pth_out, date_string, file_name)
+            dst = os.path.join(pth_out, str(date_string), file_name)
             if mode == CopyMode.COPY:
                 copy2(src, dst)
             elif mode == CopyMode.MOVE:
@@ -409,7 +342,7 @@ class ImageGrouper:
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
 
         check_df_has_all_expected_columns(
-            df=self.df_clusters, expected_cols=default_settings.CLUSTER_DF_COLUMNS
+            df=self.df_clusters, expected_cols=default_settings.cluster_df_columns
         )
 
         margin = self.config.time_granularity
@@ -434,30 +367,33 @@ class ImageGrouper:
                     # TODO: KS: 2020-12-17: Solve ambiguity other way?
                     # assign to first anyway
                 cluster_id = candidate_clusters["cluster_id"].values[0]
-                self.inbox_media_df["cluster_id"].loc[index] = cluster_id
-                self.inbox_media_df["status"].loc[index] = Status.EXISTING_CLUSTER
+                self.inbox_media_df.loc[index, "cluster_id"] = cluster_id
+                self.inbox_media_df.loc[index, "status"] = Status.EXISTING_CLUSTER
 
                 # == Update cluster info
                 # update counter
                 cluster_idx = self.df_clusters[
                     self.df_clusters.cluster_id == cluster_id
                 ].index
-                if self.df_clusters.new_file_count.loc[cluster_idx].values[0]:
-                    self.df_clusters.new_file_count.loc[cluster_idx] += 1
+                current_new_file_count = self.df_clusters.loc[
+                    cluster_idx, "new_file_count"
+                ].values[0]
+                if current_new_file_count:
+                    self.df_clusters.loc[cluster_idx, "new_file_count"] += 1
                 else:
-                    self.df_clusters.new_file_count.loc[cluster_idx] = 1
+                    self.df_clusters.loc[cluster_idx, "new_file_count"] = 1
                 # update boundaries
-                old_start = self.df_clusters.start_date.loc[cluster_idx].values[0]
+                old_start = self.df_clusters.loc[cluster_idx, "start_date"].values[0]
                 new_start = min(old_start, img_time)
-                self.df_clusters.start_date.loc[cluster_idx] = new_start
+                self.df_clusters.loc[cluster_idx, "start_date"] = new_start
 
-                old_end = self.df_clusters.end_date.loc[cluster_idx].values[0]
+                old_end = self.df_clusters.loc[cluster_idx, "end_date"].values[0]
                 new_end = max(old_end, img_time)
-                self.df_clusters.end_date.loc[cluster_idx] = new_end
+                self.df_clusters.loc[cluster_idx, "end_date"] = new_end
                 # add a target patch
-                pth = self.df_clusters.path.loc[cluster_idx].values[0]
+                pth = self.df_clusters.loc[cluster_idx, "path"].values[0]
                 target_pth = path_creator.for_existing_cluster(dir_string=pth)
-                self.df_clusters.target_path.loc[cluster_idx] = target_pth
+                self.df_clusters.loc[cluster_idx, "target_path"] = target_pth
 
         has_cluster_id = self.inbox_media_df.cluster_id >= 0
         has_status_existing_cluster = (
@@ -513,12 +449,10 @@ class ImageGrouper:
         (
             potential_inbox_dups,
             potential_library_dups,
-            watch_full_paths,
+            _watch_full_paths,
         ) = self.file_name_based_duplicates()
 
         # verify potential dups using size comparison
-        file_already_in_library = []
-
         logger.info("Confirm potential duplicates")
         for potential_duplicate in tqdm(potential_inbox_dups):
             # get inbox item info
@@ -526,13 +460,16 @@ class ImageGrouper:
                 self.inbox_media_df.file_name == potential_duplicate
             ]
             inbox_item_size = inbox_item["size"].values[0]
+            matching_library_items = [
+                lib_item
+                for lib_item in potential_library_dups
+                if Path(lib_item).name == potential_duplicate
+            ]
 
-            for lib_item in potential_library_dups:
+            for lib_item in matching_library_items:
                 lib_item_size = os.path.getsize(lib_item)
                 in_file_name = inbox_item.file_name.values[0]
                 if inbox_item_size == lib_item_size:
-                    file_already_in_library.append(lib_item)
-
                     confirmed_library_dups.append(lib_item)
                     confirmed_inbox_dups.append(in_file_name)
                     # logger.debug(f"Inbox {in_file_name} is duplicate to library: {lib_item}")
@@ -555,12 +492,10 @@ class ImageGrouper:
                 dups_lib_str_list = [str(x) for x in dups_lib_patch]
                 dups_lib_clust_list = [Path(x).parts[-2] for x in dups_lib_patch]
 
-                self.inbox_media_df["duplicated_to"][
-                    idx
-                ] = dups_lib_str_list  # FIXME: SettingWithCopyWarning
-                self.inbox_media_df["duplicated_cluster"][
-                    idx
-                ] = dups_lib_clust_list  # FIXME: SettingWithCopyWarning
+                self.inbox_media_df.loc[idx, "duplicated_to"] = dups_lib_str_list
+                self.inbox_media_df.loc[idx, "duplicated_cluster"] = (
+                    dups_lib_clust_list
+                )
 
                 # return the first cluster with this duplicated media file (for debug and testing)
                 clusters_with_dups.append(
@@ -630,9 +565,9 @@ def get_watch_folders_files_path(
 
 def check_df_has_all_expected_columns(df: pd.DataFrame, expected_cols: list[str]):
     """Check if the data frame has all expected columns."""
-    for c in df.columns:
-        if c not in expected_cols:
-            raise MissingDfClusterColumnError(c)
+    missing_columns = [col for col in expected_cols if col not in df.columns]
+    if missing_columns:
+        raise MissingDfClusterColumnError(missing_columns[0])
 
 
 def check_df_has_all_expected_columns_and_types(

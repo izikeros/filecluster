@@ -8,6 +8,7 @@ from typing import Any
 
 import pandas as pd
 from pandas import DataFrame
+from pydantic import BaseModel
 from tqdm import tqdm
 
 import filecluster.utlis as ut
@@ -27,40 +28,39 @@ ATOM_HEADER_SIZE = 8
 EPOCH_ADJUSTER = 2082844800
 
 
-class Metadata:
+class Metadata(BaseModel):
     """Class defining media metadata."""
 
-    def __init__(self) -> None:
-        self.file_name: str = ""
-        self.path_name: str = ""
-        self.m_time: str = ""
-        self.c_time: str = ""
-        self.exif_date: str = ""
-        self.date: str | None = ""
-        self.file_size: int = 0
-        self.hash_value: int = 0
-        self.image: int = 0
-        self.is_image: bool = True
-        self.cluster_id: int | None = 0
-        self.status: Status = Status.UNKNOWN
-        self.duplicated_to: list[str] = []
-        self.duplicated_cluster: list[str] = []
+    file_name: str = ""
+    path_name: str = ""
+    m_time: str = ""
+    c_time: str = ""
+    exif_date: str = ""
+    date: str | None = None
+    file_size: int = 0
+    hash_value: int = 0
+    image: int = 0
+    is_image: bool = True
+    cluster_id: int | None = 0
+    status: Status = Status.UNKNOWN
+    duplicated_to: list[str] = []
+    duplicated_cluster: list[str] = []
 
 
 def multiple_timestamps_to_one(
     image_df: MediaDataFrame, rule="m_date", drop_columns: bool = True
 ) -> MediaDataFrame:
-    """Get timestamp from exif (primary) or m_date. Drop not needed date cols.
+    """Get a timestamp from exif (primary) or m_date. Drop didn't need date cols.
 
-    Prepare single timestamp out of cdate, mdate and exif (disambiguation)
+    Prepare a single timestamp out of cdate, mdate and exif (disambiguation)
 
     Args:
-      rule:                         rule used for disambiguation
+      rule: rule used for disambiguation
       drop_columns:                 whether to drop columns with timestamps or not
-      image_df: MediaDataFrame:     input dataframe with media data
+      image_df: MediaDataFrame: input dataframe with media data
 
     Returns:
-      media dataframe with selected single date out of cdate, mdate and exif
+      media dataframe with a selected single date out of cdate, mdate and exif
 
     """
     # logger.trace("Cleaning-up timestamps in imported media.")
@@ -73,7 +73,7 @@ def multiple_timestamps_to_one(
     # TODO: Ensure that any date is assigned to file
     # use exif date as base
 
-    # unless is missing - then use modification date:
+    # unless it is missing - then use the modification date:
     if rule == "m_date":
         # use exif date if available
         image_df["date"] = image_df["exif_date"]
@@ -88,10 +88,7 @@ def multiple_timestamps_to_one(
 
 
 def initialize_row_dict(meta: Metadata) -> dict[str, Any]:
-    """Generate single row based on values defined in outer method.
-
-    Args:
-      meta: Metadata:
+    """Generate a single row based on values defined in the outer method.
 
     Returns:
         Dictionary filled-in data from the input Metadata object.
@@ -140,7 +137,7 @@ def prepare_new_row_with_meta(
     meta.path_name = path_name
     # get modification, creation and exif dates
     meta.m_time, meta.c_time, meta.exif_date = ut.get_date_from_file(path_name)
-    # determine if media file is image or other type
+    # determine if a media file is image or other type
     is_image = ut.is_image(path_name, accepted_media_file_extensions)
     meta.is_image = is_image
     if media_file_name.lower().endswith("mov"):
@@ -153,7 +150,7 @@ def prepare_new_row_with_meta(
     meta.file_size = os.path.getsize(path_name)
     # file hash
     meta.hash_value = ut.hash_file(path_name)
-    # placeholder for date representative for file
+    # placeholder for date representative for a file
     meta.date = None  # to be filled in later in: multiple_timestamps_to_one()
     # placeholder for assignment to cluster
     meta.cluster_id = None
@@ -178,11 +175,15 @@ def get_mov_timestamps(filename):
     with open(filename, "rb") as f:
         while True:
             atom_header = f.read(ATOM_HEADER_SIZE)
+            if len(atom_header) < ATOM_HEADER_SIZE:
+                raise RuntimeError('expected to find "moov" header.')
             # ~ print('atom header:', atom_header)  # debug purposes
             if atom_header[4:8] == b"moov":
                 break  # found
             else:
                 atom_size = struct.unpack(">I", atom_header[0:4])[0]
+                if atom_size < ATOM_HEADER_SIZE:
+                    raise RuntimeError("invalid atom size")
                 f.seek(atom_size - 8, 1)
 
         # found 'moov', look for 'mvhd' and timestamps
@@ -208,7 +209,7 @@ def get_creation_time(struct, f):
     return result
 
 
-class ImageReader:
+class InboxReader:
     """Initialize a media database with existing media dataframe or create empty one."""
 
     def __init__(self, in_dir_name, media_df: MediaDataFrame | None = None) -> None:
@@ -220,22 +221,19 @@ class ImageReader:
 
         if media_df is None:
             logger.debug(
-                f"Initializing empty media dataframe in ImageReader ({in_dir_name})"
+                f"Initializing empty media dataframe in InboxReader ({in_dir_name})"
             )
             self.media_df = MediaDataFrame(DataFrame())
         else:
-            msg = "Initializing media dataframe in ImageReader with provided df."
+            msg = "Initializing media dataframe in InboxReader with provided df."
             logger.debug(f"{msg}Num records: {len(media_df)}")
             self.media_df = media_df
 
     def get_data_from_files_as_list_of_rows(self) -> list[dict]:
-        """Recursively read exif data from files given in path provided in config.
-
-        Args:
+        """Recursively read exif data from files given in a path provided in config.
 
         Returns:
           List of rows: list of rows with all information
-
         """
         list_of_rows = []
         in_dir_name = self.in_dir_name
@@ -253,18 +251,18 @@ class ImageReader:
                 list_of_rows.append(new_row)
         return list_of_rows
 
-    def get_media_info_from_inbox_files(self) -> None:
+    def get_media_files_info(self) -> None:
         """Read data from files, return media info in a dataframe."""
         row_list = self.get_data_from_files_as_list_of_rows()
         logger.debug(f"Read info from {len(row_list)} files.")
-        # convert a list of rows to data frame
+        # convert a list of rows to a data frame
         inbox_media_df = MediaDataFrame(DataFrame(row_list))
         inbox_media_df = multiple_timestamps_to_one(inbox_media_df)
         self.media_df = inbox_media_df
 
 
-def configure_im_reader(in_dir_name: str | Path) -> Config:
-    """Customize configuration for purpose of scanning the media library.
+def configure_inbox_reader(in_dir_name: str | Path) -> Config:
+    """Customize configuration for the purpose of scanning the media library.
 
     Args:
         in_dir_name: input directory name to be scanned for the media contents.
@@ -274,25 +272,21 @@ def configure_im_reader(in_dir_name: str | Path) -> Config:
     """
     conf = get_default_config()
     # modify config
-    conf.__setattr__("in_dir_name", str(in_dir_name))
-    conf.__setattr__("out_dir_name", "")
-    conf.__setattr__("mode", CopyMode.NOP)
-    conf.__setattr__("delete_db", False)
+    conf.in_dir_name = Path(in_dir_name)
+    conf.out_dir_name = Path("")
+    conf.mode = CopyMode.NOP
     return conf
 
 
-def get_media_df(in_dir_name) -> MediaDataFrame | None:
-    """Get data frame with metadata description of media indicated in Config.
-
-    Args:
-      conf:
+def get_media_df(in_dir_name: Path) -> MediaDataFrame | None:
+    """Get a data frame with metadata description of media indicated in Config.
 
     Returns:
-        Dataframe with metadata of the contents of directory.
+        Dataframe with metadata of the contents of the directory.
     """
     if os.listdir(in_dir_name):
-        im_reader = ImageReader(in_dir_name)
-        if row_list := im_reader.get_data_from_files_as_list_of_rows():
+        inbox_reader = InboxReader(in_dir_name)
+        if row_list := inbox_reader.get_data_from_files_as_list_of_rows():
             df = MediaDataFrame(DataFrame(row_list))
             return multiple_timestamps_to_one(df)
         else:
@@ -304,20 +298,15 @@ def get_media_df(in_dir_name) -> MediaDataFrame | None:
 
 
 def get_media_stats(df: DataFrame, time_granularity: int) -> dict:
-    """Get statistics of media data represented in data frame.
+    """Get statistics of media data represented in a data frame.
 
-        Get statistics of media folder.
-
-    Args:
-      df: pd.DataFrame:
-      time_granularity: int:
+        Get statistics of the media folder.
 
     Returns:
-        Dictionary describing media in dataframe.
+        Dictionary describing media in a dataframe.
     """
     date_min = df.date.min()
     date_max = df.date.max()
-    # date_median = df["date"].iloc[int(len(df) / 2)]
     date_median = df["date"].median()
 
     df = df[["file_name", "date"]].copy()

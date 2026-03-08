@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Scan recursively directory and get information on clusters.
 
-Module with function to scan the directories and obtain existing cluster info,
+Module with a function to scan the directories and get existing cluster info
 by reading or creating .cluster.ini files.
 
 Usage:
 ./update_clusters.py -f -l tests/zdjecia
 
-    -f force recalculation of inin file
-    -l path to library
+    -f force recalculation of cluster info ini files
+    -l path to a library
 """
 # TODO: KS: 2020-12-28: Consider changing data format from ini to yaml
 
@@ -27,7 +27,11 @@ from filecluster import logger
 
 # from filecluster.configuration import ini_filename
 from filecluster.configuration import FileClusterSettings
-from filecluster.image_reader import configure_im_reader, get_media_df, get_media_stats
+from filecluster.image_reader import (
+    configure_inbox_reader,
+    get_media_df,
+    get_media_stats,
+)
 
 
 def str_to_bool(s: str) -> bool:
@@ -43,7 +47,7 @@ def str_to_bool(s: str) -> bool:
 def get_or_create_library_cluster_ini_as_dataframe(
     library_path: str | Path, pool: Pool, force_deep_scan: bool = False
 ) -> tuple[pd.DataFrame, list[Path]]:
-    """Scan folder for cluster info and return dataframe with clusters.
+    """Scan the folder for cluster info and return the dataframe with clusters.
 
     Args:
         library_path:
@@ -61,22 +65,21 @@ def get_or_create_library_cluster_ini_as_dataframe(
 
     subfolders = fast_scandir(library_path)
 
-    # remove library path part from the library subfolders paths
+    # remove the library path part from the library subfolders paths
     subfolders_root = [s.replace(f"{library_path}/", "") for s in subfolders]
 
     subs_labeled = identify_folder_types(subfolders_root)
+
     # TODO: support more types of events dirs
     # is_event or is_year_folder
     event_dirs = list(filter(is_event, subs_labeled))
-    n_event_dirs = len(event_dirs)
 
-    # parallel version
-    force_list = n_event_dirs * [force_deep_scan]
-    library_path_list = n_event_dirs * [library_path]
+    # Prepare arguments for parallel processing
+    pool_args = [(event_dir, force_deep_scan, library_path) for event_dir in event_dirs]
 
-    res_list = pool.starmap(
-        get_this_ini, zip(event_dirs, force_list, library_path_list, strict=False)
-    )
+    # Execute in parallel
+    res_list = pool.starmap(get_this_ini, pool_args)
+
     res_dict_list = [d for d in res_list if isinstance(d, dict)]
     res_empty_dir_list = [d for d in res_list if isinstance(d, Path)]
 
@@ -90,8 +93,8 @@ def get_or_create_library_cluster_ini_as_dataframe(
             df.file_count.sum()
         )  # FIXME: KS: 2021-02-28: Error here - no file_count
         logger.debug(f"== Found {n_clusters} clusters. Total file count: {n_files}")
-    except Exception:
-        logger.error("No 'file_count' column in dataframe")
+    except AttributeError as e:
+        logger.error(f"No 'file_count' column in dataframe {e}")
 
     return df, res_empty_dir_list
 
@@ -99,25 +102,24 @@ def get_or_create_library_cluster_ini_as_dataframe(
 def get_this_ini(
     event_dir: str, force_deep_scan: bool, library_path
 ) -> dict | Path | None:
-    """Get stats of event_dir that is subdir of library.
+    """Get stats of event_dir that are subdir of a library.
 
     Returns
-        single object that can be:
-        Dictionary with characterization of the cluster - if directory is
+        a single object that can be:
+        Dictionary with characterization of the cluster - if the directory is
             not empty and as media files.
-        Path object of the cluster - if directory is empty
+        Path object of the cluster - if the directory is empty
         None - if is not empty but no media files directly in that path.
     """
     event_dir_name = event_dir[0]
     pth = Path(library_path) / event_dir_name
-    settings = (
-        FileClusterSettings()
-    )  # FIXME: KS: 2025-04-24: are these proper settings?
+    settings = FileClusterSettings()
+
     is_ini = os.path.isfile(Path(pth) / settings.ini_filename)
     is_empty = False
     if force_deep_scan or not is_ini:
         # calculate ini
-        conf = configure_im_reader(in_dir_name=pth)
+        conf = configure_inbox_reader(in_dir_name=pth)
 
         f_name = conf.in_dir_name
         if os.listdir(f_name):
@@ -150,7 +152,7 @@ def get_this_ini(
 
 
 def dict_from_ini_range_section(cluster_ini_r, pth):
-    """Read data from ini section and adjust data types."""
+    """Read data from an ini section and adjust data types."""
     d = cluster_ini_r["Range"]
     # convert types
     d["is_continuous"] = str_to_bool(d["is_continuous"])
@@ -170,14 +172,14 @@ def initialize_cluster_info_dict(
     median: int | None = None,
     file_count: int | None = None,
 ) -> ConfigParser:
-    """Return dictionary that store information on cluster existing on the disk.
+    """Return a dictionary that stores information on a cluster existing on the disk.
 
     Args:
       median:
       file_count:
-      start:        Cluster start datetime
+      start: Cluster start datetime
       stop:         Cluster end datetime
-      is_continuous: Indicate if there are not gaps (larger than allowed) in the cluster
+      is_continuous: Indicate if there are no gaps (larger than allowed) in the cluster
 
     Returns:
         configparser object with predefined structure of information
@@ -223,8 +225,9 @@ def read_cluster_ini_as_dict(
     Returns:
         dictionary with information from the cluster ini file.
     """
+    settings = FileClusterSettings()
     cluster_ini = ConfigParser()
-    cluster_ini.read(Path(path) / ".cluster.ini")
+    cluster_ini.read(Path(path) / settings.ini_filename)
 
     if not (
         cluster_dict := {
@@ -321,13 +324,16 @@ def is_event_folder(folder: str) -> bool:
     Returns:
         True if the folder is event-folder
     """
+    parts = Path(folder).parts
+    if len(parts) < 2:
+        return False
     # is under year-folder
-    parrent_part = Path(folder).parts[-2]
-    return is_year_folder(parrent_part)
+    parent_part = parts[-2]
+    return is_year_folder(parent_part)
 
 
 def is_sel_folder(folder: str) -> bool:
-    """Check if given folder is a sel-type folder.
+    """Check if a given folder is a sel-type folder.
 
     Sel-type folder is a subfolder of the event folder dedicated to keeping
     best, selected images or videos.
@@ -336,19 +342,19 @@ def is_sel_folder(folder: str) -> bool:
       folder: path to the folder that has to be examined.
 
     Returns:
-        True if folder is sel-folder
+        True if the folder is sel-folder
     """
     return os.path.basename(folder) == "sel"
 
 
 def is_event_subcategory_folder(folder: str) -> bool:
-    """Check if given folder is an event subfolder folder.
+    """Check if a given folder is an event subfolder folder.
 
     Args:
       folder: path to the folder that has to be examined.
 
     Returns:
-        True if folder is an event subfolder folder.
+        True if the folder is an event subfolder folder.
     """
     # TODO: KS: 2020-12-23: add separator (for given system - / or \) after year
     # is_year_in_the_path = bool(re.match(r"(19|20)\d{2}", folder))
@@ -357,7 +363,7 @@ def is_event_subcategory_folder(folder: str) -> bool:
 
 
 def validate_library_structure(library_dir):
-    """Check if a library has structure following the assumed convention.
+    """Check if a library has a structure following the assumed convention.
 
     Folder types:
     - year
@@ -371,14 +377,16 @@ def validate_library_structure(library_dir):
     Returns:
         True if there is no unknown folder-type in the library.
     """
-    # check if there are no 'unknown-type' folders in the structure.
+    subfolders = fast_scandir(str(library_dir))
+    labels = identify_folder_types(subfolders)
+    return all(folder_type != "unknown" for _, folder_type in labels)
 
 
 def is_event(item: tuple[str, str]) -> bool:
-    """Check item from labelled list of folders if it is event folder.
+    """Check an item from a labelled list of folders if it is an event folder.
 
     Args:
-      item: item from a labelled list of folders
+      item: item from a labeled list of folders
 
     Returns:
         True if the folder in tuple is event-type
@@ -414,10 +422,9 @@ if __name__ == "__main__":
 
     n_cpu = multiprocessing.cpu_count()
     logger.debug(f"Setting-up multiprocessing pool with {n_cpu} processes")
-    pool = multiprocessing.Pool(processes=n_cpu)
-    logger.debug("Pool ready to use")
-
-    for lib in libs:
-        _ = get_or_create_library_cluster_ini_as_dataframe(
-            library_path=lib, pool=pool, force_deep_scan=args.force_recalc
-        )
+    with multiprocessing.Pool(processes=n_cpu) as pool:
+        logger.debug("Pool ready to use")
+        for lib in libs:
+            _ = get_or_create_library_cluster_ini_as_dataframe(
+                library_path=lib, pool=pool, force_deep_scan=args.force_recalc
+            )
