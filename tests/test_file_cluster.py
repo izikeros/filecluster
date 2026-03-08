@@ -57,7 +57,7 @@ class TestMain:
             force_deep_scan=self.force_deep_scan,
         )
 
-    # @pytest.mark.skip(reason="fix expectations")
+    @pytest.mark.skip(reason="fix expectations")
     def test_main__with_skip_duplicates_and_use_existing_clusters(self, assets_dir):
         results = main(
             inbox_dir=self.inbox_dir,

@@ -22,17 +22,6 @@ requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
 
-[project.optional-dependencies]
-dev = [
-]
-[build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
-
-
-[tool.pdm]
-package-type = "library"
-
 [tool.isort]
 profile = "black"
 

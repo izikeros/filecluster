@@ -14,12 +14,12 @@ def assets_dir():
 def test_settings():
     """Return settings configured for testing."""
     return FileClusterSettings(
-        INBOX_DIR="test_inbox",
-        OUTBOX_DIR="test_outbox",
-        WINDOWS_BASE_PATH="./test_data",
-        LINUX_BASE_PATH="./test_data",
-        WINDOWS_LIBRARY_PATHS=["./test_library"],
-        LINUX_LIBRARY_PATHS=["./test_library"],
+        inbox_dir=Path("test_inbox"),
+        outbox_dir="test_outbox",
+        windows_base_path="./test_data",
+        linux_base_path="./test_data",
+        windows_library_paths=["./test_library"],
+        linux_library_paths=["./test_library"],
     )
 
 
@@ -30,11 +30,11 @@ def test_config_factory(test_settings):
 
 
 @pytest.fixture
-def test_config(test_config_factory):
+def test_config(test_config_factory, assets_dir):
     """Return a configuration for testing."""
-    config = test_config_factory.get_config(is_dev_mode=True)
+    config = test_config_factory.get_config(is_development_mode=True)
     # Override paths to use test assets
-    config.in_dir_name = str(assets_dir() / "test_inbox")
-    config.out_dir_name = str(assets_dir() / "test_outbox")
-    config.watch_folders = [str(assets_dir() / "test_library")]
+    config.in_dir_name = assets_dir / "test_inbox"
+    config.out_dir_name = assets_dir / "test_outbox"
+    config.watch_folders = [assets_dir / "test_library"]
     return config

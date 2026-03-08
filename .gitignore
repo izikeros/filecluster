@@ -14,3 +14,6 @@ gui.dist
 filecluster/monkeytype.sqlite3
 .aider*
 .env
+.pytest_cache
+coverage.xml
+htmlcov/

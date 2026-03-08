@@ -67,6 +67,7 @@ def get_exif_date(path_name: str):
                 exif_date = None
     except KeyError:
         exif_date = None
+        logger.info(f"No EXIF date for file: {path_name}")
 
     return exif_date
 

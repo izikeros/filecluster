@@ -17,42 +17,32 @@ from filecluster.utlis import (
 
 EXT_IMG = [".jpg", ".CR2"]
 EXT_VID = [".mp4", ".3gp"]
-# img_pth = "inbox_test_a_orig/20181117_121813.jpg"
 
 
-# img_pth = ASSETS_DIR / "set_1" / "IMG_3784.jpg"
+@pytest.mark.parametrize(
+    "filename, expected, label",
+    [
+        ("img.jpg", True, "jpg_lower_case"),
+        ("img.JPG", True, "jpg_upper_case"),
+        ("img.cr2", True, "cr2_file"),
+        ("img.xyz", False, "unsupported_filetype"),
+        ("img.jpg.xyz", False, "invalid_extension"),
+    ],
+)
+def test_is_supported_filetype(filename, expected, label):
+    assert is_supported_filetype(filename, EXT_IMG) is expected
 
 
-def test_is_supported_filetype_jpg_lower_case():
-    assert is_supported_filetype("img.jpg", EXT_IMG) is True
-
-
-def test_is_supported_filetype_jpg_upper_case():
-    assert is_supported_filetype("img.JPG", EXT_IMG) is True
-
-
-def test_is_supported_filetype_cr2():
-    assert is_supported_filetype("img.cr2", EXT_IMG) is True
-
-
-def test_is_supported_filetype_xyz():
-    assert is_supported_filetype("img.xyz", EXT_IMG) is False
-
-
-def test_is_supported_filetype_jpg_xyz():
-    assert is_supported_filetype("img.jpg.xyz", EXT_IMG) is False
-
-
-def test_is_image__jpg():
-    assert is_image("img.jpg", EXT_IMG) is True
-
-
-def test_is_image__not_recognized_image_type():
-    assert is_image("img.xyz", EXT_IMG) is False
-
-
-def test_is_image__video():
-    assert is_image("img.mov", EXT_IMG) is False
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("img.jpg", True),
+        ("img.xyz", False),
+        ("img.mov", False),
+    ],
+)
+def test_is_image(filename, expected):
+    assert is_image(filename, EXT_IMG) is expected
 
 
 def test_get_date_from_file(assets_dir):

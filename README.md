@@ -2,7 +2,7 @@
 
 
 ## filecluster
-Python library for creating image and video catalog. Catalog is organized by the dates and events. The main purpose is to handle a task when you have a large number of pictures in a flat directory and want to automatically group them into separate directories corresponding to events e.g., directory for your daughter's birthday, separate directory for the excursion you make the next day after the birthday, etc..
+Python library for creating image and video catalog. Catalog is organized by the dates and events. The main purpose is to handle a task when you have a large number of pictures in a flat directory and want to automatically group them into separate directories corresponding to events e.g., directory for your daughter's birthday, separate directory for the excursion you make the next day after the birthday, etc.
 
 ### Features
 - clustering media (images, video) by event
@@ -14,7 +14,7 @@ Python library for creating image and video catalog. Catalog is organized by the
 ### Installation:
 Clone the repo, install required packages (see `filecluster/requirements.txt`)
 
-The recommended way to install the package is to use `uv`:
+The recommended way to install the packages is to use `uv`:
 
 ```bash
 uv lock && uv sync

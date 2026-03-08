@@ -26,7 +26,4 @@ clean: ## Clean all generated files
 run-ci: format lint type ## Running all CI checks
 test: ## Run tests
 	@echo "Running tests..."
-	@pytest tests/unit $(shell if [ -n "$(k)" ]; then echo "-k $(k)"; fi)
-test-e2e: ## Run end2end tests
-	echo "running end2end tests..."
-	@pytest tests/e2e -s
+	@pytest tests $(shell if [ -n "$(k)" ]; then echo "-k $(k)"; fi)

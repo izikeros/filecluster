@@ -7,9 +7,9 @@ from numpy import dtype
 from filecluster.filecluster_types import MediaDataFrame
 from filecluster.image_grouper import get_files_from_folder
 from filecluster.image_reader import (
-    ImageReader,
+    InboxReader,
     Metadata,
-    configure_im_reader,
+    configure_inbox_reader,
     get_media_df,
     get_media_stats,
     initialize_row_dict,
@@ -25,8 +25,8 @@ class TestImageReader:
 
     @pytest.fixture(autouse=True)
     def setup_method(self):
-        self.imreader = ImageReader(in_dir_name=self.in_dir_name)
-        self.media_list_of_rows = self.imreader.get_data_from_files_as_list_of_rows()
+        self.inbox_reader = InboxReader(in_dir_name=self.in_dir_name)
+        self.media_list_of_rows = self.inbox_reader.get_data_from_files_as_list_of_rows()
 
     def test_get_data_from_files_as_list_of_rows(self, assets_dir):
         files = os.listdir(str(assets_dir / "set_1"))
@@ -37,8 +37,8 @@ class TestImageReader:
         raise AssertionError
 
     def test_get_media_info_from_inbox_files(self):
-        self.imreader.get_media_info_from_inbox_files()
-        assert len(self.imreader.media_df) > 0
+        self.inbox_reader.get_media_files_info()
+        assert len(self.inbox_reader.media_df) > 0
 
 
 def test_metadata__intializes():
@@ -70,7 +70,7 @@ def test_multiple_timestamps_to_one__dates_are_datetime64():
 
 def test_multiple_timestamps_to_one(assets_dir):
     in_dir_name = assets_dir / "set_1"
-    image_reader = ImageReader(in_dir_name)
+    image_reader = InboxReader(in_dir_name)
     row_list = image_reader.get_data_from_files_as_list_of_rows()
     inbox_media_df_in = MediaDataFrame(pd.DataFrame(row_list))
     sel_cols = ["file_name", "m_date", "c_date", "exif_date", "date"]
@@ -110,7 +110,7 @@ def test_get_files_from_watch_folder(assets_dir):
 
 
 def test_dir_scanner(assets_dir):
-    conf = configure_im_reader(in_dir_name=str(assets_dir / "set_1"))
+    conf = configure_inbox_reader(in_dir_name=str(assets_dir / "set_1"))
     media_df = get_media_df(conf.in_dir_name)
     time_granularity = int(conf.time_granularity.total_seconds())
     _ = get_media_stats(media_df, time_granularity)

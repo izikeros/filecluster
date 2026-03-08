@@ -46,7 +46,7 @@ def test_config_os_specific_paths():
     """Test that OS-specific paths are set correctly."""
     # Create a factory with custom settings for testing
     settings = FileClusterSettings(
-        WINDOWS_BASE_PATH="C:\\test\\windows\\", LINUX_BASE_PATH="/test/linux/"
+        windows_base_path="C:\\test\\windows\\", linux_base_path="/test/linux/"
     )
     factory = ConfigFactory(settings)
 

@@ -1,0 +1,59 @@
+name: "filecluster"
+category: priv
+status: usable
+priority: medium
+
+definition_of_usable: "CLI can cluster photos/videos by event from inbox to organized library"
+current_state: "Core clustering works, GUI experimental, some Windows-specific bugs, technical debt in codebase"
+usable: true
+
+next_actions:
+  - "Fix iPhone video date extraction (use creation date, not modification)"
+  - "Review and close stale dependabot PRs"
+  - "Add proper logging configuration"
+
+blockers: []
+
+issues:
+  - title: "iPhone videos use wrong date (mdate instead of cdate)"
+    impact: high
+    status: open
+  - title: "Windows: creation/modification date not read correctly"
+    impact: medium
+    status: open
+  - title: "Duplicate detection false positives (same name, different content)"
+    impact: medium
+    status: open
+
+roadmap:
+  - title: "Fix date extraction for videos"
+    impact: high
+    effort: medium
+    status: planned
+  - title: "Better progress indication during library scan"
+    impact: medium
+    effort: small
+    status: planned
+  - title: "Config file support (.fileclusterrc)"
+    impact: medium
+    effort: medium
+    status: planned
+  - title: "Web UI for cluster merging"
+    impact: medium
+    effort: large
+    status: planned
+  - title: "Deep learning: blur detection, face detection"
+    impact: low
+    effort: large
+    status: planned
+
+ideas:
+  - title: "Integrate with diary/notes for event references"
+    impact: medium
+    notes: "Auto-create diary notes linking to photo events"
+  - title: "Detect photo series and pick best shot"
+    impact: medium
+    notes: "ML-based selection of representative photo"
+
+learnings: "Started in 2022, has been very useful for organizing family photos. Technical debt accumulated but core functionality solid."
+notes: "Personal photo/video organization tool. Clusters media by event dates. Used regularly for family photo management."

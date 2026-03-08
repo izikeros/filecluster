@@ -16,7 +16,7 @@ from filecluster.configuration import (
 )
 from filecluster.dbase import get_existing_clusters_info
 from filecluster.image_grouper import ImageGrouper
-from filecluster.image_reader import ImageReader
+from filecluster.image_reader import InboxReader
 
 
 def main(
@@ -81,9 +81,9 @@ def main(
     }
 
     # Configure image reader and initialize media database
-    image_reader = ImageReader(in_dir_name=config.in_dir_name)
+    image_reader = InboxReader(in_dir_name=config.in_dir_name)
     logger.info("Reading media information from inbox files")
-    image_reader.get_media_info_from_inbox_files()
+    image_reader.get_media_files_info()
 
     # Configure media grouper and initialize internal dataframes
     image_grouper = ImageGrouper(
