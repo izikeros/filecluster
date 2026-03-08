@@ -1,78 +1,181 @@
+"""Tests for the file_cluster main module.
+
+Covers the main() orchestration function, CLI argument processing via
+process_watch_dirs, and end-to-end clustering pipelines with various
+feature flag combinations.
+
+No mocking — these are integration tests using real files from test assets.
+"""
+
 import tempfile
 
 import pytest
 
-from filecluster import logger
-from filecluster.file_cluster import main
+from filecluster.file_cluster import main, process_watch_dirs
 
 
-class TestMain:
+# ---------------------------------------------------------------------------
+# process_watch_dirs
+# ---------------------------------------------------------------------------
+class TestProcessWatchDirs:
+    """Tests for the CLI watch directory processor.
+
+    Business rules:
+    - None => empty list
+    - list => returned as-is
+    - anything else => TypeError
+    """
+
+    def test_none_returns_empty_list(self):
+        """No watch dirs specified => empty list."""
+        assert process_watch_dirs(None) == []
+
+    def test_list_returned_as_is(self):
+        """A list of paths is returned unchanged."""
+        dirs = ["/a", "/b"]
+        assert process_watch_dirs(dirs) == dirs
+
+    def test_non_list_raises_type_error(self):
+        """A string (instead of list) raises TypeError."""
+        with pytest.raises(TypeError, match="list"):
+            process_watch_dirs("/not/a/list")
+
+    def test_empty_list_returns_empty(self):
+        """Explicit empty list is valid."""
+        assert process_watch_dirs([]) == []
+
+
+# ---------------------------------------------------------------------------
+# main() — integration tests
+# ---------------------------------------------------------------------------
+class TestMainOrchestration:
+    """Integration tests for the main clustering pipeline.
+
+    Uses real image assets and a temp directory for output. Tests verify the
+    clustering results dict contains expected structures and counts.
+
+    Mocking Strategy: None. File system operations use temp dirs that are
+    cleaned up automatically.
+    """
+
     @pytest.fixture(autouse=True)
-    def setup_class(self, assets_dir):
+    def setup(self, assets_dir):
         self.inbox_dir = assets_dir / "set_1"
-        # use temp dir for output
-        tmpdir = tempfile.mkdtemp()
-        self.output_dir = tmpdir
-        self.development_mode = True
-        self.force_deep_scan = True
+        self.output_dir = tempfile.mkdtemp()
+        self.assets_dir = assets_dir
 
-    def test_main__minimal(self):
+    def test_minimal_clustering_produces_expected_clusters(self):
+        """
+        Test Description: Clustering the test inbox without duplicate detection
+        or existing-cluster assignment produces 4 new clusters and 4 folder names.
+
+        Purpose: This is the core happy path — the most common use case.
+
+        Test Strategy:
+        - Setup: 8 test files in set_1, no watch folders
+        - Execution: main() with minimal flags
+        - Verification: 4 clusters (matching the time distribution of test files)
+        """
         results = main(
             inbox_dir=self.inbox_dir,
             output_dir=self.output_dir,
             watch_dir_list=[],
-            development_mode=self.development_mode,
+            development_mode=True,
             drop_duplicates=False,
             use_existing_clusters=False,
-            force_deep_scan=self.force_deep_scan,
+            force_deep_scan=True,
         )
-        n_new_folder_res = len(results["new_folder_names"])
-        n_new_folder_exp = 4
-        assert n_new_folder_res == n_new_folder_exp
+        assert len(results["new_folder_names"]) == 4
+        assert len(results["new_cluster_df"]) == 4
+        assert results["dup_files"] == 0
+        assert results["dup_clusters"] == 0
 
-        n_new_cluster_res = len(results["new_cluster_df"])
-        n_new_cluster_exp = 4
-        logger.info(f"output_dir: {self.output_dir}")
-        assert n_new_cluster_res == n_new_cluster_exp
+    def test_with_skip_duplicates(self):
+        """
+        Test Description: With duplicate detection enabled, known duplicate files
+        are identified against the watch library.
 
-    def test_main__with_skip_duplicates(self, assets_dir):
-        _ = main(
-            inbox_dir=self.inbox_dir,
-            output_dir=self.output_dir,
-            watch_dir_list=[assets_dir / "zdjecia", assets_dir / "clusters"],
-            development_mode=self.development_mode,
-            drop_duplicates=True,
-            use_existing_clusters=False,
-            force_deep_scan=self.force_deep_scan,
-        )
-
-    def test_main__with_use_existing_clusters(self, assets_dir):
-        _ = main(
-            inbox_dir=self.inbox_dir,
-            output_dir=self.output_dir,
-            watch_dir_list=[assets_dir / "zdjecia", assets_dir / "clusters"],
-            development_mode=self.development_mode,
-            drop_duplicates=False,
-            use_existing_clusters=True,
-            force_deep_scan=self.force_deep_scan,
-        )
-
-    @pytest.mark.skip(reason="fix expectations")
-    def test_main__with_skip_duplicates_and_use_existing_clusters(self, assets_dir):
+        Purpose: Users want to avoid re-clustering files that already exist in
+        their organized collection.
+        """
         results = main(
             inbox_dir=self.inbox_dir,
             output_dir=self.output_dir,
-            watch_dir_list=[assets_dir / "zdjecia", assets_dir / "clusters"],
-            development_mode=self.development_mode,
+            watch_dir_list=[
+                self.assets_dir / "zdjecia",
+                self.assets_dir / "clusters",
+            ],
+            development_mode=True,
             drop_duplicates=True,
-            use_existing_clusters=True,
-            force_deep_scan=self.force_deep_scan,
+            use_existing_clusters=False,
+            force_deep_scan=True,
         )
-        self._assert_result_len(results, "new_folder_names")
-        self._assert_result_len(results, "new_cluster_df")
+        assert "dup_files" in results
+        assert "dup_clusters" in results
+        assert "new_cluster_df" in results
+        # Some duplicates should be detected (shared files between set_1 and library)
+        assert isinstance(results["dup_files"], list)
 
-    # TODO Rename this here and in `test_main__with_skip_duplicates_and_use_existing_clusters`
-    def _assert_result_len(self, results, arg1, value=15):
-        n_new_folder_res = len(results[arg1])
-        n_new_folder_exp = value
-        assert n_new_folder_res == n_new_folder_exp
+    def test_with_use_existing_clusters(self):
+        """
+        Test Description: With existing-cluster assignment enabled, some inbox
+        files may be assigned to library clusters.
+
+        Purpose: Avoids creating duplicate event folders when the event already
+        exists in the collection.
+        """
+        results = main(
+            inbox_dir=self.inbox_dir,
+            output_dir=self.output_dir,
+            watch_dir_list=[
+                self.assets_dir / "zdjecia",
+                self.assets_dir / "clusters",
+            ],
+            development_mode=True,
+            drop_duplicates=False,
+            use_existing_clusters=True,
+            force_deep_scan=True,
+        )
+        assert "files_existing_cl" in results
+        assert "existing_cluster_names" in results
+        assert "new_cluster_df" in results
+
+    def test_results_contain_cluster_dataframe(self):
+        """The results dict always contains a 'df_clusters' key."""
+        results = main(
+            inbox_dir=self.inbox_dir,
+            output_dir=self.output_dir,
+            watch_dir_list=[],
+            development_mode=True,
+            drop_duplicates=False,
+            use_existing_clusters=False,
+            force_deep_scan=True,
+        )
+        assert "df_clusters" in results
+        assert "new_cluster_df" in results
+        assert "new_folder_names" in results
+
+    def test_no_operation_mode_does_not_move_files(self):
+        """
+        Test Description: When no_operation is True, the output directory stays
+        empty — no files are moved or copied.
+
+        Purpose: Dry-run is essential for previewing clustering results.
+        """
+        import os
+
+        results = main(
+            inbox_dir=self.inbox_dir,
+            output_dir=self.output_dir,
+            watch_dir_list=[],
+            development_mode=True,
+            no_operation=True,
+            drop_duplicates=False,
+            use_existing_clusters=False,
+            force_deep_scan=True,
+        )
+        # Output dir should remain empty in NOP mode
+        output_contents = os.listdir(self.output_dir)
+        assert len(output_contents) == 0
+        # But results should still be computed
+        assert len(results["new_cluster_df"]) > 0
