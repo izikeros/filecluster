@@ -86,6 +86,7 @@ select = [
 max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
+"src/filecluster/image_grouper.py" = ["C901"]
 "**/tests/*" = [
     "D100",
     "D101",
@@ -115,3 +116,4 @@ exclude = [
     "src/filecluster/gui.py",
     "src/filecluster/gui_tkinter.py",
 ]
+
