@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Simple GUI to configure and run filecluster. EXPERIMENTAL."""
+
 import PySimpleGUI as sg  # noqa: N813
 
 from filecluster.file_cluster import main

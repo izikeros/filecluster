@@ -22,8 +22,9 @@ requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
 
-[tool.isort]
-profile = "black"
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
@@ -34,18 +35,77 @@ dev = [
     "jupyter>=1.0.0",
     "MonkeyType>=23.3.0",
     "pytest-monkeytype>=1.1.0",
-    "pytest-mypy>=0.10.3",
     "pip-upgrader>=1.4.15",
-    "mypy",
-    "data-science-types",
-    "flake8",
-    "flake8-docstrings>=1.6.0",
-    "flake8-pytest-style",
-    "flake8-black",
-    "pandas-stubs>=2.1.1.230928",
+    "ty",
     "pre-commit>=3.6.0",
-    "black>=24.4.2",
-    "isort>=5.13.2",
     "code2flow>=2.5.1",
     "ruff>=0.11.6",
+]
+
+[tool.ruff]
+exclude = [
+    ".tox",
+    ".git",
+    "docs",
+    "venv",
+    ".venv",
+    "*.pyc",
+    "__pycache__",
+]
+line-length = 88
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.lint]
+ignore = [
+    "D100",
+    "D101",
+    "D104",
+    "D105",
+    "D107",
+    "F405",
+    "N802",
+    "E501",
+]
+select = [
+    "C4",
+    "C9",
+    "N",
+    "E",
+    "W",
+    "F",
+    "UP",
+    "B",
+    "SIM",
+    "I",
+    "RUF",
+    "PIE",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*" = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "E501",
+]
+
+"**/*.ipynb" = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "E501",
+]
+
+"**/notebooks/*" = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "E501",
 ]

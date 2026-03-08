@@ -26,7 +26,9 @@ class TestImageReader:
     @pytest.fixture(autouse=True)
     def setup_method(self):
         self.inbox_reader = InboxReader(in_dir_name=self.in_dir_name)
-        self.media_list_of_rows = self.inbox_reader.get_data_from_files_as_list_of_rows()
+        self.media_list_of_rows = (
+            self.inbox_reader.get_data_from_files_as_list_of_rows()
+        )
 
     def test_get_data_from_files_as_list_of_rows(self, assets_dir):
         files = os.listdir(str(assets_dir / "set_1"))

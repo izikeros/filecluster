@@ -1,8 +1,11 @@
-name: uv, isort, black, ruff
+name: uv, ruff, ty (example)
+
+on:
+  workflow_dispatch:
 
 jobs:
   uv-example:
-    name: python
+    name: quality
     runs-on: ubuntu-latest
 
     steps:
@@ -13,12 +16,19 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Verify import order with isort
+      - name: Sync dependencies
         run: |
-          uv run isort --check-only src tests
-      - name: Verify code formatting with black
+          uv sync --group dev
+
+      - name: Verify formatting with ruff
         run: |
-          uv run black --check --config pyproject.toml src tests
-      - name: Verify code style with ruff
+          uv run ruff format --check src tests
+
+      - name: Verify lint with ruff
         run: |
-          uv run ruff check src
+          uv run ruff check src tests
+
+      - name: Type check with ty (non-blocking)
+        continue-on-error: true
+        run: |
+          uv run ty check src

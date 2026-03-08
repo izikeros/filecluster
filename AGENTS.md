@@ -4,12 +4,13 @@ Image and video clustering by date. Groups photos/videos into event-based folder
 
 ## Build & Test
 
-- Install (editable): `pip install -e .`
-- Run tests: `pytest tests` or `make test`
-- Run single test: `pytest tests -k <test_name>`
-- Format code: `make format` (runs isort, black, ruff --fix-only)
-- Lint: `make lint` (ruff)
-- Type check: `make type` (pyright)
+- Sync dependencies: `uv sync --group dev`
+- Run tests: `make test` or `uv run pytest tests`
+- Run single test: `uv run pytest tests -k <test_name>`
+- Format code: `make format` (`uv run ruff format src tests`)
+- Lint/check: `make check` or `make lint`
+- Auto-fix lint: `make fix` (or `make fix-unsafe` for unsafe fixes)
+- Type check: `make type` (`uv run ty check src`)
 - All CI checks: `make run-ci`
 
 ## Project Layout
@@ -33,9 +34,10 @@ tests/                   → pytest test suite
 ## Conventions & Patterns
 
 - Python 3.12, line length 88 (black-compatible)
-- Formatting: black + isort (profile=black) + ruff fix
+- Tooling: uv for dependency/runtime management
+- Formatting/Linting: Ruff-only (`ruff format`, `ruff check`, `--fix`, `--unsafe-fixes`)
 - Linting: ruff (rules: C4, C9, N, E, W, F, UP, B, SIM, I, RUF, PIE)
-- Type checking: pyright (strict) and mypy (for pandas/numpy)
+- Type checking: Astral Ty (`ty check`), currently non-blocking in CI
 - Configuration via Pydantic Settings (`configuration.py`)
 - Logging via loguru
 - Tests use pytest with INFO-level log output
@@ -52,5 +54,5 @@ tests/                   → pytest test suite
 ## Gotchas
 
 - The utils module is named `utlis.py` (typo is intentional, do not rename)
-- Both `setup.py` and `pyproject.toml` exist; `pyproject.toml` is the primary config
+- `pyproject.toml` + `uv.lock` are the source of truth for dependencies/build
 - Two GUI implementations exist: `gui.py` (PySimpleGUI) and `gui_tkinter.py` (Tkinter)

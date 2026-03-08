@@ -163,7 +163,9 @@ class ImageGrouper:
                     list_new_cluster_dictionaries.append(current_cluster_dict)
 
                 # initialize record for a new cluster
-                current_cluster_dict = dict.fromkeys(default_settings.cluster_df_columns)
+                current_cluster_dict = dict.fromkeys(
+                    default_settings.cluster_df_columns
+                )
                 current_cluster_dict.update(
                     {
                         "cluster_id": cluster_idx,
@@ -493,9 +495,7 @@ class ImageGrouper:
                 dups_lib_clust_list = [Path(x).parts[-2] for x in dups_lib_patch]
 
                 self.inbox_media_df.loc[idx, "duplicated_to"] = dups_lib_str_list
-                self.inbox_media_df.loc[idx, "duplicated_cluster"] = (
-                    dups_lib_clust_list
-                )
+                self.inbox_media_df.loc[idx, "duplicated_cluster"] = dups_lib_clust_list
 
                 # return the first cluster with this duplicated media file (for debug and testing)
                 clusters_with_dups.append(
