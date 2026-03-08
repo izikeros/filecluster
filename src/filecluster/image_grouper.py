@@ -277,14 +277,17 @@ class ImageGrouper:
     def add_target_dir_for_duplicates(self):
         """Add a target directory for the duplicated media files."""
         path_creator = TargetPathCreator(out_dir_name=self.config.out_dir_name)
-        # add target dir for the duplicates
         sel_dups = self.inbox_media_df.status == Status.DUPLICATE
-        # TODO: use pandas apply or even parallel apply instead of iterrows
         for idx, _row in self.inbox_media_df[sel_dups].iterrows():
             dup_cluster = self.inbox_media_df.duplicated_cluster[idx]
             try:
+                # dup_cluster may be a string (single match) or a list (multiple)
+                if isinstance(dup_cluster, list):
+                    cluster_name = dup_cluster[0]
+                else:
+                    cluster_name = str(dup_cluster)
                 self.inbox_media_df.loc[idx, "target_path"] = (
-                    path_creator.for_duplicates(dup_cluster[0])
+                    path_creator.for_duplicates(cluster_name)
                 )
             except Exception as e:
                 logger.error(f"{e}")
@@ -465,8 +468,11 @@ class ImageGrouper:
         # Process unassigned files in inbox
         sel_unknown = self.inbox_media_df.status == Status.UNKNOWN
 
+        n_unknown = sum(sel_unknown)
         for idx, row in tqdm(
-            self.inbox_media_df[sel_unknown].iterrows(), total=sum(sel_unknown)
+            self.inbox_media_df[sel_unknown].iterrows(),
+            total=n_unknown,
+            disable=n_unknown < 50,
         ):
             inbox_size = row["size"]
             inbox_file_name = row["file_name"]

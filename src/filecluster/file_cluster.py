@@ -161,7 +161,50 @@ def main(
     else:
         logger.info("Dry run mode - no files were moved or copied")
 
+    # Print structured results summary
+    _print_results_summary(results, config)
+
     return results
+
+
+def _print_results_summary(results: dict[str, Any], config) -> None:
+    """Print a human-readable summary of the clustering run."""
+    dup_files = results.get("dup_files", [])
+    n_dups = len(dup_files) if isinstance(dup_files, list) else 0
+    files_existing = results.get("files_existing_cl", [])
+    n_existing = len(files_existing) if isinstance(files_existing, list) else 0
+    new_folders = results.get("new_folder_names", [])
+    n_new_clusters = len(new_folders) if isinstance(new_folders, list) else 0
+    plan = results.get("file_operation_plan")
+
+    mode_label = {
+        CopyMode.NOP: "NOP (dry-run, no files modified)",
+        CopyMode.COPY: "COPY (files copied, inbox preserved)",
+        CopyMode.MOVE: "MOVE (files moved from inbox)",
+    }.get(config.mode, str(config.mode))
+
+    lines = [
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "  Filecluster Results",
+        "  ─────────────────────────────────────",
+        f"  New clusters created:    {n_new_clusters}",
+    ]
+    if new_folders:
+        for name in new_folders:
+            lines.append(f"    - {name}")
+    lines.append(f"  Duplicates found:        {n_dups}")
+    lines.append(f"  Assigned to existing:    {n_existing}")
+    if plan:
+        lines.append(f"  Files moved:             {plan.n_moves}")
+        lines.append(f"  Files copied:            {plan.n_copies}")
+        lines.append(f"  Files skipped:           {plan.n_skips}")
+    lines.append(f"  Mode: {mode_label}")
+    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append("")
+
+    for line in lines:
+        logger.info(line)
 
 
 def create_argument_parser() -> argparse.ArgumentParser:

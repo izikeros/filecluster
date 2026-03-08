@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import logging
 import os
 import time
 from datetime import datetime
@@ -15,7 +16,9 @@ from filecluster import logger
 from filecluster.configuration import Config, CopyMode
 from filecluster.exceptions import DateStringNoneError
 
-# TODO: optimize this parameter for speed
+# Suppress exifread's "File format not recognized" warnings
+logging.getLogger("exifread").setLevel(logging.CRITICAL)
+
 BLOCK_SIZE_FOR_HASHING = 4096 * 32
 
 
@@ -67,7 +70,7 @@ def get_exif_date(path_name: str):
                 exif_date = None
     except KeyError:
         exif_date = None
-        logger.info(f"No EXIF date for file: {path_name}")
+        logger.debug(f"No EXIF date for file: {path_name}")
 
     return exif_date
 

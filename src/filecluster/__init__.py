@@ -58,4 +58,4 @@ logger.add(
     colorize=True,
     level="INFO",
 )
-logger.info("Logger initialized")
+logger.debug("Logger initialized")

@@ -140,7 +140,7 @@ def build_file_operation_plan(
 def execute_plan(plan: FileOperationPlan) -> None:
     """Execute every operation in the plan against the real filesystem."""
     file_ops = [op for op in plan.ops if not isinstance(op, SkipOp)]
-    for op in tqdm(file_ops, total=len(file_ops)):
+    for op in tqdm(file_ops, total=len(file_ops), disable=len(file_ops) < 50):
         if isinstance(op, MkdirOp):
             os.makedirs(op.path, exist_ok=True)
         elif isinstance(op, CopyOp):

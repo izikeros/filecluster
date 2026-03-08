@@ -243,7 +243,7 @@ class InboxReader:
         image_extensions = self.image_extensions
         meta = Metadata()
         file_list = list(os.listdir(in_dir_name))
-        for file_name in tqdm(file_list):
+        for file_name in tqdm(file_list, disable=len(file_list) < 50):
             if ut.is_supported_filetype(file_name, ext):
                 new_row = prepare_new_row_with_meta(
                     file_name, image_extensions, Path(in_dir_name), meta
@@ -259,6 +259,16 @@ class InboxReader:
         inbox_media_df = MediaDataFrame(DataFrame(row_list))
         inbox_media_df = multiple_timestamps_to_one(inbox_media_df)
         self.media_df = inbox_media_df
+
+        # Summary: report how many files lack EXIF
+        n_total = len(inbox_media_df)
+        n_no_date = inbox_media_df["date"].isna().sum()
+        if n_no_date > 0:
+            logger.info(
+                f"{n_no_date} of {n_total} files lack EXIF date (using mtime fallback)"
+            )
+        else:
+            logger.info(f"All {n_total} files have EXIF dates")
 
 
 def configure_inbox_reader(in_dir_name: str | Path) -> Config:
