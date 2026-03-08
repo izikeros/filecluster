@@ -72,7 +72,7 @@ def get_existing_clusters_info(
         # Flatten the list of empty directories:
         empty_folder_list = list(itertools.chain(*empty_folder_list))
     else:
-        df = pd.DataFrame(columns=default_settings.cluster_df_columns)
+        df = pd.DataFrame(columns=pd.Index(default_settings.cluster_df_columns))
     return ClustersDataFrame(df), empty_folder_list, non_compliant_folders
 
 

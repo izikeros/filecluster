@@ -115,7 +115,9 @@ class ImageGrouper:
 
         # prepare placeholder for first cluster row (as dict).
         #   First cluster for the media that are not clustered yet.
-        current_cluster_dict = dict.fromkeys(default_settings.cluster_df_columns)
+        current_cluster_dict: dict[str, Any] = dict.fromkeys(
+            default_settings.cluster_df_columns
+        )
         current_cluster_dict.update(
             {
                 "cluster_id": cluster_idx,
@@ -176,11 +178,13 @@ class ImageGrouper:
                 )
             else:
                 # update cluster start & stop date
+                # (start_date/end_date are always set from the new-cluster branch
+                # before we reach this else, so they are never None here)
                 current_cluster_dict["start_date"] = min(
-                    media_date, current_cluster_dict["start_date"]
+                    media_date, current_cluster_dict["start_date"]  # ty: ignore[invalid-argument-type]
                 )
                 current_cluster_dict["end_date"] = max(
-                    media_date, current_cluster_dict["end_date"]
+                    media_date, current_cluster_dict["end_date"]  # ty: ignore[invalid-argument-type]
                 )
 
             # assign cluster id to image
@@ -531,11 +535,11 @@ class ImageGrouper:
         return potential_inbox_dups, potential_library_dups, watch_full_paths
 
 
-def get_files_from_folder(folder: str) -> Iterator[Any]:
+def get_files_from_folder(folder: str | Path) -> Iterator[Any]:
     """Get iterator over recursive listing of files in the folder.
 
     Args:
-      folder: str: Folder to get files from
+      folder: Folder to get files from
 
     Returns:
         Iterator over recursive directory contents (items matching *.* a pattern)
@@ -544,7 +548,7 @@ def get_files_from_folder(folder: str) -> Iterator[Any]:
 
 
 def get_watch_folders_files_path(
-    watch_folders: list[str],
+    watch_folders: list[str] | list[Path],
 ) -> tuple[list[str], list[PosixPath]]:
     """Get a list of files and files with full paths from the folder (recursively).
 

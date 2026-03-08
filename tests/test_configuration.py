@@ -282,11 +282,11 @@ class TestCliOverride:
         assert updated.out_dir_name == Path("/new/out")
 
     def test_override_watch_dirs(self):
-        """CLI --watch-dir replaces the watch folder list."""
+        """CLI --watch-dir replaces the watch folder list (converted to Paths)."""
         config = get_default_config()
         dirs = ["/w1", "/w2"]
         updated = default_factory.override_from_cli(config, watch_dir_list=dirs)
-        assert updated.watch_folders == dirs
+        assert updated.watch_folders == [Path(d) for d in dirs]
 
     def test_override_force_deep_scan(self):
         """CLI --force-deep-scan flag propagates."""

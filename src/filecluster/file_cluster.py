@@ -74,7 +74,7 @@ def main(
         config.assign_to_clusters_existing_in_libs,
         config.force_deep_scan,
     )
-    results = {
+    results: dict[str, Any] = {
         "df_clusters": df_clusters,
         "empty": empty_folders,
         "non_compliant": non_compliant_folders,

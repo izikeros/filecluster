@@ -109,3 +109,9 @@ max-complexity = 10
     "D103",
     "E501",
 ]
+
+[tool.ty.src]
+exclude = [
+    "src/filecluster/gui.py",
+    "src/filecluster/gui_tkinter.py",
+]

@@ -95,7 +95,7 @@ def create_folder_for_cluster(config: Config, date_string: str, mode: CopyMode):
 def get_thumbnail(path, width: int = 150, height: int = 150):
     """Read image and create thumbnail of given size."""
     i = Image.open(path)
-    i.thumbnail((width, height), Image.LANCZOS)
+    i.thumbnail((width, height), Image.Resampling.LANCZOS)
     return i
 
 

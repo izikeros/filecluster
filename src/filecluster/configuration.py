@@ -298,9 +298,9 @@ class ConfigFactory:
     @staticmethod
     def override_from_cli(  # noqa: C901 too complex
         config: Config,
-        inbox_dir: Path | None = None,
-        output_dir: Path | None = None,
-        watch_dir_list: list[Path] | None = None,
+        inbox_dir: str | Path | None = None,
+        output_dir: str | Path | None = None,
+        watch_dir_list: list[str] | list[Path] | None = None,
         force_deep_scan: bool | None = None,
         no_operation: bool | None = None,
         copy_mode: bool | None = None,
@@ -334,7 +334,7 @@ class ConfigFactory:
         if output_dir is not None:
             config.out_dir_name = Path(output_dir)
         if watch_dir_list is not None:
-            config.watch_folders = watch_dir_list
+            config.watch_folders = [Path(w) for w in watch_dir_list]
         if force_deep_scan is not None:
             config.force_deep_scan = force_deep_scan
         if drop_duplicates is not None:

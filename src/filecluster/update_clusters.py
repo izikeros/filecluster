@@ -229,16 +229,18 @@ def read_cluster_ini_as_dict(
     cluster_ini = ConfigParser()
     cluster_ini.read(Path(path) / settings.ini_filename)
 
-    if not (
-        cluster_dict := {
-            section: dict(cluster_ini.items(section))
-            for section in cluster_ini.sections()
-        }
-    ):
+    raw_dict = {
+        section: dict(cluster_ini.items(section))
+        for section in cluster_ini.sections()
+    }
+    if not raw_dict:
         return None
+
+    cluster_dict: dict[str, dict[str, datetime | str | None]] = raw_dict  # type: ignore[assignment]
+
     # correct timestamps
-    dt_start = cluster_dict["Range"]["start_date"]
-    dt_end = cluster_dict["Range"]["end_date"]
+    dt_start = str(cluster_dict["Range"]["start_date"])
+    dt_end = str(cluster_dict["Range"]["end_date"])
 
     try:
         cluster_dict["Range"]["start_date"] = datetime.strptime(
