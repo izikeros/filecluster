@@ -9,7 +9,7 @@ pydantic==2.5.1
 
 # Development requirements
 pdoc3==0.10.0
-pytest==7.4.3
+pytest==9.0.3
 pytest-icdiff==0.8
 jupyter==1.0.0
 dataenforce==0.1.2
