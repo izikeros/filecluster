@@ -11,7 +11,7 @@ import tempfile
 
 import pytest
 
-from filecluster.file_cluster import main, process_watch_dirs
+from filecluster.file_cluster import create_argument_parser, main, process_watch_dirs
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +43,25 @@ class TestProcessWatchDirs:
     def test_empty_list_returns_empty(self):
         """Explicit empty list is valid."""
         assert process_watch_dirs([]) == []
+
+
+class TestArgumentParser:
+    """Tests for the CLI argument parser."""
+
+    def test_restore_original_names_flag_defaults_false(self):
+        """The --restore-original-names flag defaults to False."""
+        parser = create_argument_parser()
+        args = parser.parse_args([])
+        assert args.restore_original_names is False
+
+    def test_restore_original_names_flag_can_be_set(self):
+        """Both the short and long forms enable the flag."""
+        parser = create_argument_parser()
+        assert parser.parse_args(["-r"]).restore_original_names is True
+        assert (
+            parser.parse_args(["--restore-original-names"]).restore_original_names
+            is True
+        )
 
 
 # ---------------------------------------------------------------------------

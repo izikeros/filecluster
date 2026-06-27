@@ -36,7 +36,7 @@ $ file_cluster.py -i inbox -w zdjecia -d dataframe
 ```
 Other run options:
 ```
-usage: file_cluster.py [-h] [-i INBOX_DIR] [-o OUTPUT_DIR] [-w WATCH_DIR] [-t] [-n] [-y] [-f] [-d] [-c] [--version]
+usage: file_cluster.py [-h] [-i INBOX_DIR] [-o OUTPUT_DIR] [-w WATCH_DIR] [-t] [-n] [-y] [-f] [-d] [-c] [-r] [--version]
 
 Group media files by event
 
@@ -56,6 +56,9 @@ optional arguments:
                         Force recalculate cluster info for each existing cluster.
   -d, --drop-duplicates
   -c, --use-existing-clusters
+  -r, --restore-original-names
+                        Revert copy-suffixed file names (e.g. '-Kopiuj(1)', ' - Copy') to
+                        their originals when moving files, unless a name collision occurs
   --version             show program's version number and exit
 
 ```
