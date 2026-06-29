@@ -108,6 +108,7 @@ class FileClusterSettings(BaseSettings):
     force_deep_scan: bool = False
     assign_to_clusters_existing_in_libs: bool = False
     skip_duplicated_existing_in_libs: bool = False
+    restore_original_names: bool = False
 
     # Time settings
     time_granularity_minutes: int = 60
@@ -175,6 +176,8 @@ class Config:
         force_deep_scan: Whether to perform deep scanning of files
         assign_to_clusters_existing_in_libs: Whether to use existing clusters
         skip_duplicated_existing_in_libs: Whether to skip duplicated files
+        restore_original_names: Whether to revert copy-suffixed file names to
+            their originals when moving/copying into cluster folders
     """
 
     in_dir_name: Path
@@ -189,6 +192,7 @@ class Config:
     force_deep_scan: bool
     assign_to_clusters_existing_in_libs: bool
     skip_duplicated_existing_in_libs: bool
+    restore_original_names: bool = False
 
     def __repr__(self) -> str:
         rep = [f"{p}:\t{self.__getattribute__(p)}" for p in self.__dataclass_fields__]
@@ -293,6 +297,7 @@ class ConfigFactory:
             force_deep_scan=self.settings.force_deep_scan,
             assign_to_clusters_existing_in_libs=self.settings.assign_to_clusters_existing_in_libs,
             skip_duplicated_existing_in_libs=self.settings.skip_duplicated_existing_in_libs,
+            restore_original_names=self.settings.restore_original_names,
         )
 
     @staticmethod
@@ -306,6 +311,7 @@ class ConfigFactory:
         copy_mode: bool | None = None,
         drop_duplicates: bool | None = None,
         use_existing_clusters: bool | None = None,
+        restore_original_names: bool | None = None,
         **kwargs: Any,
     ) -> Config:
         """Override config parameters with CLI arguments.
@@ -320,6 +326,7 @@ class ConfigFactory:
             copy_mode: Whether to use copy mode
             drop_duplicates: Whether to skip duplicated files
             use_existing_clusters: Whether to use existing clusters
+            restore_original_names: Whether to revert copy-suffixed file names
             **kwargs: Additional overrides
 
         Returns:
@@ -341,6 +348,8 @@ class ConfigFactory:
             config.skip_duplicated_existing_in_libs = drop_duplicates
         if use_existing_clusters is not None:
             config.assign_to_clusters_existing_in_libs = use_existing_clusters
+        if restore_original_names is not None:
+            config.restore_original_names = restore_original_names
 
         # Handle operation mode overrides
         if copy_mode:
@@ -397,6 +406,7 @@ def override_config_with_cli_params(
     force_deep_scan: bool | None = None,
     drop_duplicates: bool | None = None,
     use_existing_clusters: bool | None = None,
+    restore_original_names: bool | None = None,
 ) -> Config:
     """Override config with CLI parameters (backwards compatibility)."""
     return default_factory.override_from_cli(
@@ -409,4 +419,5 @@ def override_config_with_cli_params(
         copy_mode=copy_mode,
         drop_duplicates=drop_duplicates,
         use_existing_clusters=use_existing_clusters,
+        restore_original_names=restore_original_names,
     )

@@ -29,6 +29,7 @@ def main(
     force_deep_scan: bool | None = None,
     drop_duplicates: bool | None = None,
     use_existing_clusters: bool | None = None,
+    restore_original_names: bool | None = None,
 ) -> dict[str, Any]:
     """Run clustering on the media files provided as inbox.
 
@@ -45,6 +46,8 @@ def main(
         force_deep_scan: Force recalculation of cluster info for existing clusters
         drop_duplicates: Skip clustering duplicates and store them in a separate folder
         use_existing_clusters: Try to assign media to existing clusters in watch folders
+        restore_original_names: Revert copy-suffixed file names (e.g. "-Kopiuj(1)")
+            to their originals when moving/copying into cluster folders
 
     Returns:
         Dictionary with diagnostic data from the clustering process
@@ -64,6 +67,7 @@ def main(
         copy_mode=copy_mode,
         drop_duplicates=drop_duplicates,
         use_existing_clusters=use_existing_clusters,
+        restore_original_names=restore_original_names,
     )
 
     # Read cluster info from libraries (or get empty DataFrame if none found)
@@ -275,6 +279,16 @@ def create_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "-r",
+        "--restore-original-names",
+        help=(
+            "Revert copy-suffixed file names (e.g. '-Kopiuj(1)', ' - Copy') to "
+            "their originals when moving files, unless a name collision occurs"
+        ),
+        action="store_true",
+        default=False,
+    )
 
     return parser
 
@@ -322,6 +336,7 @@ def run_from_cli():
         force_deep_scan=args.force_deep_scan,
         drop_duplicates=args.drop_duplicates,
         use_existing_clusters=args.use_existing_clusters,
+        restore_original_names=args.restore_original_names,
     )
 
 

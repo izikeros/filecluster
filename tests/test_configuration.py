@@ -90,6 +90,7 @@ class TestFileClusterSettings:
         assert s.force_deep_scan is False
         assert s.assign_to_clusters_existing_in_libs is False
         assert s.skip_duplicated_existing_in_libs is False
+        assert s.restore_original_names is False
 
     def test_cluster_df_columns_schema(self):
         """Verify the expected column schema for cluster DataFrames."""
@@ -293,6 +294,17 @@ class TestCliOverride:
         config = get_default_config()
         updated = default_factory.override_from_cli(config, force_deep_scan=True)
         assert updated.force_deep_scan is True
+
+    def test_restore_original_names_defaults_false(self):
+        """The restore-original-names flag is off by default."""
+        config = get_default_config()
+        assert config.restore_original_names is False
+
+    def test_override_restore_original_names(self):
+        """CLI --restore-original-names flag propagates to config."""
+        config = get_default_config()
+        updated = default_factory.override_from_cli(config, restore_original_names=True)
+        assert updated.restore_original_names is True
 
     def test_nop_mode_overrides_copy_mode(self):
         """

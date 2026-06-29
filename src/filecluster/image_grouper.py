@@ -262,6 +262,7 @@ class ImageGrouper:
             in_dir=Path(self.config.in_dir_name),
             out_dir=Path(self.config.out_dir_name),
             mode=self.config.mode,
+            restore_original_names=self.config.restore_original_names,
         )
 
     def move_files_to_cluster_folder(self):
