@@ -65,12 +65,17 @@ def multiple_timestamps_to_one(
     """
     # logger.trace("Cleaning-up timestamps in imported media.")
 
-    # normalize date format
-    image_df["m_date"] = pd.to_datetime(image_df["m_date"]).astype("datetime64[ns]")
-    image_df["c_date"] = pd.to_datetime(image_df["c_date"]).astype("datetime64[ns]")
-    image_df["exif_date"] = pd.to_datetime(image_df["exif_date"]).astype(
+    # normalize date format - coerce unparseable values to NaT rather than
+    # crashing the entire run because of one file with an odd timestamp.
+    image_df["m_date"] = pd.to_datetime(image_df["m_date"], errors="coerce").astype(
         "datetime64[ns]"
     )
+    image_df["c_date"] = pd.to_datetime(image_df["c_date"], errors="coerce").astype(
+        "datetime64[ns]"
+    )
+    image_df["exif_date"] = pd.to_datetime(
+        image_df["exif_date"], errors="coerce"
+    ).astype("datetime64[ns]")
 
     # TODO: Ensure that any date is assigned to file
     # use exif date as base

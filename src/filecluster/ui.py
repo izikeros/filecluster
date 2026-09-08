@@ -196,6 +196,10 @@ class ProgressSink(Protocol):
         """Report that *step* units of work completed."""
         ...
 
+    def update_description(self, text: str) -> None:
+        """Update the spinner/status text before the progress bar starts."""
+        ...
+
 
 class NullProgress:
     """Progress sink that discards everything."""
@@ -208,6 +212,9 @@ class NullProgress:
 
     def advance(self, step: int = 1) -> None:
         """Ignore the reported progress."""
+
+    def update_description(self, text: str) -> None:
+        """Ignore the description update."""
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +249,15 @@ class _Phase:
         self._batch = 1
 
     # -- ProgressSink ------------------------------------------------------
+    def update_description(self, text: str) -> None:
+        """Update the spinner text shown before the progress bar starts.
+
+        Useful for long discovery phases (e.g. scanning a network share) where
+        the user needs feedback before the total item count is known.
+        """
+        if self._reporter._status is not None:
+            self._reporter._status.update(f"[bold]{text}[/]…")
+
     def start(self, total: int, description: str = "") -> None:
         """Replace the spinner with a determinate progress bar.
 

@@ -16,6 +16,7 @@ import argparse
 import multiprocessing
 import os
 import re
+from collections.abc import Callable
 from configparser import ConfigParser
 from datetime import datetime
 from multiprocessing.pool import Pool
@@ -78,9 +79,20 @@ def get_or_create_library_cluster_ini_as_dataframe(
     progress = progress or NullProgress()
     # strip trailing '/' and '\' if any
     library_path = str(library_path).rstrip("/").rstrip("\\")
+    lib_name = Path(library_path).name
     logger.info(f"Scanning ini files in {library_path}")
 
-    subfolders = fast_scandir(library_path)
+    _folder_count = 0
+
+    def _on_folder_found(count: int) -> None:
+        nonlocal _folder_count
+        _folder_count += count
+        progress.update_description(
+            f"Discovering {lib_name} ({_folder_count} folders)"
+        )
+
+    progress.update_description(f"Discovering folders in {lib_name}")
+    subfolders = fast_scandir(library_path, _on_found=_on_folder_found)
 
     # remove the library path part from the library subfolders paths
     subfolders_root = [s.replace(f"{library_path}/", "") for s in subfolders]
@@ -94,7 +106,10 @@ def get_or_create_library_cluster_ini_as_dataframe(
     # Execute in parallel. imap keeps result order stable (so cluster ids stay
     # reproducible) while still yielding incrementally, which is what lets the
     # scan report progress on large libraries.
-    progress.start(len(event_dirs), "Scanning library")
+    progress.update_description(
+        f"Scanning {len(event_dirs)} event folders in {lib_name}"
+    )
+    progress.start(len(event_dirs), f"Scanning {lib_name}")
     pool_args = [(event_dir, force_deep_scan, library_path) for event_dir in event_dirs]
     res_list = []
     for result in pool.imap(_scan_event_dir, pool_args):
@@ -278,19 +293,27 @@ def read_cluster_ini_as_dict(
     return cluster_dict
 
 
-def fast_scandir(dirname: str) -> list[str]:
+def fast_scandir(
+    dirname: str,
+    _on_found: Callable[[int], None] | None = None,
+) -> list[str]:
     """Get a list of folders of a given directory.
 
     Args:
         dirname: directory names that have to be scanned for folders
+        _on_found: optional callback invoked with the running total of
+            discovered folders after each directory level. Used by the
+            progress system to show discovery feedback on slow mounts.
 
     Returns:
         list of folders
     """
     if dirname:
         subfolders = [f.path for f in os.scandir(dirname) if f.is_dir()]
+        if _on_found:
+            _on_found(len(subfolders))
         for dirname in list(subfolders):
-            subfolders.extend(fast_scandir(dirname))
+            subfolders.extend(fast_scandir(dirname, _on_found))
     else:
         subfolders = []
     return subfolders

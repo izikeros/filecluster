@@ -4,7 +4,6 @@ import base64
 import hashlib
 import logging
 import os
-import time
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -37,9 +36,14 @@ def is_image(file_name: str, ext_list_image: list[str]) -> bool:
 
 
 def get_date_from_file(path_name: str):
-    """Get date information from a photo file."""
-    m_time = time.ctime(os.path.getmtime(path_name))
-    c_time = time.ctime(os.path.getctime(path_name))
+    """Get date information from a photo file.
+
+    Returns:
+        Tuple of (m_time, c_time, exif_date) as datetime objects.
+        m_time and c_time are always present; exif_date may be None.
+    """
+    m_time = datetime.fromtimestamp(os.path.getmtime(path_name))
+    c_time = datetime.fromtimestamp(os.path.getctime(path_name))
     exif_date = get_exif_date(path_name)
     return m_time, c_time, exif_date
 

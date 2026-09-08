@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Folder-discovery progress feedback during library scanning for slow network
+  mounts (`update_clusters`, `fast_scandir`).
+- `update_description()` method on `ProgressSink` protocol for pre-bar spinner
+  updates.
+
+### Fixed
+- Timestamp parsing coerces unparseable values to `NaT` instead of crashing the
+  entire run on a single malformed EXIF date.
+- `get_date_from_file` returns `datetime` objects instead of `ctime` strings,
+  fixing downstream type mismatches with pandas.
+
 ## [0.5.0] - 2026-09-08
 
 ### Added
