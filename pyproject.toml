@@ -1,6 +1,6 @@
 [project]
 name = "filecluster"
-version = "0.1.0"
+version = "0.5.0"
 description = "Image and video clustering by date"
 authors = [
     { name = "Krystian Safjan", email = "ksafjan@gmail.com" },
@@ -44,6 +44,7 @@ dev = [
     "pre-commit>=3.6.0",
     "code2flow>=2.5.1",
     "ruff>=0.11.6",
+    "bump-my-version>=1.5.1",
 ]
 
 [tool.ruff]
@@ -114,6 +115,32 @@ max-complexity = 10
     "D103",
     "E501",
 ]
+
+# ---------------------------------------------------------------------------
+# bump-my-version
+# ---------------------------------------------------------------------------
+[tool.bumpversion]
+current_version = "0.5.0"
+commit = true
+tag = true
+tag_name = "v{new_version}"
+message = "bump: version {current_version} → {new_version}"
+tag_message = "v{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "src/filecluster/version.py"
+search = '_FALLBACK_VERSION = "{current_version}"'
+replace = '_FALLBACK_VERSION = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "CHANGELOG.md"
+search = "## [Unreleased]"
+replace = "## [Unreleased]\n\n## [{new_version}] - {now:%Y-%m-%d}"
 
 [tool.ty.src]
 exclude = [

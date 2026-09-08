@@ -45,3 +45,21 @@ run-ci: format-check check type test ## Running all CI checks
 test: ## Run tests
 	@echo "Running tests..."
 	@uv run pytest tests $(shell if [ -n "$(k)" ]; then echo "-k $(k)"; fi)
+
+# ---------------------------------------------------------------------------
+# Versioning (bump-my-version)
+# ---------------------------------------------------------------------------
+bump-patch: ## Bump patch version (0.5.0 → 0.5.1)
+	@uv run bump-my-version bump patch
+
+bump-minor: ## Bump minor version (0.5.0 → 0.6.0)
+	@uv run bump-my-version bump minor
+
+bump-major: ## Bump major version (0.5.0 → 1.0.0)
+	@uv run bump-my-version bump major
+
+bump-show: ## Show current version
+	@uv run bump-my-version show current_version
+
+bump-dry: ## Dry-run patch bump (shows what would change)
+	@uv run bump-my-version bump patch --dry-run --verbose
