@@ -11,7 +11,7 @@ import tempfile
 
 import pytest
 
-from filecluster.file_cluster import create_argument_parser, main, process_watch_dirs
+from filecluster.file_cluster import main, process_watch_dirs
 
 
 # ---------------------------------------------------------------------------
@@ -43,25 +43,6 @@ class TestProcessWatchDirs:
     def test_empty_list_returns_empty(self):
         """Explicit empty list is valid."""
         assert process_watch_dirs([]) == []
-
-
-class TestArgumentParser:
-    """Tests for the CLI argument parser."""
-
-    def test_restore_original_names_flag_defaults_false(self):
-        """The --restore-original-names flag defaults to False."""
-        parser = create_argument_parser()
-        args = parser.parse_args([])
-        assert args.restore_original_names is False
-
-    def test_restore_original_names_flag_can_be_set(self):
-        """Both the short and long forms enable the flag."""
-        parser = create_argument_parser()
-        assert parser.parse_args(["-r"]).restore_original_names is True
-        assert (
-            parser.parse_args(["--restore-original-names"]).restore_original_names
-            is True
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -106,8 +87,10 @@ class TestMainOrchestration:
         )
         assert len(results["new_folder_names"]) == 4
         assert len(results["new_cluster_df"]) == 4
-        assert results["dup_files"] == 0
-        assert results["dup_clusters"] == 0
+        # Duplicate detection was off, so the (always list-typed) results are
+        # empty rather than absent.
+        assert results["dup_files"] == []
+        assert results["dup_clusters"] == []
 
     def test_with_skip_duplicates(self):
         """
@@ -198,3 +181,24 @@ class TestMainOrchestration:
         assert len(output_contents) == 0
         # But results should still be computed
         assert len(results["new_cluster_df"]) > 0
+
+    def test_empty_inbox_completes_without_creating_clusters(self, tmp_path):
+        """An empty inbox should be a successful no-op, not a runtime error."""
+        inbox_dir = tmp_path / "empty-inbox"
+        output_dir = tmp_path / "output"
+        inbox_dir.mkdir()
+        output_dir.mkdir()
+
+        results = main(
+            inbox_dir=inbox_dir,
+            output_dir=output_dir,
+            watch_dir_list=[],
+            development_mode=True,
+            no_operation=True,
+            drop_duplicates=False,
+            use_existing_clusters=False,
+        )
+
+        assert results["new_cluster_df"].empty
+        assert results["file_operation_plan"].n_skips == 0
+        assert list(output_dir.iterdir()) == []

@@ -20,6 +20,7 @@ from configparser import ConfigParser
 from datetime import datetime
 from multiprocessing.pool import Pool
 from pathlib import Path
+from typing import Any, cast
 
 import pandas as pd
 
@@ -32,6 +33,7 @@ from filecluster.image_reader import (
     get_media_df,
     get_media_stats,
 )
+from filecluster.ui import NullProgress, ProgressSink
 
 
 def str_to_bool(s: str) -> bool:
@@ -44,8 +46,21 @@ def str_to_bool(s: str) -> bool:
         raise ValueError
 
 
+def _scan_event_dir(args: tuple[Any, bool, str]) -> dict | Path | None:
+    """Unpack pool arguments for :func:`get_this_ini`.
+
+    ``imap`` passes a single argument per item, so the tuple is unpacked here
+    rather than using ``starmap``, which cannot report progress incrementally.
+    """
+    event_dir, force_deep_scan, library_path = args
+    return get_this_ini(event_dir, force_deep_scan, library_path)
+
+
 def get_or_create_library_cluster_ini_as_dataframe(
-    library_path: str | Path, pool: Pool, force_deep_scan: bool = False
+    library_path: str | Path,
+    pool: Pool,
+    force_deep_scan: bool = False,
+    progress: ProgressSink | None = None,
 ) -> tuple[pd.DataFrame, list[Path]]:
     """Scan the folder for cluster info and return the dataframe with clusters.
 
@@ -53,12 +68,14 @@ def get_or_create_library_cluster_ini_as_dataframe(
         library_path:
         force_deep_scan:
         pool:
+        progress: Optional sink notified of each event folder scanned.
 
     Returns:
         Tuple of:
             - dataframe with cluster info
             - list of empty directories
     """
+    progress = progress or NullProgress()
     # strip trailing '/' and '\' if any
     library_path = str(library_path).rstrip("/").rstrip("\\")
     logger.info(f"Scanning ini files in {library_path}")
@@ -74,11 +91,15 @@ def get_or_create_library_cluster_ini_as_dataframe(
     # is_event or is_year_folder
     event_dirs = list(filter(is_event, subs_labeled))
 
-    # Prepare arguments for parallel processing
+    # Execute in parallel. imap keeps result order stable (so cluster ids stay
+    # reproducible) while still yielding incrementally, which is what lets the
+    # scan report progress on large libraries.
+    progress.start(len(event_dirs), "Scanning library")
     pool_args = [(event_dir, force_deep_scan, library_path) for event_dir in event_dirs]
-
-    # Execute in parallel
-    res_list = pool.starmap(get_this_ini, pool_args)
+    res_list = []
+    for result in pool.imap(_scan_event_dir, pool_args):
+        res_list.append(result)
+        progress.advance()
 
     res_dict_list = [d for d in res_list if isinstance(d, dict)]
     res_empty_dir_list = [d for d in res_list if isinstance(d, Path)]
@@ -235,7 +256,7 @@ def read_cluster_ini_as_dict(
     if not raw_dict:
         return None
 
-    cluster_dict: dict[str, dict[str, datetime | str | None]] = raw_dict  # type: ignore[assignment]
+    cluster_dict = cast(dict[str, dict[str, datetime | str | None]], raw_dict)
 
     # correct timestamps
     dt_start = str(cluster_dict["Range"]["start_date"])

@@ -288,6 +288,93 @@ class TestInboxReader:
         reader = InboxReader(in_dir_name=assets_dir / "set_1")
         assert len(reader.media_df) == 0
 
+    def test_empty_directory_produces_valid_empty_dataframe(self, tmp_path):
+        """An empty inbox has the schema required by the clustering pipeline."""
+        reader = InboxReader(in_dir_name=tmp_path)
+
+        reader.get_media_files_info()
+
+        assert reader.media_df.empty
+        assert {"date", "cluster_id", "status"}.issubset(reader.media_df.columns)
+
+
+class TestIngestionLimit:
+    """A limit caps how much of the inbox is read at all."""
+
+    def test_only_the_limit_is_read(self, assets_dir):
+        """
+        Test Description: With limit=3, three files are read even though the
+        inbox holds more.
+
+        Purpose: The point of the limit is to avoid reading a large inbox, so
+        it must apply to the ingestion itself, not to the results afterwards.
+        """
+        reader = InboxReader(in_dir_name=assets_dir / "set_1", limit=3)
+
+        rows = reader.get_data_from_files_as_list_of_rows()
+
+        assert len(rows) == 3
+        assert reader.n_available == 8
+
+    def test_selection_is_repeatable(self, assets_dir):
+        """
+        Test Description: Two limited reads of the same inbox pick the same files.
+
+        Purpose: A truncated preview is only useful if a rerun shows the same
+        thing, so the truncation is applied to a sorted list rather than to
+        whatever order the filesystem returned.
+        """
+        first = InboxReader(in_dir_name=assets_dir / "set_1", limit=4)
+        second = InboxReader(in_dir_name=assets_dir / "set_1", limit=4)
+
+        names_first = [
+            r["file_name"] for r in first.get_data_from_files_as_list_of_rows()
+        ]
+        names_second = [
+            r["file_name"] for r in second.get_data_from_files_as_list_of_rows()
+        ]
+
+        assert names_first == names_second == sorted(names_first)
+
+    def test_limit_above_the_inbox_size_changes_nothing(self, assets_dir):
+        """A limit larger than the inbox reads everything."""
+        reader = InboxReader(in_dir_name=assets_dir / "set_1", limit=1000)
+
+        rows = reader.get_data_from_files_as_list_of_rows()
+
+        assert len(rows) == reader.n_available == 8
+
+    def test_no_limit_reads_everything(self, assets_dir):
+        """The limit is opt-in; without it the whole inbox is read."""
+        reader = InboxReader(in_dir_name=assets_dir / "set_1")
+
+        rows = reader.get_data_from_files_as_list_of_rows()
+
+        assert len(rows) == 8
+
+    def test_progress_total_reflects_the_limit(self, assets_dir):
+        """The bar counts to the limit, not to the full inbox size."""
+
+        class RecordingProgress:
+            def __init__(self):
+                self.total = None
+                self.detail = ""
+                self.advances = 0
+
+            def start(self, total, description=""):
+                self.total = total
+
+            def advance(self, step=1):
+                self.advances += step
+
+        progress = RecordingProgress()
+        reader = InboxReader(in_dir_name=assets_dir / "set_1", limit=2)
+
+        reader.get_data_from_files_as_list_of_rows(progress=progress)
+
+        assert progress.total == 2
+        assert progress.advances == 2
+
 
 # ---------------------------------------------------------------------------
 # get_media_df

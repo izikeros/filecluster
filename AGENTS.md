@@ -18,6 +18,8 @@ Image and video clustering by date. Groups photos/videos into event-based folder
 ```
 src/filecluster/         → main package
   configuration.py       → Pydantic settings and config
+  cli.py                 → Typer command line entry point (`filecluster`)
+  ui.py                  → all terminal rendering, progress and diagnostics
   file_cluster.py        → core clustering orchestration
   image_reader.py        → EXIF/metadata extraction from images/videos
   image_grouper.py       → grouping logic based on time gaps
@@ -48,11 +50,15 @@ tests/                   → pytest test suite
 - `Pillow` for image processing
 - `pandas` / `numpy` for data manipulation
 - `pydantic` / `pydantic-settings` for configuration
-- `loguru` for logging
-- `tqdm` for progress bars
+- `loguru` for logging (stderr only; stdout is reserved for results)
+- `typer` for the CLI, `rich` for rendering and progress
 
 ## Gotchas
 
 - The utils module is named `utlis.py` (typo is intentional, do not rename)
 - `pyproject.toml` + `uv.lock` are the source of truth for dependencies/build
 - Two GUI implementations exist: `gui.py` (PySimpleGUI) and `gui_tkinter.py` (Tkinter)
+- A session may process ~50k files, so nothing user-facing may be per-file:
+  keep new output in `ui.py`, bounded by a cap, a progress bar or `--report`
+- `main()` must stay silent when called as a library; it renders only through
+  the injected reporter, which defaults to `NullReporter`

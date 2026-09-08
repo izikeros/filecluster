@@ -79,7 +79,7 @@ class TestGetExistingClustersInfo:
         Purpose: Downstream code (ImageGrouper) expects the DF to always have
         the cluster column schema, even when empty.
         """
-        df, empty_dirs, non_compliant = get_existing_clusters_info(
+        df, _empty_dirs, _non_compliant = get_existing_clusters_info(
             watch_folders=[],
             skip_duplicated_existing_in_libs=False,
             assign_to_clusters_existing_in_libs=False,

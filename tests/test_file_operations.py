@@ -183,3 +183,27 @@ class TestExecutePlan:
         plan = FileOperationPlan(ops=[SkipOp(src=Path("/nonexistent"), reason="test")])
         execute_plan(plan)
         # If we get here without error, skip was handled correctly
+
+    @pytest.mark.parametrize("mode", [CopyMode.COPY, CopyMode.MOVE])
+    def test_existing_destination_is_renamed_instead_of_overwritten(
+        self, tmp_path, mode
+    ):
+        """An existing same-named file is preserved in both operation modes."""
+        src_dir = tmp_path / "inbox"
+        target_dir = tmp_path / "out" / "new" / "cluster1"
+        src_dir.mkdir()
+        target_dir.mkdir(parents=True)
+        (src_dir / "photo.jpg").write_text("incoming")
+        (target_dir / "photo.jpg").write_text("existing")
+
+        df = pd.DataFrame({"file_name": ["photo.jpg"], "target_path": ["new/cluster1"]})
+        plan = build_file_operation_plan(
+            inbox_media_df=df,
+            in_dir=src_dir,
+            out_dir=tmp_path / "out",
+            mode=mode,
+        )
+        execute_plan(plan)
+
+        assert (target_dir / "photo.jpg").read_text() == "existing"
+        assert (target_dir / "photo (1).jpg").read_text() == "incoming"

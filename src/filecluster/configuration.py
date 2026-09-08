@@ -178,6 +178,7 @@ class Config:
         skip_duplicated_existing_in_libs: Whether to skip duplicated files
         restore_original_names: Whether to revert copy-suffixed file names to
             their originals when moving/copying into cluster folders
+        inbox_limit: Maximum number of inbox files to ingest, or None for all
     """
 
     in_dir_name: Path
@@ -193,6 +194,7 @@ class Config:
     assign_to_clusters_existing_in_libs: bool
     skip_duplicated_existing_in_libs: bool
     restore_original_names: bool = False
+    inbox_limit: int | None = None
 
     def __repr__(self) -> str:
         rep = [f"{p}:\t{self.__getattribute__(p)}" for p in self.__dataclass_fields__]
@@ -312,6 +314,7 @@ class ConfigFactory:
         drop_duplicates: bool | None = None,
         use_existing_clusters: bool | None = None,
         restore_original_names: bool | None = None,
+        limit: int | None = None,
         **kwargs: Any,
     ) -> Config:
         """Override config parameters with CLI arguments.
@@ -327,6 +330,7 @@ class ConfigFactory:
             drop_duplicates: Whether to skip duplicated files
             use_existing_clusters: Whether to use existing clusters
             restore_original_names: Whether to revert copy-suffixed file names
+            limit: Maximum number of inbox files to ingest
             **kwargs: Additional overrides
 
         Returns:
@@ -350,6 +354,10 @@ class ConfigFactory:
             config.assign_to_clusters_existing_in_libs = use_existing_clusters
         if restore_original_names is not None:
             config.restore_original_names = restore_original_names
+        if limit is not None:
+            if limit < 1:
+                raise ValueError("Limit must be a positive number of files")
+            config.inbox_limit = limit
 
         # Handle operation mode overrides
         if copy_mode:

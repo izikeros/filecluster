@@ -1,0 +1,296 @@
+"""Command line interface.
+
+Thin wrapper around :func:`filecluster.file_cluster.main`: it parses options,
+sets up rendering, and turns exceptions into readable messages. All layout
+decisions live in :mod:`filecluster.ui`, and all orchestration in
+``file_cluster``, so this module stays free of both.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Annotated, Any, NoReturn
+
+import typer
+
+from filecluster import ui
+from filecluster.configuration import CopyMode
+from filecluster.exceptions import DateStringNoneError
+from filecluster.file_cluster import main
+from filecluster.version import get_version
+
+# Exit codes, matching the usual shell conventions.
+EXIT_OK = 0
+EXIT_FAILURE = 1
+EXIT_USAGE = 2
+EXIT_INTERRUPTED = 130
+
+app = typer.Typer(
+    add_completion=False,
+    no_args_is_help=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    help="Group photos and videos into event folders based on their timestamps.",
+)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"filecluster {get_version()}")
+        raise typer.Exit(EXIT_OK)
+
+
+@app.command()
+def run(  # noqa: C901 - a CLI entry point is a flat list of options by nature
+    inbox_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "-i",
+            "--inbox-dir",
+            help="Directory with input media files to process.",
+            exists=True,
+            file_okay=False,
+            readable=True,
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "-o",
+            "--output-dir",
+            help="Directory where clustered media will be placed.",
+            file_okay=False,
+        ),
+    ] = None,
+    watch_dirs: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "-w",
+            "--watch-dir",
+            help="Existing media library to match against. Repeatable.",
+            exists=True,
+            file_okay=False,
+            readable=True,
+        ),
+    ] = None,
+    development_mode: Annotated[
+        bool,
+        typer.Option(
+            "-t", "--development-mode", help="Use the development test directories."
+        ),
+    ] = False,
+    no_operation: Annotated[
+        bool,
+        typer.Option(
+            "-n", "--no-operation", help="Dry run: show the plan, change nothing."
+        ),
+    ] = False,
+    copy_mode: Annotated[
+        bool, typer.Option("-y", "--copy-mode", help="Copy files instead of moving.")
+    ] = False,
+    force_deep_scan: Annotated[
+        bool,
+        typer.Option(
+            "-f",
+            "--force-deep-scan",
+            help="Recompute cluster info for every existing cluster.",
+        ),
+    ] = False,
+    drop_duplicates: Annotated[
+        bool,
+        typer.Option(
+            "-d",
+            "--drop-duplicates",
+            help="Put duplicates in a separate folder instead of clustering them.",
+        ),
+    ] = False,
+    use_existing_clusters: Annotated[
+        bool,
+        typer.Option(
+            "-c",
+            "--use-existing-clusters",
+            help="Assign media to matching clusters already in the watch folders.",
+        ),
+    ] = False,
+    restore_original_names: Annotated[
+        bool,
+        typer.Option(
+            "-r",
+            "--restore-original-names",
+            help="Strip copy suffixes such as '-Kopiuj(1)' or ' - Copy' from names.",
+        ),
+    ] = False,
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            "-l",
+            "--limit",
+            help=(
+                "Ingest at most this many inbox files, in name order. "
+                "Handy with --no-operation to try a large inbox quickly."
+            ),
+            min=1,
+        ),
+    ] = None,
+    yes: Annotated[
+        bool,
+        typer.Option("-Y", "--yes", help="Do not ask for confirmation before writing."),
+    ] = False,
+    show: Annotated[
+        int,
+        typer.Option(
+            "--show",
+            help="How many of the largest clusters to list. 0 lists all of them.",
+            min=0,
+        ),
+    ] = ui.MAX_CLUSTER_ROWS,
+    report: Annotated[
+        Path | None,
+        typer.Option(
+            "--report",
+            help="Write the full per-file operation list to this CSV file.",
+            dir_okay=False,
+            writable=True,
+        ),
+    ] = None,
+    as_json: Annotated[
+        bool,
+        typer.Option("--json", help="Print a machine-readable summary instead."),
+    ] = False,
+    color: Annotated[
+        bool | None,
+        typer.Option("--color/--no-color", help="Force colour on or off."),
+    ] = None,
+    verbose: Annotated[
+        int,
+        typer.Option("-v", "--verbose", count=True, help="-v for info, -vv for debug."),
+    ] = 0,
+    quiet: Annotated[
+        bool, typer.Option("-q", "--quiet", help="Only report errors.")
+    ] = False,
+    _version: Annotated[
+        bool,
+        typer.Option(
+            "-V",
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show the version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Group photos and videos into event folders based on their timestamps."""
+    ui.configure_logging(verbosity=verbose, quiet=quiet)
+    ui.diagnostics.reset()
+
+    # With --json the summary is the payload, so nothing else may touch stdout.
+    render = not as_json and not quiet
+    console = ui.make_console(color=False if as_json else color)
+    err_console = ui.make_console(stderr=True, color=color)
+    reporter = (
+        ui.RichReporter(console, verbose=verbose) if render else ui.NullReporter()
+    )
+
+    try:
+        results = main(
+            inbox_dir=str(inbox_dir) if inbox_dir else None,
+            output_dir=str(output_dir) if output_dir else None,
+            watch_dir_list=[str(w) for w in (watch_dirs or [])],
+            development_mode=development_mode,
+            no_operation=no_operation,
+            copy_mode=copy_mode,
+            force_deep_scan=force_deep_scan,
+            drop_duplicates=drop_duplicates,
+            use_existing_clusters=use_existing_clusters,
+            restore_original_names=restore_original_names,
+            limit=limit,
+            reporter=reporter,
+            confirm=None if yes else _make_confirm(console, render),
+            banner=_make_banner(console) if render else None,
+        )
+    except KeyboardInterrupt:
+        ui.error_panel(err_console, "Interrupted. No further files were touched.")
+        raise typer.Exit(EXIT_INTERRUPTED) from None
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        _fail(err_console, exc, verbose, hint="Check the -i, -o and -w paths.")
+    except PermissionError as exc:
+        _fail(err_console, exc, verbose, hint="Check the file and folder permissions.")
+    except DateStringNoneError as exc:
+        _fail(
+            err_console,
+            exc,
+            verbose,
+            message="Could not determine a date for at least one cluster.",
+            hint="Re-run with -vv to see which files lack a usable timestamp.",
+        )
+    except ValueError as exc:
+        _fail(err_console, exc, verbose)
+
+    elapsed = float(results.get("elapsed") or 0.0)
+    plan = results.get("file_operation_plan")
+    config = results["config"]  # always present once main() has returned
+
+    if report is not None:
+        n_rows = ui.write_report(report, plan, config)
+        if render:
+            console.print(
+                f"\n  [dim]Wrote {ui.fmt_count(n_rows)} rows to {report}[/]",
+                highlight=False,
+            )
+
+    if as_json:
+        typer.echo(json.dumps(ui.json_summary(results, config, elapsed), indent=2))
+        raise typer.Exit(EXIT_OK)
+
+    if results.get("aborted"):
+        if render:
+            console.print("\n  [yellow]Aborted.[/] [dim]Nothing was written.[/]\n")
+        raise typer.Exit(EXIT_OK)
+
+    if render:
+        ui.results_panel(console, results, config, elapsed)
+        ui.largest_clusters(console, results.get("cluster_sizes") or [], limit=show)
+        if config.mode == CopyMode.NOP and plan is not None:
+            ui.plan_preview(console, plan.destinations, str(config.out_dir_name))
+        ui.render_diagnostics(console, verbose=verbose)
+        console.print()
+
+    raise typer.Exit(EXIT_OK)
+
+
+def _make_banner(console) -> Any:
+    """Return a callback that shows the resolved configuration."""
+
+    def _banner(config) -> None:
+        ui.banner(console, config, get_version())
+
+    return _banner
+
+
+def _make_confirm(console, render: bool) -> Any:
+    """Return the confirmation gate, or an auto-approve when not rendering."""
+    if not render:
+        return None
+
+    def _confirm(plan, config) -> bool:
+        return ui.confirm_plan(console, plan, config)
+
+    return _confirm
+
+
+def _fail(
+    console,
+    exc: Exception,
+    verbose: int,
+    message: str | None = None,
+    hint: str = "",
+) -> NoReturn:
+    """Report a fatal error and exit, showing a traceback only at -vv."""
+    ui.error_panel(console, message or str(exc) or exc.__class__.__name__, hint)
+    if verbose >= 2:
+        console.print_exception()
+    raise typer.Exit(EXIT_USAGE) from exc
+
+
+if __name__ == "__main__":  # pragma: no cover
+    app()

@@ -4,8 +4,8 @@ TODO list
 - [FEAT] rich directories (with many files) sortable to the top (cover 20%/50%/80% of files? All above 10?)
 - [FEAT] read config from the dot file as here: https://www.foxinfotech.in/2019/01/how-to-read-config-file-in-python.html
 - [FEAT] add mechanism to detect that cluster folder was updated and ini file needs recalculation
-- [IMPR] better indicate progress while scanning library
-- [IMPR] better handle log level (single setting on package level)
+- [DONE] [IMPR] better indicate progress while scanning library
+- [DONE] [IMPR] better handle log level (single setting on package level)
 - [REFA] use dataenforce and perhaps great expectations package to better control dataframes format and content
 - [FEAT] integrate library scanning with diary - add reference to events dir in the diary note for given date. Create note for the day if not existing. Write python script for that. Might be too complex for bash script.
 - [TASK] use github issues and tools for project planning

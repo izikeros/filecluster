@@ -306,6 +306,23 @@ class TestCliOverride:
         updated = default_factory.override_from_cli(config, restore_original_names=True)
         assert updated.restore_original_names is True
 
+    def test_inbox_limit_defaults_to_none(self):
+        """Ingestion is unlimited unless asked otherwise."""
+        assert get_default_config().inbox_limit is None
+
+    def test_override_limit(self):
+        """CLI --limit propagates to config."""
+        config = get_default_config()
+        updated = default_factory.override_from_cli(config, limit=100)
+        assert updated.inbox_limit == 100
+
+    @pytest.mark.parametrize("bad_limit", [0, -1])
+    def test_non_positive_limit_is_rejected(self, bad_limit):
+        """A limit of zero or less would ingest nothing, so it is an error."""
+        config = get_default_config()
+        with pytest.raises(ValueError, match="positive"):
+            default_factory.override_from_cli(config, limit=bad_limit)
+
     def test_nop_mode_overrides_copy_mode(self):
         """
         Test Description: --no-operation takes precedence over --copy-mode.

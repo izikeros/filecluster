@@ -11,6 +11,7 @@ from pandas.core.frame import DataFrame
 from filecluster import logger
 from filecluster.configuration import default_settings
 from filecluster.filecluster_types import ClustersDataFrame
+from filecluster.ui import ProgressSink
 from filecluster.update_clusters import get_or_create_library_cluster_ini_as_dataframe
 
 
@@ -19,6 +20,7 @@ def get_existing_clusters_info(
     skip_duplicated_existing_in_libs: bool,
     assign_to_clusters_existing_in_libs: bool,
     force_deep_scan: bool,
+    progress: ProgressSink | None = None,
 ) -> tuple[ClustersDataFrame, list[Path], list[str]]:
     """Scan the library, find existing clusters and empty or non-compliant folders.
 
@@ -59,7 +61,7 @@ def get_existing_clusters_info(
             logger.debug("Pool ready to use")
             tuples = [
                 get_or_create_library_cluster_ini_as_dataframe(
-                    lib, pool, force_deep_scan
+                    lib, pool, force_deep_scan, progress=progress
                 )
                 for lib in watch_folders
             ]
