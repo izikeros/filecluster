@@ -66,9 +66,11 @@ def multiple_timestamps_to_one(
     # logger.trace("Cleaning-up timestamps in imported media.")
 
     # normalize date format
-    image_df["m_date"] = pd.to_datetime(image_df["m_date"])
-    image_df["c_date"] = pd.to_datetime(image_df["c_date"])
-    image_df["exif_date"] = pd.to_datetime(image_df["exif_date"])
+    image_df["m_date"] = pd.to_datetime(image_df["m_date"]).astype("datetime64[ns]")
+    image_df["c_date"] = pd.to_datetime(image_df["c_date"]).astype("datetime64[ns]")
+    image_df["exif_date"] = pd.to_datetime(image_df["exif_date"]).astype(
+        "datetime64[ns]"
+    )
 
     # TODO: Ensure that any date is assigned to file
     # use exif date as base
@@ -255,6 +257,13 @@ class InboxReader:
         """Read data from files, return media info in a dataframe."""
         row_list = self.get_data_from_files_as_list_of_rows()
         logger.debug(f"Read info from {len(row_list)} files.")
+        if not row_list:
+            empty_df = MediaDataFrame(
+                DataFrame(columns=list(initialize_row_dict(Metadata())))
+            )
+            self.media_df = multiple_timestamps_to_one(empty_df)
+            return
+
         # convert a list of rows to a data frame
         inbox_media_df = MediaDataFrame(DataFrame(row_list))
         inbox_media_df = multiple_timestamps_to_one(inbox_media_df)

@@ -84,8 +84,9 @@ class ImageGrouper:
         # sort by creation date
         self.inbox_media_df.sort_values(by=date_col, ascending=True, inplace=True)
 
-        # select not clustered items
-        sel = self.inbox_media_df.cluster_id.isna()
+        # Only unknown items participate. Duplicates have no cluster ID but
+        # must not bridge otherwise separate events.
+        sel = self.inbox_media_df.status == Status.UNKNOWN
 
         # calculate breaks between the non-clustered images
         self.inbox_media_df[delta_col] = None
@@ -331,8 +332,10 @@ class ImageGrouper:
         continuous_clusters["margin_start"] = continuous_clusters["start_date"] - margin
         continuous_clusters["margin_end"] = continuous_clusters["end_date"] + margin
 
-        # For each unassigned file, find matching clusters
-        for index, row in self.inbox_media_df[sel_no_duplicated].iterrows():
+        # Process chronologically so an earlier file can expand a cluster's
+        # boundary before later files are matched against it.
+        unassigned_files = self.inbox_media_df[sel_no_duplicated].sort_values("date")
+        for index, row in unassigned_files.iterrows():
             img_time: Timestamp = row["date"]
 
             # Check against all pre-calculated boundaries
@@ -448,7 +451,7 @@ class ImageGrouper:
             return [], []
 
         # Get files in watch folders
-        watch_file_names, watch_full_paths = get_watch_folders_files_path(
+        _watch_file_names, watch_full_paths = get_watch_folders_files_path(
             self.config.watch_folders
         )
 

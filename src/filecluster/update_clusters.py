@@ -20,6 +20,7 @@ from configparser import ConfigParser
 from datetime import datetime
 from multiprocessing.pool import Pool
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 
@@ -235,7 +236,7 @@ def read_cluster_ini_as_dict(
     if not raw_dict:
         return None
 
-    cluster_dict: dict[str, dict[str, datetime | str | None]] = raw_dict  # type: ignore[assignment]
+    cluster_dict = cast(dict[str, dict[str, datetime | str | None]], raw_dict)
 
     # correct timestamps
     dt_start = str(cluster_dict["Range"]["start_date"])

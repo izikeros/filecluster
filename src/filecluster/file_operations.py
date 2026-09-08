@@ -62,13 +62,10 @@ def resolve_destination_names(
 ) -> dict[str, str]:
     """Map each inbox ``file_name`` to its destination basename.
 
-    When *restore* is False, the mapping is the identity (destination equals
-    source name).  When True, copy-suffixes are stripped where it is safe to do
-    so: a de-suffixed name is only used if it does not collide with a file
-    already present in the target directory or with another file in the same run
-    landing in the same directory.  Files that already have no suffix claim their
-    name first, so true originals win and copies fall back to their suffixed
-    names on collision.
+    Existing files and files from the same run are never overwritten. When
+    *restore* is True, copy-suffixes are stripped where it is safe to do so.
+    Files that already have no suffix claim their name first, so true originals
+    win. Any remaining collision receives a numeric suffix.
 
     Args:
         inbox_media_df: DataFrame with ``file_name`` and ``target_path`` columns.
@@ -78,11 +75,6 @@ def resolve_destination_names(
     Returns:
         Mapping of original ``file_name`` -> destination basename.
     """
-    if not restore:
-        return {
-            row["file_name"]: row["file_name"] for _, row in inbox_media_df.iterrows()
-        }
-
     # Per-target-dir set of already-claimed (lower-cased) names, seeded with
     # whatever already exists on disk in that directory.
     claimed: dict[str, set[str]] = {}
@@ -98,24 +90,43 @@ def resolve_destination_names(
 
     mapping: dict[str, str] = {}
 
-    # Process un-suffixed originals first so they always keep their name, then
-    # the remaining (suffixed) files in deterministic order.
-    rows = list(inbox_media_df.iterrows())
-    originals = [
-        r for _, r in rows if strip_copy_suffix(r["file_name"]) == r["file_name"]
-    ]
-    suffixed = [
-        r for _, r in rows if strip_copy_suffix(r["file_name"]) != r["file_name"]
-    ]
-    suffixed.sort(key=lambda r: str(r["file_name"]))
+    def _unique_name(name: str, claimed_names: set[str]) -> str:
+        if name.lower() not in claimed_names:
+            return name
 
-    for row in [*originals, *suffixed]:
+        path = Path(name)
+        suffix = path.suffix
+        stem = path.name[: -len(suffix)] if suffix else path.name
+        counter = 1
+        while True:
+            candidate = f"{stem} ({counter}){suffix}"
+            if candidate.lower() not in claimed_names:
+                return candidate
+            counter += 1
+
+    # When restoring, process un-suffixed originals first so they always keep
+    # their names. Otherwise preserve the inbox order.
+    rows = list(inbox_media_df.iterrows())
+    if restore:
+        originals = [
+            r for _, r in rows if strip_copy_suffix(r["file_name"]) == r["file_name"]
+        ]
+        suffixed = [
+            r for _, r in rows if strip_copy_suffix(r["file_name"]) != r["file_name"]
+        ]
+        suffixed.sort(key=lambda r: str(r["file_name"]))
+        ordered_rows = [*originals, *suffixed]
+    else:
+        ordered_rows = [r for _, r in rows]
+
+    for row in ordered_rows:
         name = row["file_name"]
         target_path = row["target_path"]
         claimed_names = _claimed_for(str(target_path))
 
-        desired = strip_copy_suffix(name)
-        chosen = desired if desired.lower() not in claimed_names else name
+        desired = strip_copy_suffix(name) if restore else name
+        fallback = name if desired.lower() in claimed_names else desired
+        chosen = _unique_name(fallback, claimed_names)
 
         claimed_names.add(chosen.lower())
         mapping[name] = chosen

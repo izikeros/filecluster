@@ -153,6 +153,36 @@ class TestImageGrouperGapCalculation:
         first_delta = grouper.inbox_media_df.iloc[0]["date_delta"]
         assert pd.isna(first_delta)
 
+    def test_duplicate_does_not_bridge_separate_events(
+        self, config_with_1h_granularity, empty_clusters_df
+    ):
+        """A duplicate timestamp between two files must not merge their events."""
+        media_df = pd.DataFrame(
+            {
+                "file_name": ["first.jpg", "duplicate.jpg", "last.jpg"],
+                "date": pd.to_datetime(
+                    [
+                        "2024-01-01 10:00",
+                        "2024-01-01 11:00",
+                        "2024-01-01 12:00",
+                    ]
+                ),
+                "cluster_id": [None, None, None],
+                "status": [Status.UNKNOWN, Status.DUPLICATE, Status.UNKNOWN],
+                "is_image": [True, True, True],
+            }
+        )
+        grouper = ImageGrouper(
+            configuration=config_with_1h_granularity,
+            df_clusters=empty_clusters_df,
+            inbox_media_df=media_df,
+        )
+
+        grouper.calculate_gaps()
+        clusters = grouper.run_clustering()
+
+        assert len(clusters) == 2
+
 
 # ---------------------------------------------------------------------------
 # ImageGrouper - run_clustering
@@ -445,6 +475,36 @@ class TestImageGrouperIntegration:
         ids = self.grouper.get_new_cluster_ids()
         assert len(ids) > 0
         assert len(ids) == len(set(ids))
+
+
+class TestExistingClusterAssignment:
+    """Regression tests for assigning inbox files to existing clusters."""
+
+    def test_assignment_is_independent_of_inbox_order(
+        self,
+        config_with_1h_granularity,
+        sample_clusters_df,
+    ):
+        """Boundary expansion must work even when files arrive in reverse order."""
+        cluster_df = sample_clusters_df.iloc[[0]].copy()
+        media_df = pd.DataFrame(
+            {
+                "file_name": ["later.jpg", "bridge.jpg"],
+                "date": pd.to_datetime(["2020-01-10 16:20:00", "2020-01-10 15:30:00"]),
+                "cluster_id": [None, None],
+                "status": [Status.UNKNOWN, Status.UNKNOWN],
+                "is_image": [True, True],
+            }
+        )
+        grouper = ImageGrouper(
+            configuration=config_with_1h_granularity,
+            df_clusters=cluster_df,
+            inbox_media_df=media_df,
+        )
+
+        assigned, _ = grouper.assign_to_existing_clusters()
+
+        assert set(assigned) == {"bridge.jpg", "later.jpg"}
 
 
 # ---------------------------------------------------------------------------

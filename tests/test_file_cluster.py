@@ -198,3 +198,24 @@ class TestMainOrchestration:
         assert len(output_contents) == 0
         # But results should still be computed
         assert len(results["new_cluster_df"]) > 0
+
+    def test_empty_inbox_completes_without_creating_clusters(self, tmp_path):
+        """An empty inbox should be a successful no-op, not a runtime error."""
+        inbox_dir = tmp_path / "empty-inbox"
+        output_dir = tmp_path / "output"
+        inbox_dir.mkdir()
+        output_dir.mkdir()
+
+        results = main(
+            inbox_dir=inbox_dir,
+            output_dir=output_dir,
+            watch_dir_list=[],
+            development_mode=True,
+            no_operation=True,
+            drop_duplicates=False,
+            use_existing_clusters=False,
+        )
+
+        assert results["new_cluster_df"].empty
+        assert results["file_operation_plan"].n_skips == 0
+        assert list(output_dir.iterdir()) == []

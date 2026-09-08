@@ -288,6 +288,15 @@ class TestInboxReader:
         reader = InboxReader(in_dir_name=assets_dir / "set_1")
         assert len(reader.media_df) == 0
 
+    def test_empty_directory_produces_valid_empty_dataframe(self, tmp_path):
+        """An empty inbox has the schema required by the clustering pipeline."""
+        reader = InboxReader(in_dir_name=tmp_path)
+
+        reader.get_media_files_info()
+
+        assert reader.media_df.empty
+        assert {"date", "cluster_id", "status"}.issubset(reader.media_df.columns)
+
 
 # ---------------------------------------------------------------------------
 # get_media_df

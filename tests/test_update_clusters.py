@@ -348,7 +348,7 @@ class TestGetOrCreateLibraryClusterIni:
 
         library = assets_dir / "zdjecia"
         with multiprocessing.Pool(processes=1) as pool:
-            df, empty_dirs = get_or_create_library_cluster_ini_as_dataframe(
+            df, _empty_dirs = get_or_create_library_cluster_ini_as_dataframe(
                 library_path=str(library),
                 pool=pool,
                 force_deep_scan=True,
