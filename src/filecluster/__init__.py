@@ -47,15 +47,13 @@ import sys
 
 from loguru import logger
 
-# remove existing handlers (or handler?)
+# Logs are diagnostics, so they go to stderr and leave stdout free for results.
+# Importing the package must not print progress noise, so the default level is
+# WARNING; the CLI raises it through filecluster.ui.configure_logging().
 logger.remove()
-
-# ----- add console handler
 logger.add(
-    sys.stdout,
-    # format="<green>{time:HH:mm:ss}</green> <level>{level}</level> {message}",
-    format="<level>{level}</level> {message}",
+    sys.stderr,
+    format="<level>{level: <8}</level> {message}",
     colorize=True,
-    level="INFO",
+    level="WARNING",
 )
-logger.debug("Logger initialized")

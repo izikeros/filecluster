@@ -14,11 +14,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import copy2, move
 
-from tqdm import tqdm
-
 from filecluster import logger
 from filecluster.configuration import CopyMode
 from filecluster.exceptions import DateStringNoneError
+from filecluster.ui import NullProgress, ProgressSink
 
 # Copy-suffix patterns appended (by file managers) just before the extension.
 # Stripped, in order, from the end of the file *stem*:
@@ -152,10 +151,16 @@ class CopyOp:
 
 @dataclass(frozen=True)
 class SkipOp:
-    """Record that a file was intentionally skipped."""
+    """Record that a file was intentionally skipped.
+
+    ``dst`` carries the destination the file *would* have received. It lets a
+    dry run preview the resolved names (including collision renames) without
+    the plan performing any I/O.
+    """
 
     src: Path
     reason: str
+    dst: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -186,6 +191,31 @@ class FileOperationPlan:
     @property
     def n_skips(self) -> int:
         return sum(1 for op in self.ops if isinstance(op, SkipOp))
+
+    @property
+    def n_renamed(self) -> int:
+        """Files whose destination name differs from the source name."""
+        return sum(
+            1
+            for op in self.ops
+            if isinstance(op, MoveOp | CopyOp | SkipOp)
+            and op.dst is not None
+            and op.src.name != op.dst.name
+        )
+
+    @property
+    def destinations(self) -> list[tuple[str, str, str]]:
+        """``(target_folder, source_name, destination_name)`` for every file.
+
+        Populated in every mode, so a dry run can be previewed identically to
+        a real run. The folder is the full destination directory; callers that
+        display it are expected to shorten it.
+        """
+        out: list[tuple[str, str, str]] = []
+        for op in self.ops:
+            if isinstance(op, MoveOp | CopyOp | SkipOp) and op.dst is not None:
+                out.append((str(op.dst.parent), op.src.name, op.dst.name))
+        return out
 
     @property
     def n_mkdirs(self) -> int:
@@ -225,11 +255,16 @@ def build_file_operation_plan(
     plan = FileOperationPlan()
 
     if mode == CopyMode.NOP:
+        preview_names = resolve_destination_names(
+            inbox_media_df, Path(out_dir), restore=restore_original_names
+        )
         for _, row in inbox_media_df.iterrows():
+            name = row["file_name"]
             plan.ops.append(
                 SkipOp(
-                    src=Path(in_dir) / row["file_name"],
+                    src=Path(in_dir) / name,
                     reason="NOP mode",
+                    dst=Path(out_dir) / str(row["target_path"]) / preview_names[name],
                 )
             )
         return plan
@@ -262,16 +297,24 @@ def build_file_operation_plan(
     return plan
 
 
-def execute_plan(plan: FileOperationPlan) -> None:
-    """Execute every operation in the plan against the real filesystem."""
+def execute_plan(plan: FileOperationPlan, progress: ProgressSink | None = None) -> None:
+    """Execute every operation in the plan against the real filesystem.
+
+    Args:
+        plan: Operations to perform.
+        progress: Optional sink notified of each completed operation.
+    """
+    progress = progress or NullProgress()
     file_ops = [op for op in plan.ops if not isinstance(op, SkipOp)]
-    for op in tqdm(file_ops, total=len(file_ops), disable=len(file_ops) < 50):
+    progress.start(len(file_ops), "Writing files")
+    for op in file_ops:
         if isinstance(op, MkdirOp):
             os.makedirs(op.path, exist_ok=True)
         elif isinstance(op, CopyOp):
             copy2(str(op.src), str(op.dst))
         elif isinstance(op, MoveOp):
             move(str(op.src), str(op.dst))
+        progress.advance()
 
     if plan.n_skips:
-        logger.info(f"Skipped {plan.n_skips} files (NOP mode)")
+        logger.debug(f"Skipped {plan.n_skips} files (NOP mode)")

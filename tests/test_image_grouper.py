@@ -12,6 +12,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from filecluster import image_grouper
 from filecluster.configuration import (
     AssignDateToClusterMethod,
     CopyMode,
@@ -505,6 +506,70 @@ class TestExistingClusterAssignment:
         assigned, _ = grouper.assign_to_existing_clusters()
 
         assert set(assigned) == {"bridge.jpg", "later.jpg"}
+
+
+class TestDuplicateDetectionCost:
+    """Duplicate detection must not re-read the library once per inbox file."""
+
+    def test_library_files_are_hashed_once_regardless_of_inbox_size(
+        self, tmp_path, config_with_1h_granularity, monkeypatch
+    ):
+        """
+        Test Description: With many inbox files of the same size as one library
+        file, that library file is partially hashed exactly once.
+
+        Purpose: The candidate lists are grouped by file size, so without a
+        cache a single library file is re-hashed for every size-matching inbox
+        file. On a large inbox that redundant I/O dominates the runtime.
+        """
+        library = tmp_path / "library" / "[2020_01_01]_event"
+        library.mkdir(parents=True)
+        (library / "lib.jpg").write_bytes(b"x" * 2048)
+
+        inbox = tmp_path / "inbox"
+        inbox.mkdir()
+        for i in range(25):
+            (inbox / f"in_{i}.jpg").write_bytes(b"y" * 2048)
+
+        config = config_with_1h_granularity
+        config.in_dir_name = str(inbox)
+        config.watch_folders = [str(tmp_path / "library")]
+        config.skip_duplicated_existing_in_libs = True
+
+        media_df = pd.DataFrame(
+            {
+                "file_name": [f"in_{i}.jpg" for i in range(25)],
+                "date": pd.to_datetime(
+                    [f"2020-01-10 15:{i:02d}:00" for i in range(25)]
+                ),
+                "size": [2048] * 25,
+                "hash_value": [None] * 25,
+                "cluster_id": [None] * 25,
+                "status": [Status.UNKNOWN] * 25,
+                "is_image": [True] * 25,
+            }
+        )
+        grouper = ImageGrouper(
+            configuration=config,
+            df_clusters=pd.DataFrame(
+                {"cluster_id": [], "path": [], "new_file_count": []}
+            ),
+            inbox_media_df=media_df,
+        )
+
+        calls: list[str] = []
+        real_partial_hash = image_grouper.get_partial_hash
+
+        def counting_partial_hash(filepath, size=image_grouper.PARTIAL_HASH_SIZE):
+            calls.append(str(filepath))
+            return real_partial_hash(filepath, size)
+
+        monkeypatch.setattr(image_grouper, "get_partial_hash", counting_partial_hash)
+
+        grouper.mark_inbox_duplicates()
+
+        library_calls = [c for c in calls if c.endswith("lib.jpg")]
+        assert len(library_calls) == 1
 
 
 # ---------------------------------------------------------------------------

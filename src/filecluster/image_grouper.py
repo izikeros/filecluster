@@ -11,7 +11,6 @@ from typing import Any
 
 import pandas as pd
 from pandas._libs.tslibs.timestamps import Timestamp
-from tqdm import tqdm
 
 from filecluster import logger
 from filecluster.configuration import (
@@ -24,7 +23,19 @@ from filecluster.dbase import get_new_cluster_id_from_dataframe
 from filecluster.exceptions import MissingDfClusterColumnError
 from filecluster.file_operations import FileOperationPlan, build_file_operation_plan
 from filecluster.filecluster_types import ClustersDataFrame, MediaDataFrame
+from filecluster.ui import NullProgress, ProgressSink
 from filecluster.utlis import hash_file
+
+PARTIAL_HASH_SIZE = 1024 * 1024
+
+
+def get_partial_hash(filepath, size: int = PARTIAL_HASH_SIZE) -> str | None:
+    """Hash the first *size* bytes of a file, or None if it cannot be read."""
+    try:
+        with open(filepath, "rb") as f:
+            return hashlib.md5(f.read(size)).hexdigest()
+    except OSError:
+        return None
 
 
 class TargetPathCreator:
@@ -428,7 +439,9 @@ class ImageGrouper:
             pth = path_creator.for_existing_cluster(dir_string=cl)
             self.df_clusters.loc[sel_cluster, "target_path"] = pth
 
-    def mark_inbox_duplicates(self) -> tuple[list[str], list[str]]:
+    def mark_inbox_duplicates(
+        self, progress: ProgressSink | None = None
+    ) -> tuple[list[str], list[str]]:
         """Check if imported files are not in the library already, if so - skip them.
 
         Uses a lazy evaluation strategy:
@@ -436,9 +449,13 @@ class ImageGrouper:
         2. Partial hash match (first 1MB)
         3. Full hash match
 
+        Args:
+            progress: Optional sink notified of the inbox files checked.
+
         Returns:
             List of inbox filenames that have duplicates in a library
         """
+        progress = progress or NullProgress()
         clusters_with_dups = []
         confirmed_inbox_dups = []
         confirmed_library_dups = []
@@ -456,7 +473,7 @@ class ImageGrouper:
         )
 
         # 1. First pass: Map library files by size to avoid unnecessary hashing
-        logger.info("Building library size index")
+        logger.debug("Building library size index")
         library_by_size = {}
         for path in watch_full_paths:
             try:
@@ -467,17 +484,36 @@ class ImageGrouper:
             except OSError:
                 pass
 
-        logger.info("Checking for duplicates using size -> partial hash -> full hash")
+        logger.debug("Checking for duplicates using size -> partial hash -> full hash")
+
+        # Library digests are cached: without this a library file is re-hashed
+        # once per size-matching inbox file, which dominates runtime on large
+        # inboxes.
+        partial_hash_cache: dict[str, str | None] = {}
+        full_hash_cache: dict[str, str | None] = {}
+
+        def cached_partial_hash(filepath) -> str | None:
+            key = str(filepath)
+            if key not in partial_hash_cache:
+                partial_hash_cache[key] = get_partial_hash(filepath)
+            return partial_hash_cache[key]
+
+        def cached_full_hash(filepath) -> str | None:
+            key = str(filepath)
+            if key not in full_hash_cache:
+                try:
+                    full_hash_cache[key] = hash_file(filepath)
+                except OSError:
+                    full_hash_cache[key] = None
+            return full_hash_cache[key]
 
         # Process unassigned files in inbox
         sel_unknown = self.inbox_media_df.status == Status.UNKNOWN
 
-        n_unknown = sum(sel_unknown)
-        for idx, row in tqdm(
-            self.inbox_media_df[sel_unknown].iterrows(),
-            total=n_unknown,
-            disable=n_unknown < 50,
-        ):
+        n_unknown = int(sel_unknown.sum())
+        progress.start(n_unknown, "Checking duplicates")
+        for idx, row in self.inbox_media_df[sel_unknown].iterrows():
+            progress.advance()
             inbox_size = row["size"]
             inbox_file_name = row["file_name"]
 
@@ -486,13 +522,6 @@ class ImageGrouper:
                 continue
 
             potential_matches = library_by_size[inbox_size]
-
-            def get_partial_hash(filepath, size=1024 * 1024):
-                try:
-                    with open(filepath, "rb") as f:
-                        return hashlib.md5(f.read(size)).hexdigest()
-                except OSError:
-                    return None
 
             # Helper for full hashing
             # (inbox already has full hash computed in hash_value column if image_reader did it)
@@ -511,12 +540,12 @@ class ImageGrouper:
 
             for lib_path in potential_matches:
                 # 2. Partial hash match
-                lib_partial = get_partial_hash(lib_path)
+                lib_partial = cached_partial_hash(lib_path)
 
                 if inbox_partial and lib_partial and inbox_partial == lib_partial:
                     # 3. Full hash match
                     try:
-                        lib_hash = hash_file(lib_path)
+                        lib_hash = cached_full_hash(lib_path)
 
                         if inbox_hash == lib_hash:
                             confirmed_inbox_dups.append(inbox_file_name)

@@ -9,7 +9,6 @@ from typing import Any
 import pandas as pd
 from pandas import DataFrame
 from pydantic import BaseModel
-from tqdm import tqdm
 
 import filecluster.utlis as ut
 from filecluster import logger
@@ -21,6 +20,7 @@ from filecluster.configuration import (
     get_default_config,
 )
 from filecluster.filecluster_types import MediaDataFrame
+from filecluster.ui import NullProgress, ProgressSink, diagnostics
 
 # for extracting timestamp from MOV files
 ATOM_HEADER_SIZE = 8
@@ -146,7 +146,8 @@ def prepare_new_row_with_meta(
         try:
             meta.c_time, meta.m_time = get_mov_timestamps(path_name)
         except Exception:
-            logger.error(f"Cannot get dates from MOV file: {path_name}")
+            diagnostics.add("unreadable video timestamp", path_name)
+            logger.debug(f"Cannot get dates from MOV file: {path_name}")
 
     # file size
     meta.file_size = os.path.getsize(path_name)
@@ -214,12 +215,26 @@ def get_creation_time(struct, f):
 class InboxReader:
     """Initialize a media database with existing media dataframe or create empty one."""
 
-    def __init__(self, in_dir_name, media_df: MediaDataFrame | None = None) -> None:
-        # read the config
+    def __init__(
+        self,
+        in_dir_name,
+        media_df: MediaDataFrame | None = None,
+        limit: int | None = None,
+    ) -> None:
+        """Initialize the reader.
 
+        Args:
+            in_dir_name: Directory to read media from.
+            media_df: Pre-built media frame, if the caller already has one.
+            limit: Ingest at most this many files. Useful for trying a run on a
+                large inbox without reading all of it.
+        """
         self.in_dir_name = in_dir_name
         self.image_extensions = default_settings.image_extensions
         self.video_extensions = default_settings.video_extensions
+        self.limit = limit
+        #: Supported files present in the inbox, before *limit* is applied.
+        self.n_available = 0
 
         if media_df is None:
             logger.debug(
@@ -231,12 +246,18 @@ class InboxReader:
             logger.debug(f"{msg}Num records: {len(media_df)}")
             self.media_df = media_df
 
-    def get_data_from_files_as_list_of_rows(self) -> list[dict]:
+    def get_data_from_files_as_list_of_rows(
+        self, progress: ProgressSink | None = None
+    ) -> list[dict]:
         """Recursively read exif data from files given in a path provided in config.
+
+        Args:
+          progress: Optional sink notified of the file count and each file read.
 
         Returns:
           List of rows: list of rows with all information
         """
+        progress = progress or NullProgress()
         list_of_rows = []
         in_dir_name = self.in_dir_name
         ext = self.image_extensions + self.video_extensions
@@ -244,18 +265,36 @@ class InboxReader:
         logger.debug(f"Reading data from: {in_dir_name}")
         image_extensions = self.image_extensions
         meta = Metadata()
-        file_list = list(os.listdir(in_dir_name))
-        for file_name in tqdm(file_list, disable=len(file_list) < 50):
-            if ut.is_supported_filetype(file_name, ext):
-                new_row = prepare_new_row_with_meta(
-                    file_name, image_extensions, Path(in_dir_name), meta
-                )
-                list_of_rows.append(new_row)
+        file_list = [
+            f for f in os.listdir(in_dir_name) if ut.is_supported_filetype(f, ext)
+        ]
+        self.n_available = len(file_list)
+
+        if self.limit is not None and self.limit < len(file_list):
+            # Sorted only when truncating, so a limited run picks the same
+            # files every time instead of whatever order the filesystem
+            # happened to return. Unlimited runs keep their original order.
+            file_list = sorted(file_list)[: self.limit]
+            logger.debug(
+                f"Ingesting {len(file_list)} of {self.n_available} files (--limit)"
+            )
+
+        progress.start(len(file_list), "Reading media")
+        for file_name in file_list:
+            new_row = prepare_new_row_with_meta(
+                file_name, image_extensions, Path(in_dir_name), meta
+            )
+            list_of_rows.append(new_row)
+            progress.advance()
         return list_of_rows
 
-    def get_media_files_info(self) -> None:
-        """Read data from files, return media info in a dataframe."""
-        row_list = self.get_data_from_files_as_list_of_rows()
+    def get_media_files_info(self, progress: ProgressSink | None = None) -> None:
+        """Read data from files, return media info in a dataframe.
+
+        Args:
+          progress: Optional sink notified of reading progress.
+        """
+        row_list = self.get_data_from_files_as_list_of_rows(progress=progress)
         logger.debug(f"Read info from {len(row_list)} files.")
         if not row_list:
             empty_df = MediaDataFrame(
@@ -264,20 +303,16 @@ class InboxReader:
             self.media_df = multiple_timestamps_to_one(empty_df)
             return
 
+        # Count files lacking EXIF before the raw date columns are dropped.
+        # Counted rather than listed: a large inbox can hold thousands of them.
+        n_no_exif = sum(1 for row in row_list if row["exif_date"] is None)
+        diagnostics.add_count("no EXIF date (used file timestamp)", n_no_exif)
+        logger.debug(f"{n_no_exif} of {len(row_list)} files lack an EXIF date")
+
         # convert a list of rows to a data frame
         inbox_media_df = MediaDataFrame(DataFrame(row_list))
         inbox_media_df = multiple_timestamps_to_one(inbox_media_df)
         self.media_df = inbox_media_df
-
-        # Summary: report how many files lack EXIF
-        n_total = len(inbox_media_df)
-        n_no_date = inbox_media_df["date"].isna().sum()
-        if n_no_date > 0:
-            logger.info(
-                f"{n_no_date} of {n_total} files lack EXIF date (using mtime fallback)"
-            )
-        else:
-            logger.info(f"All {n_total} files have EXIF dates")
 
 
 def configure_inbox_reader(in_dir_name: str | Path) -> Config:
