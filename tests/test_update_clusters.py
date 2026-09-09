@@ -20,6 +20,7 @@ from filecluster.update_clusters import (
     dict_from_ini_range_section,
     fast_scandir,
     get_or_create_library_cluster_ini_as_dataframe,
+    get_this_ini,
     identify_folder_types,
     initialize_cluster_info_dict,
     is_event,
@@ -408,6 +409,61 @@ class TestValidateLibraryStructure:
     def test_empty_library_passes(self, tmp_path):
         """An empty directory has no unknown folders => valid."""
         assert validate_library_structure(tmp_path) is True
+
+
+# ---------------------------------------------------------------------------
+# Stale ini detection in get_this_ini
+# ---------------------------------------------------------------------------
+class TestStaleIniDetection:
+    """Verify that get_this_ini rescans when the folder is newer than the ini."""
+
+    def test_rescan_when_folder_newer_than_ini(self, tmp_path):
+        """Simulates the user adding files to a cluster folder after a scan.
+
+        1. Create an event folder with a .cluster.ini (file_count=1)
+        2. Add a file so the folder mtime advances past the ini mtime
+        3. Call get_this_ini without force_deep_scan
+        4. The ini should be refreshed with file_count=2
+        """
+        import time
+
+        # Build a minimal library: year/event with one image
+        year = tmp_path / "2020"
+        year.mkdir()
+        event = year / "[2020_06_15]_event"
+        event.mkdir()
+
+        # Copy a real JPEG from test assets so EXIF reading works
+        assets = Path(__file__).parent / "assets" / "set_1"
+        import shutil
+
+        shutil.copy(assets / "IMG_4026.JPG", event / "IMG_4026.JPG")
+
+        # Write an ini claiming file_count=1
+        ini = initialize_cluster_info_dict(
+            start="2020-06-15 10:00:00",
+            stop="2020-06-15 10:00:00",
+            is_continuous=True,
+            median="2020-06-15 10:00:00",
+            file_count=1,
+        )
+        save_cluster_ini(ini, event)
+
+        # Ensure the ini mtime is older than the folder after we add a file
+        time.sleep(0.05)
+
+        # "User adds a file" — folder mtime advances
+        shutil.copy(assets / "IMG_4029.JPG", event / "IMG_4029.JPG")
+
+        # Rescan WITHOUT force_deep_scan
+        result = get_this_ini(
+            event_dir=("[2020_06_15]_event", "event"),
+            force_deep_scan=False,
+            library_path=str(year),
+        )
+
+        assert isinstance(result, dict)
+        assert result["file_count"] == 2  # refreshed, not stale 1
 
 
 # ---------------------------------------------------------------------------

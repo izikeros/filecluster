@@ -201,8 +201,11 @@ def get_or_create_library_cluster_ini_as_dataframe(
     for _ in range(n_cached):
         progress.advance()
 
+    # Stale folders always get a deep scan: either the user asked for it
+    # globally (-f) or the catalog detected a mtime change.  Without this,
+    # get_this_ini would read a stale .cluster.ini instead of rescanning.
     pool_args = [
-        (event_dir, force_deep_scan, library_path) for event_dir in stale_event_dirs
+        (event_dir, True, library_path) for event_dir in stale_event_dirs
     ]
     scanned_results: list[dict | Path | None] = []
     for result in pool.imap(_scan_event_dir, pool_args):
@@ -266,9 +269,24 @@ def get_this_ini(
     pth = Path(library_path) / event_dir_name
     settings = FileClusterSettings()
 
-    is_ini = os.path.isfile(Path(pth) / settings.ini_filename)
+    ini_path = Path(pth) / settings.ini_filename
+    is_ini = os.path.isfile(ini_path)
+
+    # Detect stale ini: if the folder was modified after the ini was last
+    # written, the ini is outdated (e.g. the user added files to the folder).
+    needs_rescan = force_deep_scan or not is_ini
+    if is_ini and not force_deep_scan:
+        try:
+            folder_mtime = os.stat(pth).st_mtime
+            ini_mtime = os.stat(ini_path).st_mtime
+            if folder_mtime > ini_mtime:
+                needs_rescan = True
+                logger.debug(f"Stale ini detected for {event_dir_name} (folder newer)")
+        except OSError:
+            needs_rescan = True
+
     is_empty = False
-    if force_deep_scan or not is_ini:
+    if needs_rescan:
         # calculate ini
         conf = configure_inbox_reader(in_dir_name=pth)
 
