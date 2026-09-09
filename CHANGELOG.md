@@ -9,9 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.1] - 2026-09-09
 
+### Fixed
+- Auto-refresh stale `.cluster.ini` when files are added to a watched folder.
+  `get_this_ini` now compares folder mtime vs ini mtime and rescans
+  automatically, so the typical workflow (run → copy output to library → run
+  again) no longer requires `--force-recalc`.
+- Catalog path forces a deep rescan for all folders with a mtime mismatch
+  instead of reading the outdated ini.
+
 ## [0.6.0] - 2026-09-09
 
+### Added
+- **Per-library SQLite catalog** (`.filecluster.db`) caches cluster metadata
+  and file hashes across runs. Unchanged event folders (same mtime) are served
+  from the catalog instead of re-reading `.cluster.ini` files.
+- File-hash caching for duplicate detection: library file hashes are persisted
+  in the catalog so repeated runs skip re-hashing entirely.
+- Stale-row pruning removes catalog entries for folders/files deleted from disk.
+
+### Changed
+- Library scan pipeline checks the catalog before dispatching to the worker
+  pool; results are written back as write-through (both SQLite and `.cluster.ini`).
+- `mark_inbox_duplicates` pre-seeds hash caches from catalogs and persists
+  newly computed hashes after the check.
+
 ## [0.5.2] - 2026-09-09
+
+### Fixed
+- Handle nanosecond-precision timestamps in `.cluster.ini` files. Pandas
+  `median()` can produce Timestamps with 9 fractional digits, but
+  `datetime.strptime` `%f` only handles 6, causing "unconverted data remains"
+  errors. Added `_parse_datetime()` helper that truncates excess digits.
+- `start_date`/`end_date` parsing in `read_cluster_ini_as_dict` now tries the
+  microsecond format instead of silently dropping to `None`.
 
 ## [0.5.1] - 2026-09-08
 
@@ -110,7 +140,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simple GUI implementations (PySimpleGUI and Tkinter).
 - Pre-commit hooks (black, isort, flake8).
 
-[Unreleased]: https://github.com/izikeros/filecluster/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/izikeros/filecluster/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/izikeros/filecluster/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/izikeros/filecluster/compare/v0.5.2...v0.6.0
+[0.5.2]: https://github.com/izikeros/filecluster/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/izikeros/filecluster/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/izikeros/filecluster/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/izikeros/filecluster/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/izikeros/filecluster/compare/v0.2.0...v0.3.0

@@ -24,6 +24,7 @@ src/filecluster/         → main package
   image_reader.py        → EXIF/metadata extraction from images/videos
   image_grouper.py       → grouping logic based on time gaps
   update_clusters.py     → cluster assignment and update logic
+  catalog.py             → per-library SQLite catalog (.filecluster.db)
   dbase.py               → database/dataframe operations
   utlis.py               → utility functions (note: intentional typo in filename)
   gui.py                 → GUI (PySimpleGUI)
@@ -52,6 +53,20 @@ tests/                   → pytest test suite
 - `pydantic` / `pydantic-settings` for configuration
 - `loguru` for logging (stderr only; stdout is reserved for results)
 - `typer` for the CLI, `rich` for rendering and progress
+
+## Release Workflow
+
+When committing finished work, always follow this sequence:
+
+1. Update `CHANGELOG.md` — fill the `[Unreleased]` section with the changes
+2. `git add` and `git commit` all changes (code, tests, changelog, docs)
+3. `uv run bump-my-version bump <patch|minor|major>` — this updates version
+   strings in `pyproject.toml`, `version.py`, and `CHANGELOG.md`, creates
+   a commit and a `v<version>` tag automatically
+4. `git push forgejo --follow-tags` — push commits and the new tag
+
+bump-my-version requires a clean working tree, so commit everything
+(including `uv.lock` if it drifted) before running the bump.
 
 ## Gotchas
 
