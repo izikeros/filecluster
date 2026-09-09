@@ -16,6 +16,7 @@ import pandas as pd
 import pytest
 
 from filecluster.update_clusters import (
+    _parse_datetime,
     dict_from_ini_range_section,
     fast_scandir,
     get_or_create_library_cluster_ini_as_dataframe,
@@ -31,6 +32,49 @@ from filecluster.update_clusters import (
     str_to_bool,
     validate_library_structure,
 )
+
+
+# ---------------------------------------------------------------------------
+# _parse_datetime
+# ---------------------------------------------------------------------------
+class TestParseDatetime:
+    """Tests for the datetime parser that handles nanosecond-precision strings.
+
+    Business rule: pandas Timestamps serialised with str() can carry 9
+    fractional digits (nanoseconds), but datetime.strptime %f only handles 6.
+    """
+
+    def test_plain_seconds(self):
+        result = _parse_datetime("2020-01-15 10:30:45")
+        assert result == datetime(2020, 1, 15, 10, 30, 45)
+
+    def test_microseconds(self):
+        result = _parse_datetime("2020-01-15 10:30:45.123456")
+        assert result == datetime(2020, 1, 15, 10, 30, 45, 123456)
+
+    def test_nanoseconds_trailing_zeros(self):
+        """9-digit fractional part with trailing zeros (e.g. .500000000)."""
+        result = _parse_datetime("2020-01-15 10:30:45.500000000")
+        assert result == datetime(2020, 1, 15, 10, 30, 45, 500000)
+
+    def test_nanoseconds_nonzero_tail(self):
+        """9-digit fractional part where the last 3 digits are nonzero.
+
+        This is the exact case that caused 'unconverted data remains: 552'.
+        """
+        result = _parse_datetime("2020-01-15 10:30:45.000000552")
+        assert result == datetime(2020, 1, 15, 10, 30, 45, 0)
+
+    def test_seven_digit_fractional(self):
+        """7-digit fractional seconds (between micro and nano)."""
+        result = _parse_datetime("2020-01-15 10:30:45.1234567")
+        assert result == datetime(2020, 1, 15, 10, 30, 45, 123456)
+
+    def test_garbage_returns_none(self):
+        assert _parse_datetime("not-a-date") is None
+
+    def test_empty_string_returns_none(self):
+        assert _parse_datetime("") is None
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +235,44 @@ class TestDictFromIniRangeSection:
         result = dict_from_ini_range_section(ini_data, Path("/test"))
         assert result["is_continuous"] is False
         assert result["median"].microsecond == 123456
+
+    def test_handles_nanosecond_median(self):
+        """Median with 9-digit nanoseconds no longer crashes."""
+        ini_data = {
+            "Range": {
+                "start_date": "2020-01-01 12:00:00.000000552",
+                "end_date": "2020-01-02 12:00:00.500000000",
+                "is_continuous": "True",
+                "median": "2020-01-01 18:00:00.000000552",
+                "file_count": "3",
+            }
+        }
+        result = dict_from_ini_range_section(ini_data, Path("/test"))
+        assert isinstance(result["median"], datetime)
+
+    def test_nanosecond_ini_roundtrip(self, tmp_path):
+        """Save a cluster ini with a pandas Timestamp median, then read it back.
+
+        This reproduces the original 'unconverted data remains: 552' crash.
+        """
+        import pandas as pd
+
+        ts = pd.Timestamp("2020-06-15 14:30:00.000000552")
+        ini = initialize_cluster_info_dict(
+            start=str(ts),
+            stop=str(ts),
+            is_continuous=True,
+            median=ts,
+            file_count=1,
+        )
+        save_cluster_ini(ini, tmp_path)
+
+        raw = read_cluster_ini_as_dict(tmp_path)
+        assert raw is not None
+        assert isinstance(raw["Range"]["start_date"], datetime)
+
+        result = dict_from_ini_range_section(raw, tmp_path)
+        assert isinstance(result["median"], datetime)
 
 
 # ---------------------------------------------------------------------------

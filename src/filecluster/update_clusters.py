@@ -37,6 +37,24 @@ from filecluster.image_reader import (
 from filecluster.ui import NullProgress, ProgressSink
 
 
+def _parse_datetime(s: str) -> datetime | None:
+    """Parse a datetime string that may have microsecond or nanosecond precision.
+
+    Pandas Timestamps serialised with ``str()`` can carry up to 9 fractional
+    digits (nanoseconds), but ``datetime.strptime`` with ``%f`` only handles 6.
+    This helper truncates any excess digits before parsing.
+    """
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
+        # Truncate fractional part to 6 digits so %f can handle it.
+        # A dot followed by more than 6 digits means nanosecond precision.
+        truncated = re.sub(r"(\.\d{6})\d+$", r"\1", s)
+        try:
+            return datetime.strptime(truncated, fmt)
+        except ValueError:
+            continue
+    return None
+
+
 def str_to_bool(s: str) -> bool:
     """Convert 'True' or 'False' provided as string to the corresponding bool value."""
     if s == "True":
@@ -192,10 +210,7 @@ def dict_from_ini_range_section(cluster_ini_r, pth):
     d = cluster_ini_r["Range"]
     # convert types
     d["is_continuous"] = str_to_bool(d["is_continuous"])
-    try:
-        d["median"] = datetime.strptime(d["median"], "%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        d["median"] = datetime.strptime(d["median"], "%Y-%m-%d %H:%M:%S.%f")
+    d["median"] = _parse_datetime(d["median"])
     d["file_count"] = int(d["file_count"])
     d["path"] = pth
     return d
@@ -277,19 +292,8 @@ def read_cluster_ini_as_dict(
     dt_start = str(cluster_dict["Range"]["start_date"])
     dt_end = str(cluster_dict["Range"]["end_date"])
 
-    try:
-        cluster_dict["Range"]["start_date"] = datetime.strptime(
-            dt_start, "%Y-%m-%d %H:%M:%S"
-        )
-    except ValueError:
-        cluster_dict["Range"]["start_date"] = None
-
-    try:
-        cluster_dict["Range"]["end_date"] = datetime.strptime(
-            dt_end, "%Y-%m-%d %H:%M:%S"
-        )
-    except ValueError:
-        cluster_dict["Range"]["end_date"] = None
+    cluster_dict["Range"]["start_date"] = _parse_datetime(dt_start)
+    cluster_dict["Range"]["end_date"] = _parse_datetime(dt_end)
     return cluster_dict
 
 
