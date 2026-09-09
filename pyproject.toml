@@ -1,6 +1,6 @@
 [project]
 name = "filecluster"
-version = "0.6.1"
+version = "0.6.2"
 description = "Image and video clustering by date"
 authors = [
     { name = "Krystian Safjan", email = "ksafjan@gmail.com" },
@@ -120,7 +120,7 @@ max-complexity = 10
 # bump-my-version
 # ---------------------------------------------------------------------------
 [tool.bumpversion]
-current_version = "0.6.1"
+current_version = "0.6.2"
 commit = true
 tag = true
 tag_name = "v{new_version}"
