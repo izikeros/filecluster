@@ -17,3 +17,4 @@ filecluster/monkeytype.sqlite3
 .pytest_cache
 coverage.xml
 htmlcov/
+.filecluster.db

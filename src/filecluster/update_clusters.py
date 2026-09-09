@@ -75,6 +75,30 @@ def _scan_event_dir(args: tuple[Any, bool, str]) -> dict | Path | None:
     return get_this_ini(event_dir, force_deep_scan, library_path)
 
 
+def _catalog_row_to_dict(row: dict, library_path: str) -> dict:
+    """Convert a catalog DB row into the same dict shape that ``get_this_ini`` returns."""
+    pth = Path(library_path) / row["path"]
+    return {
+        "start_date": _parse_datetime(row["start_date"]) if row["start_date"] else None,
+        "end_date": _parse_datetime(row["end_date"]) if row["end_date"] else None,
+        "median": _parse_datetime(row["median"]) if row["median"] else None,
+        "is_continuous": bool(row["is_continuous"]),
+        "file_count": row["file_count"],
+        "path": pth,
+    }
+
+
+def _dict_to_catalog_row(d: dict) -> dict:
+    """Extract the fields needed for :meth:`LibraryCatalog.put_cluster`."""
+    return {
+        "start_date": str(d.get("start_date", "")),
+        "end_date": str(d.get("end_date", "")),
+        "median": str(d.get("median", "")),
+        "is_continuous": bool(d.get("is_continuous", True)),
+        "file_count": int(d.get("file_count", 0)),
+    }
+
+
 def get_or_create_library_cluster_ini_as_dataframe(
     library_path: str | Path,
     pool: Pool,
@@ -82,6 +106,11 @@ def get_or_create_library_cluster_ini_as_dataframe(
     progress: ProgressSink | None = None,
 ) -> tuple[pd.DataFrame, list[Path]]:
     """Scan the folder for cluster info and return the dataframe with clusters.
+
+    Uses a per-library SQLite catalog (``.filecluster.db``) to skip
+    unchanged event folders on repeated runs.  When the catalog is not
+    available (permissions, first run on old library, etc.) the function
+    falls back to reading ``.cluster.ini`` files directly.
 
     Args:
         library_path:
@@ -94,11 +123,20 @@ def get_or_create_library_cluster_ini_as_dataframe(
             - dataframe with cluster info
             - list of empty directories
     """
+    from filecluster.catalog import LibraryCatalog
+
     progress = progress or NullProgress()
     # strip trailing '/' and '\' if any
     library_path = str(library_path).rstrip("/").rstrip("\\")
     lib_name = Path(library_path).name
     logger.info(f"Scanning ini files in {library_path}")
+
+    # --- open catalog (best-effort) ---
+    catalog: LibraryCatalog | None = None
+    try:
+        catalog = LibraryCatalog.open(library_path)
+    except Exception as exc:
+        logger.debug(f"Could not open catalog for {library_path}: {exc}")
 
     _folder_count = 0
 
@@ -121,21 +159,80 @@ def get_or_create_library_cluster_ini_as_dataframe(
     # is_event or is_year_folder
     event_dirs = list(filter(is_event, subs_labeled))
 
-    # Execute in parallel. imap keeps result order stable (so cluster ids stay
-    # reproducible) while still yielding incrementally, which is what lets the
-    # scan report progress on large libraries.
+    # --- split into cached (mtime match) and stale (needs scanning) ---
+    cached_results: list[dict] = []
+    stale_event_dirs: list[tuple[str, str]] = []
+
+    for event_dir in event_dirs:
+        event_dir_name = event_dir[0]
+        pth = Path(library_path) / event_dir_name
+
+        if force_deep_scan or catalog is None:
+            stale_event_dirs.append(event_dir)
+            continue
+
+        try:
+            disk_mtime = os.stat(pth).st_mtime
+        except OSError:
+            stale_event_dirs.append(event_dir)
+            continue
+
+        cached = catalog.get_cluster(event_dir_name)
+        if cached is not None and cached["folder_mtime"] == disk_mtime:
+            cached_results.append(_catalog_row_to_dict(cached, library_path))
+        else:
+            stale_event_dirs.append(event_dir)
+
+    n_cached = len(cached_results)
+    n_stale = len(stale_event_dirs)
+    logger.debug(
+        f"Catalog: {n_cached} cached, {n_stale} to scan"
+        f" ({len(event_dirs)} total event dirs)"
+    )
+
+    # --- scan stale folders in parallel (same as before) ---
     progress.update_description(
-        f"Scanning {len(event_dirs)} event folders in {lib_name}"
+        f"Scanning {n_stale} event folders in {lib_name}"
+        + (f" ({n_cached} cached)" if n_cached else "")
     )
     progress.start(len(event_dirs), f"Scanning {lib_name}")
-    pool_args = [(event_dir, force_deep_scan, library_path) for event_dir in event_dirs]
-    res_list = []
-    for result in pool.imap(_scan_event_dir, pool_args):
-        res_list.append(result)
+
+    # Advance progress for cached hits immediately
+    for _ in range(n_cached):
         progress.advance()
 
-    res_dict_list = [d for d in res_list if isinstance(d, dict)]
-    res_empty_dir_list = [d for d in res_list if isinstance(d, Path)]
+    pool_args = [
+        (event_dir, force_deep_scan, library_path) for event_dir in stale_event_dirs
+    ]
+    scanned_results: list[dict | Path | None] = []
+    for result in pool.imap(_scan_event_dir, pool_args):
+        scanned_results.append(result)
+        progress.advance()
+
+    # --- write freshly scanned results back to catalog ---
+    if catalog is not None:
+        for event_dir, result in zip(stale_event_dirs, scanned_results, strict=True):
+            if isinstance(result, dict):
+                event_dir_name = event_dir[0]
+                pth = Path(library_path) / event_dir_name
+                try:
+                    disk_mtime = os.stat(pth).st_mtime
+                except OSError:
+                    disk_mtime = 0.0
+                cat_row = _dict_to_catalog_row(result)
+                catalog.put_cluster(
+                    event_dir_name, folder_mtime=disk_mtime, **cat_row
+                )
+
+        # Prune folders that no longer exist on disk
+        existing_rel_paths = {ed[0] for ed in event_dirs}
+        catalog.prune_clusters(existing_rel_paths)
+        catalog.close()
+
+    # --- combine cached + scanned into result lists ---
+    res_dict_list = list(cached_results)
+    res_dict_list.extend(d for d in scanned_results if isinstance(d, dict))
+    res_empty_dir_list = [d for d in scanned_results if isinstance(d, Path)]
 
     df = pd.DataFrame(res_dict_list)
 

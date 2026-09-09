@@ -449,12 +449,19 @@ class ImageGrouper:
         2. Partial hash match (first 1MB)
         3. Full hash match
 
+        When a per-library SQLite catalog (``.filecluster.db``) exists,
+        previously computed hashes are loaded from it so that unchanged
+        library files are never re-hashed.  Newly computed hashes are
+        written back at the end of the check.
+
         Args:
             progress: Optional sink notified of the inbox files checked.
 
         Returns:
             List of inbox filenames that have duplicates in a library
         """
+        from filecluster.catalog import LibraryCatalog
+
         progress = progress or NullProgress()
         clusters_with_dups = []
         confirmed_inbox_dups = []
@@ -467,6 +474,29 @@ class ImageGrouper:
             logger.debug("No library folder defined. Skipping duplicate search.")
             return [], []
 
+        # --- open catalogs (best-effort) and pre-seed hash caches ---
+        catalogs: list[tuple[LibraryCatalog, Path]] = []
+        partial_hash_cache: dict[str, str | None] = {}
+        full_hash_cache: dict[str, str | None] = {}
+
+        for wf in self.config.watch_folders:
+            try:
+                cat = LibraryCatalog.open(wf)
+                catalogs.append((cat, Path(wf)))
+                # Pre-populate caches from catalog
+                for rel_path, (size, p_hash, f_hash) in cat.get_file_hashes().items():
+                    abs_path = str(Path(wf) / rel_path)
+                    if p_hash is not None:
+                        partial_hash_cache[abs_path] = p_hash
+                    if f_hash is not None:
+                        full_hash_cache[abs_path] = f_hash
+            except Exception as exc:
+                logger.debug(f"Could not open catalog for {wf}: {exc}")
+
+        n_preloaded = len(partial_hash_cache)
+        if n_preloaded:
+            logger.debug(f"Pre-loaded {n_preloaded} file hashes from catalog(s)")
+
         # Get files in watch folders
         _watch_file_names, watch_full_paths = get_watch_folders_files_path(
             self.config.watch_folders
@@ -474,7 +504,7 @@ class ImageGrouper:
 
         # 1. First pass: Map library files by size to avoid unnecessary hashing
         logger.debug("Building library size index")
-        library_by_size = {}
+        library_by_size: dict[int, list] = {}
         for path in watch_full_paths:
             try:
                 size = os.path.getsize(path)
@@ -486,16 +516,14 @@ class ImageGrouper:
 
         logger.debug("Checking for duplicates using size -> partial hash -> full hash")
 
-        # Library digests are cached: without this a library file is re-hashed
-        # once per size-matching inbox file, which dominates runtime on large
-        # inboxes.
-        partial_hash_cache: dict[str, str | None] = {}
-        full_hash_cache: dict[str, str | None] = {}
+        # Track newly computed hashes so they can be persisted to the catalog.
+        new_hashes: list[tuple[str, Path, int, float, str | None, str | None]] = []
 
         def cached_partial_hash(filepath) -> str | None:
             key = str(filepath)
             if key not in partial_hash_cache:
                 partial_hash_cache[key] = get_partial_hash(filepath)
+                _mark_new_hash(filepath, key)
             return partial_hash_cache[key]
 
         def cached_full_hash(filepath) -> str | None:
@@ -505,7 +533,23 @@ class ImageGrouper:
                     full_hash_cache[key] = hash_file(filepath)
                 except OSError:
                     full_hash_cache[key] = None
+                _mark_new_hash(filepath, key)
             return full_hash_cache[key]
+
+        def _mark_new_hash(filepath, key: str) -> None:
+            """Record that *filepath* had a hash freshly computed."""
+            try:
+                st = os.stat(filepath)
+                new_hashes.append((
+                    key,
+                    Path(filepath),
+                    st.st_size,
+                    st.st_mtime,
+                    partial_hash_cache.get(key),
+                    full_hash_cache.get(key),
+                ))
+            except OSError:
+                pass
 
         # Process unassigned files in inbox
         sel_unknown = self.inbox_media_df.status == Status.UNKNOWN
@@ -569,6 +613,26 @@ class ImageGrouper:
                             break  # Found a match, no need to check other files of same size
                     except OSError:
                         continue
+
+        # --- persist newly computed hashes back to catalogs ---
+        for cat, wf_path in catalogs:
+            try:
+                entries = []
+                for key, fpath, size, mtime, p_hash, f_hash in new_hashes:
+                    try:
+                        rel = str(fpath.relative_to(wf_path))
+                    except ValueError:
+                        continue  # file not under this watch folder
+                    entries.append((rel, size, mtime, p_hash, f_hash))
+                if entries:
+                    cat.put_file_hashes(entries)
+                    logger.debug(
+                        f"Wrote {len(entries)} new file hashes to catalog"
+                        f" for {wf_path.name}"
+                    )
+                cat.close()
+            except Exception as exc:
+                logger.debug(f"Error writing hash cache for {wf_path}: {exc}")
 
         return list(set(confirmed_inbox_dups)), list(set(clusters_with_dups))
 
