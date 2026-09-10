@@ -481,7 +481,7 @@ class ImageGrouper:
                 cat = LibraryCatalog.open(wf)
                 catalogs.append((cat, Path(wf)))
                 # Pre-populate caches from catalog
-                for rel_path, (size, p_hash, f_hash) in cat.get_file_hashes().items():
+                for rel_path, (_size, p_hash, f_hash) in cat.get_file_hashes().items():
                     abs_path = str(Path(wf) / rel_path)
                     if p_hash is not None:
                         partial_hash_cache[abs_path] = p_hash
@@ -617,7 +617,7 @@ class ImageGrouper:
         for cat, wf_path in catalogs:
             try:
                 entries = []
-                for key, fpath, size, mtime, p_hash, f_hash in new_hashes:
+                for _key, fpath, size, mtime, p_hash, f_hash in new_hashes:
                     try:
                         rel = str(fpath.relative_to(wf_path))
                     except ValueError:

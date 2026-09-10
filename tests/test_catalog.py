@@ -6,7 +6,6 @@ backup/restore integrity.
 """
 
 import sqlite3
-from pathlib import Path
 
 import pytest
 
@@ -47,7 +46,7 @@ class TestCatalogLifecycle:
         cat = LibraryCatalog.open(tmp_path)
         cat.close()
         # Closed connection raises on use
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.ProgrammingError):
             cat.get_cluster("anything")
 
 
