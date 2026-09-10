@@ -14,6 +14,7 @@ gui.dist
 filecluster/monkeytype.sqlite3
 .aider*
 .env
+uv.lock
 .pytest_cache
 coverage.xml
 htmlcov/
