@@ -7,12 +7,14 @@ trivial, testing pure, and the I/O boundary explicit.
 
 from __future__ import annotations
 
+import errno
 import math
 import os
 import re
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from shutil import copy2, move
+from shutil import copy2
 
 from filecluster import logger
 from filecluster.configuration import CopyMode
@@ -54,6 +56,75 @@ def strip_copy_suffix(name: str) -> str:
     return name
 
 
+def numbered_name(name: str, counter: int) -> str:
+    """Return *name* with ``(counter)`` inserted before the extension."""
+    path = Path(name)
+    suffix = path.suffix
+    stem = path.name[: -len(suffix)] if suffix else path.name
+    return f"{stem} ({counter}){suffix}"
+
+
+def unique_name(name: str, claimed_names: set[str]) -> str:
+    """Return *name*, or the first ``stem (n).ext`` variant not yet claimed.
+
+    *claimed_names* holds lower-cased names, matching the case-insensitive
+    behaviour of macOS and Windows filesystems.
+    """
+    if name.lower() not in claimed_names:
+        return name
+
+    counter = 1
+    while True:
+        candidate = numbered_name(name, counter)
+        if candidate.lower() not in claimed_names:
+            return candidate
+        counter += 1
+
+
+class DestinationAllocator:
+    """Hands out destination paths that cannot overwrite an existing file.
+
+    Names already on disk in a target directory are claimed lazily on first
+    use, and every name handed out is claimed too, so neither an existing file
+    nor an earlier file from the same run can be clobbered.
+
+    ``shutil.move`` silently replaces the destination on POSIX, so any planner
+    that moves files into a shared directory has to route through this.
+    """
+
+    def __init__(self) -> None:
+        self._claimed: dict[Path, set[str]] = {}
+
+    def claimed_for(self, directory: str | Path) -> set[str]:
+        """Return the mutable set of claimed lower-cased names in *directory*."""
+        key = Path(directory)
+        if key not in self._claimed:
+            existing: set[str] = set()
+            # Every entry counts, not just regular files: a directory would
+            # make `move` nest the source inside it, and a symlink (even a
+            # dangling one) would redirect the write to its target.
+            with suppress(OSError):
+                existing = {entry.name.lower() for entry in os.scandir(key)}
+            self._claimed[key] = existing
+        return self._claimed[key]
+
+    def peek(self, directory: str | Path, name: str) -> str:
+        """Resolve *name* against *directory* without claiming it."""
+        return unique_name(name, self.claimed_for(directory))
+
+    def allocate(self, directory: str | Path, name: str) -> Path:
+        """Claim and return a free destination path for *name* in *directory*."""
+        claimed = self.claimed_for(directory)
+        chosen = unique_name(name, claimed)
+        claimed.add(chosen.lower())
+        return Path(directory) / chosen
+
+    def reserve(self, path: str | Path) -> None:
+        """Mark *path* as taken without allocating a new name for it."""
+        p = Path(path)
+        self.claimed_for(p.parent).add(p.name.lower())
+
+
 def resolve_destination_names(
     inbox_media_df,
     out_dir: Path,
@@ -74,34 +145,8 @@ def resolve_destination_names(
     Returns:
         Mapping of original ``file_name`` -> destination basename.
     """
-    # Per-target-dir set of already-claimed (lower-cased) names, seeded with
-    # whatever already exists on disk in that directory.
-    claimed: dict[str, set[str]] = {}
-
-    def _claimed_for(target_path: str) -> set[str]:
-        if target_path not in claimed:
-            existing: set[str] = set()
-            dir_path = Path(out_dir) / str(target_path)
-            if dir_path.is_dir():
-                existing = {p.name.lower() for p in dir_path.iterdir() if p.is_file()}
-            claimed[target_path] = existing
-        return claimed[target_path]
-
+    allocator = DestinationAllocator()
     mapping: dict[str, str] = {}
-
-    def _unique_name(name: str, claimed_names: set[str]) -> str:
-        if name.lower() not in claimed_names:
-            return name
-
-        path = Path(name)
-        suffix = path.suffix
-        stem = path.name[: -len(suffix)] if suffix else path.name
-        counter = 1
-        while True:
-            candidate = f"{stem} ({counter}){suffix}"
-            if candidate.lower() not in claimed_names:
-                return candidate
-            counter += 1
 
     # When restoring, process un-suffixed originals first so they always keep
     # their names. Otherwise preserve the inbox order.
@@ -120,15 +165,12 @@ def resolve_destination_names(
 
     for row in ordered_rows:
         name = row["file_name"]
-        target_path = row["target_path"]
-        claimed_names = _claimed_for(str(target_path))
+        target_dir = Path(out_dir) / str(row["target_path"])
+        claimed_names = allocator.claimed_for(target_dir)
 
         desired = strip_copy_suffix(name) if restore else name
         fallback = name if desired.lower() in claimed_names else desired
-        chosen = _unique_name(fallback, claimed_names)
-
-        claimed_names.add(chosen.lower())
-        mapping[name] = chosen
+        mapping[name] = allocator.allocate(target_dir, fallback).name
 
     return mapping
 
@@ -297,8 +339,80 @@ def build_file_operation_plan(
     return plan
 
 
+def reserve_exclusive(dst: Path) -> Path:
+    """Atomically create an empty placeholder at *dst*, or the next free name.
+
+    Planning claims names against a directory listing, which is a
+    time-of-check/time-of-use gap: anything created in between would be
+    silently replaced at write time.  ``O_CREAT | O_EXCL`` closes it, because
+    the kernel refuses the call when the name exists -- including when it is a
+    directory or a symlink, dangling or not.
+
+    Returns the path actually reserved, which differs from *dst* only when the
+    planned name was taken after the plan was built.
+    """
+    counter = 0
+    while True:
+        candidate = (
+            dst if counter == 0 else dst.with_name(numbered_name(dst.name, counter))
+        )
+        try:
+            fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
+        except FileExistsError:
+            counter += 1
+            continue
+        os.close(fd)
+        if counter:
+            logger.warning(
+                f"{dst} appeared after planning; writing to {candidate} instead"
+            )
+        return candidate
+
+
+def _write_file(op: CopyOp | MoveOp) -> None:
+    """Perform one copy or move without ever replacing an existing file."""
+    dst = reserve_exclusive(op.dst)
+    try:
+        if isinstance(op, MoveOp):
+            _move_onto(op.src, dst)
+        else:
+            copy2(str(op.src), str(dst))
+    except BaseException:
+        # The placeholder is ours and nothing pre-existing can be at *dst*, so
+        # removing a failed (possibly truncated) write cannot lose data.
+        with suppress(OSError):
+            os.unlink(dst)
+        raise
+
+
+def _move_onto(src: Path, dst: Path) -> None:
+    """Move *src* onto the reserved placeholder at *dst*."""
+    try:
+        # Atomic on the same filesystem, and the only thing it can replace is
+        # the placeholder reserved by the caller.
+        os.replace(str(src), str(dst))
+        return
+    except OSError as exc:
+        if exc.errno != errno.EXDEV:
+            raise
+
+    # Different filesystem: copy, then drop the original. A symlink is
+    # recreated rather than dereferenced, so the move does not silently turn a
+    # link into a full copy of its target.
+    if src.is_symlink():
+        os.unlink(dst)
+        os.symlink(os.readlink(src), dst)
+    else:
+        copy2(str(src), str(dst))
+    os.unlink(str(src))
+
+
 def execute_plan(plan: FileOperationPlan, progress: ProgressSink | None = None) -> None:
     """Execute every operation in the plan against the real filesystem.
+
+    No operation can replace an existing file: each destination name is claimed
+    exclusively at write time, and a name taken since planning gets a numeric
+    suffix instead.
 
     Args:
         plan: Operations to perform.
@@ -310,10 +424,8 @@ def execute_plan(plan: FileOperationPlan, progress: ProgressSink | None = None) 
     for op in file_ops:
         if isinstance(op, MkdirOp):
             os.makedirs(op.path, exist_ok=True)
-        elif isinstance(op, CopyOp):
-            copy2(str(op.src), str(op.dst))
-        elif isinstance(op, MoveOp):
-            move(str(op.src), str(op.dst))
+        elif isinstance(op, CopyOp | MoveOp):
+            _write_file(op)
         progress.advance()
 
     if plan.n_skips:

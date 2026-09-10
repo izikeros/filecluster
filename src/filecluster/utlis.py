@@ -4,6 +4,7 @@ import base64
 import hashlib
 import logging
 import os
+import re
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -20,12 +21,136 @@ logging.getLogger("exifread").setLevel(logging.CRITICAL)
 
 BLOCK_SIZE_FOR_HASHING = 4096 * 32
 
+#: Event-folder names produced by filecluster: ``[YYYY_MM_DD]_optional_name``.
+EVENT_FOLDER_RE = re.compile(r"^\[(\d{4})_(\d{2})_(\d{2})\]")
+
+#: How many leading bytes go into a partial hash. One megabyte is enough to
+#: separate distinct photos while staying far cheaper than a full read.
+PARTIAL_HASH_SIZE = 1024 * 1024
+
+#: Extensions of companion files that belong to a media file and must travel
+#: with it: editing sidecars, Apple adjustment data, GoPro low-res proxies,
+#: thumbnails, subtitles and per-file JSON exports.
+SIDECAR_EXTENSIONS: tuple[str, ...] = (
+    ".xmp",
+    ".aae",
+    ".json",
+    ".thm",
+    ".lrv",
+    ".srt",
+    ".pp3",
+    ".dop",
+    ".on1",
+    ".acr",
+)
+
+#: Directory names never worth walking into when scanning a media library.
+SKIP_DIR_NAMES: frozenset[str] = frozenset(
+    {
+        ".git",
+        ".svn",
+        "@eaDir",
+        ".Trash",
+        ".Trashes",
+        "#recycle",
+        "$RECYCLE.BIN",
+        ".thumbnails",
+        "__pycache__",
+    }
+)
+
 
 def is_supported_filetype(file_name: str, ext_list: list[str]) -> bool:
     """Check if the filename has one of the allowed extensions from the list."""
     ext_list_lower = [ext.lower() for ext in ext_list]
     fn_lower = file_name.lower()
     return fn_lower.endswith(tuple(ext_list_lower))
+
+
+def is_sidecar_file(file_name: str) -> bool:
+    """Whether *file_name* looks like a companion file rather than media."""
+    return file_name.lower().endswith(SIDECAR_EXTENSIONS)
+
+
+def get_partial_hash(filepath, size: int = PARTIAL_HASH_SIZE) -> str | None:
+    """Hash the first *size* bytes of a file, or None if it cannot be read."""
+    try:
+        with open(filepath, "rb") as f:
+            return hashlib.md5(f.read(size)).hexdigest()
+    except OSError:
+        return None
+
+
+def walk_media_files(
+    root: str | Path,
+    ext_list: list[str],
+    *,
+    recursive: bool = True,
+    skip_dir_names: frozenset[str] = SKIP_DIR_NAMES,
+) -> list[Path]:
+    """Collect every supported media file under *root*.
+
+    Args:
+        root: Directory to scan.
+        ext_list: Recognised media extensions.
+        recursive: When False, only direct children of *root* are returned.
+        skip_dir_names: Directory names to prune from the walk.
+
+    Returns:
+        Sorted list of media file paths.
+    """
+    root = Path(root)
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip_dir_names]
+        if not recursive:
+            dirnames.clear()
+        here = Path(dirpath)
+        found.extend(
+            here / name for name in filenames if is_supported_filetype(name, ext_list)
+        )
+    return sorted(found)
+
+
+def is_event_folder_name(name: str) -> bool:
+    """Whether *name* looks like a filecluster event folder."""
+    return EVENT_FOLDER_RE.match(name) is not None
+
+
+def extract_year_from_folder(name: str) -> str | None:
+    """Extract the year from an event folder name like ``[2024_01_15]…``."""
+    m = EVENT_FOLDER_RE.match(name)
+    return m.group(1) if m else None
+
+
+def extract_date_from_folder(name: str) -> str | None:
+    """Extract ``YYYY_MM_DD`` from an event folder name."""
+    m = EVENT_FOLDER_RE.match(name)
+    return f"{m.group(1)}_{m.group(2)}_{m.group(3)}" if m else None
+
+
+def find_sidecar_files(media_path: str | Path) -> list[Path]:
+    """Return companion files that belong to *media_path*.
+
+    Both naming conventions are recognised: ``IMG_001.xmp`` (extension
+    replaced) and ``IMG_001.jpg.xmp`` (extension appended).
+    """
+    media_path = Path(media_path)
+    parent = media_path.parent
+    if not parent.is_dir():
+        return []
+
+    full_name = media_path.name.lower()
+    stem = media_path.stem.lower()
+    out: list[Path] = []
+    for entry in parent.iterdir():
+        name = entry.name
+        if name == media_path.name or not is_sidecar_file(name):
+            continue
+        base = name[: len(name) - len(Path(name).suffix)].lower()
+        if base in (stem, full_name) and entry.is_file():
+            out.append(entry)
+    return sorted(out)
 
 
 def is_image(file_name: str, ext_list_image: list[str]) -> bool:

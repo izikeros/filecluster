@@ -1,9 +1,11 @@
 """Tests for the file_operations module.
 
 Covers FileOperationPlan construction, operation counting,
-build_file_operation_plan for NOP/COPY/MOVE modes, and execute_plan.
+build_file_operation_plan for NOP/COPY/MOVE modes, execute_plan, and the
+write-time guarantees that keep an existing file from being replaced.
 """
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +21,8 @@ from filecluster.file_operations import (
     SkipOp,
     build_file_operation_plan,
     execute_plan,
+    numbered_name,
+    reserve_exclusive,
 )
 
 
@@ -207,3 +211,212 @@ class TestExecutePlan:
 
         assert (target_dir / "photo.jpg").read_text() == "existing"
         assert (target_dir / "photo (1).jpg").read_text() == "incoming"
+
+
+# ---------------------------------------------------------------------------
+# DestinationAllocator
+# ---------------------------------------------------------------------------
+class TestUniqueName:
+    """The numeric-suffix fallback used to avoid overwriting a file."""
+
+    def test_free_name_is_returned_unchanged(self):
+        from filecluster.file_operations import unique_name
+
+        assert unique_name("photo.jpg", set()) == "photo.jpg"
+
+    def test_taken_name_gets_a_counter(self):
+        from filecluster.file_operations import unique_name
+
+        assert unique_name("photo.jpg", {"photo.jpg"}) == "photo (1).jpg"
+
+    def test_counter_keeps_climbing(self):
+        from filecluster.file_operations import unique_name
+
+        claimed = {"photo.jpg", "photo (1).jpg", "photo (2).jpg"}
+        assert unique_name("photo.jpg", claimed) == "photo (3).jpg"
+
+    def test_matching_is_case_insensitive(self):
+        from filecluster.file_operations import unique_name
+
+        assert unique_name("Photo.JPG", {"photo.jpg"}) == "Photo (1).JPG"
+
+    def test_name_without_extension(self):
+        from filecluster.file_operations import unique_name
+
+        assert unique_name("README", {"readme"}) == "README (1)"
+
+
+class TestDestinationAllocator:
+    def test_existing_files_are_claimed_from_disk(self, tmp_path):
+        from filecluster.file_operations import DestinationAllocator
+
+        (tmp_path / "photo.jpg").write_text("existing")
+        allocator = DestinationAllocator()
+
+        assert allocator.allocate(tmp_path, "photo.jpg").name == "photo (1).jpg"
+
+    def test_two_allocations_never_collide(self, tmp_path):
+        from filecluster.file_operations import DestinationAllocator
+
+        allocator = DestinationAllocator()
+        first = allocator.allocate(tmp_path, "photo.jpg")
+        second = allocator.allocate(tmp_path, "photo.jpg")
+
+        assert first.name == "photo.jpg"
+        assert second.name == "photo (1).jpg"
+
+    def test_separate_directories_are_independent(self, tmp_path):
+        from filecluster.file_operations import DestinationAllocator
+
+        allocator = DestinationAllocator()
+        a = allocator.allocate(tmp_path / "a", "photo.jpg")
+        b = allocator.allocate(tmp_path / "b", "photo.jpg")
+
+        assert a.name == b.name == "photo.jpg"
+
+    def test_peek_does_not_claim(self, tmp_path):
+        from filecluster.file_operations import DestinationAllocator
+
+        allocator = DestinationAllocator()
+        assert allocator.peek(tmp_path, "photo.jpg") == "photo.jpg"
+        assert allocator.peek(tmp_path, "photo.jpg") == "photo.jpg"
+
+    def test_reserve_blocks_a_name(self, tmp_path):
+        from filecluster.file_operations import DestinationAllocator
+
+        allocator = DestinationAllocator()
+        allocator.reserve(tmp_path / "photo.jpg")
+
+        assert allocator.allocate(tmp_path, "photo.jpg").name == "photo (1).jpg"
+
+    def test_existing_directory_is_claimed(self, tmp_path):
+        """A directory would make a move nest the file inside it."""
+        from filecluster.file_operations import DestinationAllocator
+
+        (tmp_path / "photo.jpg").mkdir()
+        allocator = DestinationAllocator()
+
+        assert allocator.allocate(tmp_path, "photo.jpg").name == "photo (1).jpg"
+
+    def test_symlink_to_a_directory_is_claimed(self, tmp_path):
+        """A symlink would redirect the write outside the destination tree."""
+        from filecluster.file_operations import DestinationAllocator
+
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        target = tmp_path / "dest"
+        target.mkdir()
+        os.symlink(outside, target / "photo.jpg")
+        allocator = DestinationAllocator()
+
+        assert allocator.allocate(target, "photo.jpg").name == "photo (1).jpg"
+
+    def test_dangling_symlink_is_claimed(self, tmp_path):
+        from filecluster.file_operations import DestinationAllocator
+
+        os.symlink(tmp_path / "nowhere", tmp_path / "photo.jpg")
+        allocator = DestinationAllocator()
+
+        assert allocator.allocate(tmp_path, "photo.jpg").name == "photo (1).jpg"
+
+
+# ---------------------------------------------------------------------------
+# Write-time reservation
+# ---------------------------------------------------------------------------
+class TestNumberedName:
+    def test_counter_goes_before_the_extension(self):
+        assert numbered_name("photo.jpg", 3) == "photo (3).jpg"
+
+    def test_name_without_extension(self):
+        assert numbered_name("README", 1) == "README (1)"
+
+
+class TestReserveExclusive:
+    def test_free_name_is_created_as_given(self, tmp_path):
+        reserved = reserve_exclusive(tmp_path / "photo.jpg")
+
+        assert reserved == tmp_path / "photo.jpg"
+        assert reserved.is_file()
+
+    def test_taken_name_falls_back_to_a_suffix(self, tmp_path):
+        (tmp_path / "photo.jpg").write_text("existing")
+
+        reserved = reserve_exclusive(tmp_path / "photo.jpg")
+
+        assert reserved == tmp_path / "photo (1).jpg"
+        assert (tmp_path / "photo.jpg").read_text() == "existing"
+
+    def test_directory_at_the_destination_is_not_entered(self, tmp_path):
+        (tmp_path / "photo.jpg").mkdir()
+
+        reserved = reserve_exclusive(tmp_path / "photo.jpg")
+
+        assert reserved == tmp_path / "photo (1).jpg"
+        assert (tmp_path / "photo.jpg").is_dir()
+
+
+class TestWriteTimeCollisions:
+    """Names taken between planning and writing must not be overwritten."""
+
+    @pytest.mark.parametrize("op_type", [CopyOp, MoveOp])
+    def test_file_created_after_planning_survives(self, tmp_path, op_type):
+        src = tmp_path / "inbox" / "photo.jpg"
+        src.parent.mkdir()
+        src.write_text("incoming")
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        plan = FileOperationPlan(ops=[op_type(src=src, dst=dest_dir / "photo.jpg")])
+        # Planning saw an empty directory; something else fills it in first.
+        (dest_dir / "photo.jpg").write_text("precious")
+
+        execute_plan(plan)
+
+        assert (dest_dir / "photo.jpg").read_text() == "precious"
+        assert (dest_dir / "photo (1).jpg").read_text() == "incoming"
+
+    def test_move_does_not_follow_a_directory_symlink(self, tmp_path):
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+        os.symlink(outside, dest_dir / "photo.jpg")
+        src = tmp_path / "inbox" / "photo.jpg"
+        src.parent.mkdir()
+        src.write_text("incoming")
+
+        execute_plan(
+            FileOperationPlan(ops=[MoveOp(src=src, dst=dest_dir / "photo.jpg")])
+        )
+
+        assert list(outside.iterdir()) == []
+        assert (dest_dir / "photo (1).jpg").read_text() == "incoming"
+
+    def test_failed_write_leaves_no_placeholder(self, tmp_path):
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+        missing = tmp_path / "inbox" / "gone.jpg"
+
+        with pytest.raises(OSError):
+            execute_plan(
+                FileOperationPlan(ops=[CopyOp(src=missing, dst=dest_dir / "gone.jpg")])
+            )
+
+        assert list(dest_dir.iterdir()) == []
+
+    def test_moving_a_symlink_keeps_it_a_symlink(self, tmp_path):
+        real = tmp_path / "real.jpg"
+        real.write_text("data")
+        link = tmp_path / "inbox" / "link.jpg"
+        link.parent.mkdir()
+        os.symlink(real, link)
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        execute_plan(
+            FileOperationPlan(ops=[MoveOp(src=link, dst=dest_dir / "link.jpg")])
+        )
+
+        assert (dest_dir / "link.jpg").is_symlink()
+        assert (dest_dir / "link.jpg").read_text() == "data"
+        assert real.read_text() == "data"

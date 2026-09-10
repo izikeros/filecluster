@@ -280,3 +280,172 @@ class TestImageConversion:
         html = image_formatter(im_base64=img_pth)
         assert html.startswith('<img src="data:image/jpeg;base64,')
         assert html.endswith('">')
+
+
+# ---------------------------------------------------------------------------
+# Partial hashing
+# ---------------------------------------------------------------------------
+class TestGetPartialHash:
+    """Hashing only the leading bytes of a file."""
+
+    def test_returns_hex_digest(self, tmp_path):
+        from filecluster.utlis import get_partial_hash
+
+        f = tmp_path / "a.jpg"
+        f.write_bytes(b"some-photo-bytes")
+        assert isinstance(get_partial_hash(str(f)), str)
+
+    def test_same_prefix_same_hash(self, tmp_path):
+        from filecluster.utlis import get_partial_hash
+
+        a = tmp_path / "a.bin"
+        b = tmp_path / "b.bin"
+        a.write_bytes(b"prefix")
+        b.write_bytes(b"prefix")
+        assert get_partial_hash(str(a)) == get_partial_hash(str(b))
+
+    def test_only_leading_bytes_are_read(self, tmp_path):
+        from filecluster.utlis import get_partial_hash
+
+        a = tmp_path / "a.bin"
+        b = tmp_path / "b.bin"
+        a.write_bytes(b"headXXXX")
+        b.write_bytes(b"headYYYY")
+        assert get_partial_hash(str(a), size=4) == get_partial_hash(str(b), size=4)
+
+    def test_missing_file_returns_none(self, tmp_path):
+        from filecluster.utlis import get_partial_hash
+
+        assert get_partial_hash(str(tmp_path / "nope.jpg")) is None
+
+    def test_still_importable_from_image_grouper(self):
+        """The old import path must keep working for existing callers."""
+        from filecluster import image_grouper
+        from filecluster.utlis import get_partial_hash
+
+        assert image_grouper.get_partial_hash is get_partial_hash
+
+
+# ---------------------------------------------------------------------------
+# Media walking
+# ---------------------------------------------------------------------------
+class TestWalkMediaFiles:
+    def test_finds_nested_media(self, tmp_path):
+        from filecluster.utlis import walk_media_files
+
+        (tmp_path / "a" / "b").mkdir(parents=True)
+        (tmp_path / "top.jpg").write_bytes(b"1")
+        (tmp_path / "a" / "mid.jpg").write_bytes(b"2")
+        (tmp_path / "a" / "b" / "deep.mp4").write_bytes(b"3")
+
+        found = walk_media_files(tmp_path, [".jpg", ".mp4"])
+        assert [p.name for p in found] == ["deep.mp4", "mid.jpg", "top.jpg"]
+
+    def test_non_recursive_stays_at_top(self, tmp_path):
+        from filecluster.utlis import walk_media_files
+
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "top.jpg").write_bytes(b"1")
+        (tmp_path / "sub" / "deep.jpg").write_bytes(b"2")
+
+        found = walk_media_files(tmp_path, [".jpg"], recursive=False)
+        assert [p.name for p in found] == ["top.jpg"]
+
+    def test_unsupported_extensions_are_skipped(self, tmp_path):
+        from filecluster.utlis import walk_media_files
+
+        (tmp_path / "a.jpg").write_bytes(b"1")
+        (tmp_path / "notes.txt").write_bytes(b"2")
+
+        assert [p.name for p in walk_media_files(tmp_path, [".jpg"])] == ["a.jpg"]
+
+    def test_noise_directories_are_pruned(self, tmp_path):
+        from filecluster.utlis import walk_media_files
+
+        (tmp_path / "@eaDir").mkdir()
+        (tmp_path / "@eaDir" / "thumb.jpg").write_bytes(b"1")
+        (tmp_path / "keep.jpg").write_bytes(b"2")
+
+        assert [p.name for p in walk_media_files(tmp_path, [".jpg"])] == ["keep.jpg"]
+
+    def test_empty_tree(self, tmp_path):
+        from filecluster.utlis import walk_media_files
+
+        assert walk_media_files(tmp_path, [".jpg"]) == []
+
+
+# ---------------------------------------------------------------------------
+# Sidecar detection
+# ---------------------------------------------------------------------------
+class TestFindSidecarFiles:
+    def test_replaced_extension_sidecar(self, tmp_path):
+        from filecluster.utlis import find_sidecar_files
+
+        media = tmp_path / "IMG_1.jpg"
+        media.write_bytes(b"photo")
+        (tmp_path / "IMG_1.xmp").write_bytes(b"meta")
+
+        assert [p.name for p in find_sidecar_files(media)] == ["IMG_1.xmp"]
+
+    def test_appended_extension_sidecar(self, tmp_path):
+        from filecluster.utlis import find_sidecar_files
+
+        media = tmp_path / "IMG_1.jpg"
+        media.write_bytes(b"photo")
+        (tmp_path / "IMG_1.jpg.xmp").write_bytes(b"meta")
+
+        assert [p.name for p in find_sidecar_files(media)] == ["IMG_1.jpg.xmp"]
+
+    def test_similar_stem_is_not_a_sidecar(self, tmp_path):
+        from filecluster.utlis import find_sidecar_files
+
+        media = tmp_path / "IMG_1.jpg"
+        media.write_bytes(b"photo")
+        (tmp_path / "IMG_12.xmp").write_bytes(b"other photo's meta")
+
+        assert find_sidecar_files(media) == []
+
+    def test_other_media_is_not_a_sidecar(self, tmp_path):
+        from filecluster.utlis import find_sidecar_files
+
+        media = tmp_path / "IMG_1.jpg"
+        media.write_bytes(b"photo")
+        (tmp_path / "IMG_1.mp4").write_bytes(b"live photo video")
+
+        assert find_sidecar_files(media) == []
+
+    def test_multiple_sidecars_are_sorted(self, tmp_path):
+        from filecluster.utlis import find_sidecar_files
+
+        media = tmp_path / "IMG_1.jpg"
+        media.write_bytes(b"photo")
+        (tmp_path / "IMG_1.xmp").write_bytes(b"a")
+        (tmp_path / "IMG_1.aae").write_bytes(b"b")
+
+        assert [p.name for p in find_sidecar_files(media)] == [
+            "IMG_1.aae",
+            "IMG_1.xmp",
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Event-folder names
+# ---------------------------------------------------------------------------
+class TestEventFolderNames:
+    def test_recognises_event_folder(self):
+        from filecluster.utlis import is_event_folder_name
+
+        assert is_event_folder_name("[2024_01_15]_birthday")
+        assert not is_event_folder_name("birthday")
+
+    def test_extracts_year(self):
+        from filecluster.utlis import extract_year_from_folder
+
+        assert extract_year_from_folder("[2024_01_15]_birthday") == "2024"
+        assert extract_year_from_folder("nope") is None
+
+    def test_extracts_date(self):
+        from filecluster.utlis import extract_date_from_folder
+
+        assert extract_date_from_folder("[2024_01_15]_x") == "2024_01_15"
+        assert extract_date_from_folder("nope") is None
