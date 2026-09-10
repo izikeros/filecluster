@@ -11,12 +11,17 @@ Python library for creating image and video catalog. Catalog is organized by the
 - detecting media belonging to events that are already in the library
 - assigning imported media to an event already present in the library
 - marking folders of events with a large amount of media (folder suffix: `_rich`)
-- never overwrites: a destination name already taken gets a numeric suffix
-- dry run (`-n`) that shows the full plan without touching a file
+- never overwrites: a destination name already taken gets a numeric suffix,
+  claimed again at write time so a file created after planning is safe too
+- dry run (`-n`) that shows the full plan without writing anything at all, not
+  even the hash catalog
 - output stays compact whether you import 8 files or 50,000
+- maintenance commands: `reconcile` merges a folder into the library, `dedup`
+  finds files stored twice inside one tree, `catalog` inspects and repairs the
+  per-library SQLite index
 
 ### Installation
-Requires Python 3.10 or newer. The recommended way to install is with `uv`:
+Requires Python 3.12 or newer. The recommended way to install is with `uv`:
 
 ```bash
 uv sync            # dependencies + the `filecluster` command in .venv/bin
@@ -33,29 +38,31 @@ On Windows to have numpy working, one might need to install:
 
 [vc_redist.x64.exe](https://aka.ms/vs/15/release/vc_redist.x64.exe)
 
-### Usage
-Installing the package provides the `filecluster` command.
+### Quick start
+Installing the package provides the `filecluster` command with four
+subcommands. All of them change nothing until you say so.
 
-Preview what would happen, without touching a single file:
 ```bash
-$ filecluster -i inbox -o clustered --no-operation
-```
+# 1. sort a flat folder into event folders — preview first
+filecluster -i inbox -o clustered --no-operation
 
-On a huge inbox, cap the ingestion to get a preview in seconds. `--limit` takes
-the first N files in name order, so repeated previews stay comparable:
-```bash
-$ filecluster -i inbox -o clustered --no-operation --limit 500
-```
+# 2. run it for real, matching against a library you already have
+filecluster -i inbox -o clustered -w zdjecia --drop-duplicates --use-existing-clusters
 
-Then run it for real, matching against an existing library:
-```bash
-$ filecluster -i inbox -o clustered -w zdjecia --drop-duplicates --use-existing-clusters
+# 3. merge an already-organised folder into that library
+filecluster reconcile -s to_sort -l zdjecia          # add --execute to apply
+
+# 4. find photos stored twice inside one tree
+filecluster dedup -d zdjecia                         # add -q DIR --execute to quarantine
+
+# 5. inspect the per-library index
+filecluster catalog stats -l zdjecia
 ```
 
 A dry run over a small inbox looks like this:
 
 ```
-  filecluster 0.5.0
+  filecluster 0.6.2
   Inbox   inbox
   Output  clustered
   Watch   none
@@ -96,12 +103,31 @@ A dry run over a small inbox looks like this:
 ```
 
 Before writing anything it asks for confirmation. Pass `--yes` to skip the
-prompt; when the output is not a terminal (cron, pipelines) it proceeds on its
-own.
+prompt; a non-interactive session (cron, pipelines) proceeds on its own.
 
 Output stays this compact no matter how many files are processed: per-file
 detail goes to a progress bar while a phase runs, or to `--report FILE`, never
 to the scrollback. Logs go to stderr, so `stdout` can be piped safely.
+
+### Documentation
+**[User guide](docs/user-guide.md)** — organised by task, with the full option
+reference for every command:
+
+- [Sort a flat folder into event folders](docs/user-guide.md#sort-a-flat-folder-into-event-folders)
+- [Import into an existing library](docs/user-guide.md#import-into-an-existing-library)
+- [Preview a large import](docs/user-guide.md#preview-a-large-import)
+- [Merge an organised folder into the library](docs/user-guide.md#merge-an-organised-folder-into-the-library) (`reconcile`)
+- [Find files stored twice in one tree](docs/user-guide.md#find-files-stored-twice-in-one-tree) (`dedup`)
+- [Look after the catalog](docs/user-guide.md#look-after-the-catalog) (`catalog`)
+- [Change the defaults](docs/user-guide.md#change-the-defaults) (environment variables)
+- [Automation and scripting](docs/user-guide.md#automation-and-scripting) (`--json`, exit codes)
+- [Troubleshooting](docs/user-guide.md#troubleshooting)
+- [Command reference](docs/user-guide.md#command-reference)
+
+**[Curation subpackage](docs/curation.md)** — the experimental
+`filecluster.curation` cascade that sorts an inbox into keep / review / reject
+before clustering: how to run it, how the decision is made, its current
+limitations and what is still pending.
 
 ### How the clustering works
 Files are sorted by timestamp and split wherever the gap between two
@@ -124,49 +150,10 @@ Timestamps come from EXIF where available, from the QuickTime atom for `.mov`
 files, and from the filesystem otherwise. The summary reports how many files
 fell back to a filesystem timestamp, since those dates are the least reliable.
 
-Run options:
-```
-Usage: filecluster [OPTIONS]
-
-  Group photos and videos into event folders based on their timestamps.
-
-  -i, --inbox-dir DIRECTORY       Directory with input media files to process
-  -o, --output-dir DIRECTORY      Directory where clustered media will be placed
-  -w, --watch-dir DIRECTORY       Existing media library to match against. Repeatable
-  -t, --development-mode          Use the development test directories
-  -n, --no-operation              Dry run: show the plan, change nothing
-  -y, --copy-mode                 Copy files instead of moving
-  -f, --force-deep-scan           Recompute cluster info for every existing cluster
-  -d, --drop-duplicates           Put duplicates in a separate folder instead of clustering
-  -c, --use-existing-clusters     Assign media to clusters already in the watch folders
-  -r, --restore-original-names    Strip copy suffixes such as '-Kopiuj(1)' or ' - Copy'
-  -l, --limit INTEGER             Ingest at most this many inbox files, in name order
-  -Y, --yes                       Do not ask for confirmation before writing
-      --show INTEGER              How many of the largest clusters to list (0 = all)  [20]
-      --report FILE               Write the full per-file operation list to this CSV
-      --json                      Print a machine-readable summary instead
-      --color / --no-color        Force colour on or off
-  -v, --verbose                   -v for info, -vv for debug
-  -q, --quiet                     Only report errors
-  -V, --version                   Show the version and exit
-  -h, --help                      Show this message and exit
-```
-
-`-d` and `-c` compare the inbox against the library, so both require at least
-one `-w` watch folder.
-
-### Scripting
-`--json` replaces the rendered summary with a single JSON document on stdout
-(counts, per-cluster sizes, diagnostics, elapsed time), so a run can be checked
-from a script:
-
-```bash
-$ filecluster -i inbox -o clustered -n --json | jq '.new_clusters, .duplicates'
-```
-
-`--report FILE` writes every planned or performed operation to CSV
-(`operation,source,destination_folder,destination`). That is where per-file
-detail belongs on a large import, instead of the terminal.
+Duplicate detection is exact-content, never perceptual, and uses a three-level
+cascade — file size, then MD5 of the first 1 MB, then full SHA1 — so a library
+where most files are unique is barely read. Hashes are cached in each library's
+`.filecluster.db` and re-used while the file's size and mtime still match.
 
 ### Configuration
 Defaults live in `src/filecluster/configuration.py` and can be overridden with
@@ -177,9 +164,8 @@ touching the code:
 $ FILECLUSTER_TIME_GRANULARITY_MINUTES=180 filecluster -i inbox -o clustered -n
 ```
 
-Useful settings: `TIME_GRANULARITY_MINUTES` (event gap), `IMAGE_EXTENSIONS`,
-`VIDEO_EXTENSIONS`, `INBOX_DIR`, `OUTBOX_DIR`. List settings take a JSON array,
-for example `FILECLUSTER_VIDEO_EXTENSIONS='[".mp4", ".mov"]'`.
+See [Change the defaults](docs/user-guide.md#change-the-defaults) for the
+settings that matter most.
 
 Exit codes: `0` success or a declined confirmation, `2` bad usage or
 environment, `130` interrupted.
@@ -187,7 +173,7 @@ environment, `130` interrupted.
 ### Development
 ```bash
 uv sync --group dev   # install dev dependencies
-make test             # pytest (325 tests)
+make test             # pytest
 make run-ci           # format check, lint, type check, tests
 make help             # all targets
 ```
@@ -198,17 +184,9 @@ are managed with `make bump-patch`, `bump-minor` or `bump-major`, which update
 
 `tests/assets/` holds a small end-to-end fixture set: an inbox (`set_1`) plus
 two library folders (`zdjecia`, `clusters`). See `tests/assets/README.md` for
-what each file exercises. To try the CLI by hand, copy the fixtures somewhere
-scratch first, keeping their timestamps, so a MOVE run cannot damage them:
-
-```bash
-mkdir -p /tmp/fc-demo
-cp -Rp tests/assets/set_1 /tmp/fc-demo/inbox
-filecluster -i /tmp/fc-demo/inbox -o /tmp/fc-demo/out -n
-```
-
-`cp -Rp` matters: five of the fixture files carry no EXIF date, so without
-preserved timestamps they all fall into a single present-day event.
+what each file exercises, and
+[Trying it on the bundled fixtures](docs/user-guide.md#trying-it-on-the-bundled-fixtures)
+for a safe way to drive the CLI by hand.
 
 ## Graphical Interface
 There is available experimental graphical interface: (`src/filecluster/gui.py`).

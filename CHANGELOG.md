@@ -31,21 +31,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`filecluster reconcile` command** — checks whether files in a source
   directory (inbox or filecluster output dirs with event folders) already exist
   in the main library, then moves duplicates aside and integrates new files.
-  - Auto-detects event-folder mode (`[YYYY_MM_DD]…` subdirs) vs flat inbox mode.
+  - Auto-detects event-folder mode (`[YYYY_MM_DD]…` subdirs), flat inbox mode,
+    and sources that mix the two.
   - Uses the same 3-level matching cascade as `mark_inbox_duplicates`:
     size → partial hash (1 MB MD5) → full hash (SHA1).
-  - Classifies each file as DUPLICATE, NEW, or NAME_COLLISION; in event-folder
-    mode, each folder gets an aggregate status (ALL_DUPLICATE, ALL_NEW, PARTIAL).
-  - Dry-run by default; `--execute` applies moves.
+  - Classifies each file as DUPLICATE, NEW, or SOURCE_DUPLICATE (duplicated
+    inside the source itself); in event-folder mode each folder also gets an
+    aggregate status (ALL_DUPLICATE, ALL_NEW, PARTIAL).
+  - Walks the source recursively, and keeps companion files (`.xmp`, `.aae`,
+    `.thm`, `.lrv`, …) and `.cluster.ini` with the media they belong to.
+  - Matches against several libraries (`-l` is repeatable) and reports every
+    library copy of a duplicate, not just the first.
+  - Dry-run by default; `--execute` applies. `-y`/`--copy-mode` copies instead
+    of moving, `--scan-only` reports without planning any move.
   - `--report` exports a per-file CSV; `--json` prints a machine-readable summary.
   - `-f`/`--force-reindex` backs up the existing `.filecluster.db` catalog with
     a timestamp, clears it, and eagerly recomputes all partial hashes.
-- `LibraryCatalog.backup()` creates a timestamped `.bak` copy of the SQLite catalog.
-- `LibraryCatalog.clear_file_hashes()` deletes all file-hash rows for a clean reindex.
+- **`filecluster dedup` command** — finds media stored more than once inside a
+  single directory tree, in the same folder or across folders. Picks one
+  canonical copy per group (prefers a file in an event folder, without a
+  `-Kopiuj`/` - Copy` suffix, highest up the tree), reports how much space is
+  reclaimable, and with `-q`/`--quarantine-dir` moves the redundant copies out
+  while preserving their path relative to the scanned root.
+- **`filecluster catalog` command** — `stats`, `backup`, `restore` and
+  `verify [--prune]` subcommands for the per-library SQLite index.
+- `LibraryCatalog`: `backup()`, `restore()`, `list_backups()`,
+  `clear_file_hashes()`, `delete_file_rows()`, `stats()`, `verify()` and
+  `vacuum()`. `get_file_records()` returns `FileRecord`s carrying `mtime`.
+- `file_operations.DestinationAllocator` and `unique_name()`: reusable
+  collision-free destination allocation, now shared by the clustering plan,
+  `reconcile` and `dedup`.
+- `utlis`: `get_partial_hash()`, `PARTIAL_HASH_SIZE`, `walk_media_files()`,
+  `find_sidecar_files()`, `is_sidecar_file()`, `is_event_folder_name()`,
+  `extract_year_from_folder()`, `extract_date_from_folder()`.
+- **`docs/user-guide.md`** — task-oriented guide ("I want to …") covering every
+  command, with real terminal output, the destination rules for `reconcile`,
+  the quarantine workflow for `dedup`, catalog maintenance, configuration,
+  scripting with `--json`, troubleshooting, and a full option reference.
+- `filecluster catalog stats` now reports how many catalog backups exist and
+  names the newest one, which is the one `restore` picks by default.
+- `exceptions.OverlappingPathsError`, raised when two directories that must stay
+  separate are the same or nested.
+- `LibraryCatalog.open(read_only=True)` for previews: reuses an existing catalog
+  without creating one, and refuses every write.
+- `file_operations.reserve_exclusive()` and `numbered_name()`, the write-time
+  half of the overwrite guarantee.
 
 ### Changed
-- CLI restructured as a multi-command app (`run` + `reconcile`). Bare invocation
-  (`filecluster -i … -o …`) still defaults to `run` for full backwards compatibility.
+- README trimmed to overview, installation, quick start and how clustering
+  works; the per-command walkthroughs and option tables moved to
+  `docs/user-guide.md`.
+- `requires-python` raised from `>=3.10` to `>=3.12`, matching the Python
+  version the code needs (`enum.StrEnum`, `datetime.UTC`) and the one ruff and
+  `ty` already target. The README states the same version.
+- CLI restructured as a multi-command app (`run`, `reconcile`, `dedup`,
+  `catalog`). Bare invocation (`filecluster -i … -o …`) still defaults to `run`
+  for full backwards compatibility.
+- `get_partial_hash()` and `PARTIAL_HASH_SIZE` moved from `image_grouper` to
+  `utlis` and are re-exported, so existing imports keep working.
+- `ty` now type-checks against Python 3.12 instead of inferring 3.10 from
+  `requires-python`, which had it reporting `enum.StrEnum` and `datetime.UTC`
+  as missing.
+
+### Fixed
+- `filecluster reconcile` was registered as `reconcile-cmd`, so the documented
+  command name did not exist.
+- Reconcile could overwrite library files: a collision was detected but the
+  destination was left unchanged, and `shutil.move` replaces silently on POSIX.
+  Every destination now goes through `DestinationAllocator`.
+- Cached file hashes were trusted without checking `mtime`, so a file edited
+  in place (same size, new content) could be reported as a duplicate of its
+  former self. A cache entry is now used only while size *and* mtime match.
+- A source holding one event folder plus loose files silently skipped the loose
+  files.
+- Moving an event folder was not recursive, leaving sidecars, `.cluster.ini`
+  and nested media behind.
+- **Data loss: reconciling overlapping folders emptied the library.** Passing
+  the same directory (or a symlinked alias, or a nested subdirectory) as both
+  source and library made every file match itself, and `--execute` moved the
+  whole library into the duplicates folder. `reconcile` now rejects overlapping
+  source, library and duplicates roots with `OverlappingPathsError` before
+  opening a catalog or reading a file. A duplicates folder inside the source is
+  refused for the same reason.
+- **Data loss: collision protection ignored directories and symlinks.** The
+  allocator only claimed names of regular files, so an existing directory made
+  a move nest the file inside it, and a destination symlink redirected the write
+  to its target, outside the library. Every directory entry is claimed now.
+- **Data loss: a file created after planning was silently overwritten.** Names
+  were claimed against a directory listing, leaving a time-of-check gap that
+  `shutil.move` and `copy2` would happily overwrite. Each destination is now
+  reserved with `O_CREAT | O_EXCL` at write time and gets a numeric suffix if it
+  was taken meanwhile; moves use `os.replace` onto that reservation, and a
+  failed write removes only the placeholder it created.
+- **Catalog backups could omit committed data.** `backup()` checkpointed the WAL
+  and copied the database file, but a checkpoint fails silently while another
+  connection holds a read snapshot, leaving those rows out of the `.bak`. It now
+  uses SQLite's own backup API, and a partial backup is deleted rather than left
+  for `catalog restore` to offer.
+- `catalog restore` validated nothing, so a truncated or corrupt backup could
+  replace a working catalog. The backup is opened and checked first.
+- `--no-sidecars` still moved sidecars that sat inside an event folder: they were
+  skipped as sidecars and then swept up again as generic extra files.
+- **Dry runs wrote to disk.** Previewing `reconcile` or `dedup` created a
+  `.filecluster.db` in the scanned tree, and `reconcile -f` cleared the cached
+  hashes even without `--execute`. Both now open the catalog read-only, so a
+  preview leaves the tree byte-identical; `LibraryCatalog` refuses every write
+  on a read-only handle.
+- The same library passed twice (`-l LIB -l LIB`, or via a symlink) was indexed
+  twice, reporting every file as its own duplicate.
 
 ## [0.6.2] - 2026-09-09
 
