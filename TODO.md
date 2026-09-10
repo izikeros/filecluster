@@ -14,6 +14,18 @@ TODO list
 - [REFA] rename `duplicated_cluster` in `inbox_media_df` to `ref_cluster` that should be filled in in case of duplicates and existing clusters and used to create target path
 - [IMPR] take minimum date from mtime, ctime, exif date
 
+Curation cascade (`src/filecluster/curation`, see docs/curation.md for detail):
+- [TASK] build a labelled evaluation set from the own library (split by event, not at random) - blocks calibration
+- [TASK] calibrate weights and thresholds, and fit a calibration map so the scores become probabilities
+- [TASK] validate the SigLIP semantic stage on real files: per-label precision/recall, prompt-bank iteration, MPS vs CPU throughput
+- [FEAT] close the feedback loop: capture user corrections, store embeddings, train the preference model
+- [FEAT] implement the aesthetic provider (NIMA / MUSIQ / TOPIQ); the seam is ready
+- [FEAT] implement the local VLM provider; response parsing and prompt are done
+- [FEAT] wire `curate` into the main CLI, then `filecluster run --curate` sharing one inbox pass
+- [FEAT] `curate cache` subcommand for stats / prune / vacuum (catalog methods already exist)
+- [IMPR] batch the semantic stage instead of one image per forward pass
+- [IMPR] decode one keyframe so videos get pixel and semantic signals instead of always going to review
+
 FIXMEs:
 - for the iphone videos (or videos in general) take creation date, not modification date
 - why '[2020_01_23]_Wystep_Hani' has no date info. In case exif not available, mdate/cdate should be taken. Is this windows problem?

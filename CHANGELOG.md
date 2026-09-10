@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`filecluster.curation` subpackage** — cascaded photo curation that sorts an
+  inbox into `keep` / `review` / `reject` before clustering, so screenshots,
+  receipts, documents and product shots never enter the photo library.
+  - Cheap stages first: filename and EXIF rules with a versioned screen-size
+    table, then a single-decode pixel pass (sharpness, exposure, contrast,
+    entropy, colourfulness, edge density, uniform background).
+  - Model-backed stages (semantic labelling, OCR density, aesthetics, VLM
+    escalation) sit behind injected providers with lazy imports; install them
+    with `pip install "filecluster[curation]"`.
+  - Safety asymmetry: nothing is deleted, unknowns and failures go to `review`,
+    and automatic `reject` needs semantic evidence or a decisive screenshot
+    marker. Protected subjects (people, pets, home, events) block reject.
+  - SQLite verdict cache keyed by content hash plus pipeline, config and model
+    fingerprints; CSV report and aggregate-only JSON summary.
+  - Runnable standalone today (`python -m filecluster.curation -i inbox -o out`)
+    and wired into the main CLI with one line when desired.
+  - **`docs/curation.md`** — reference for the subpackage: decision model, the
+    six cascade stages, signal and reason-code vocabulary, configuration, cache
+    invalidation, extension points, current limitations, and the pending work
+    needed to reach the design's full potential.
 - **`filecluster reconcile` command** — checks whether files in a source
   directory (inbox or filecluster output dirs with event folders) already exist
   in the main library, then moves duplicates aside and integrates new files.

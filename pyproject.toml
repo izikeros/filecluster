@@ -23,6 +23,21 @@ requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
 
+[project.optional-dependencies]
+# Model-backed curation stages. Kept optional so a plain `filecluster run`
+# never pulls an ML runtime; without them curation falls back to the cheap
+# metadata and pixel stages and routes the uncertain cases to review.
+curation = [
+    "torch>=2.2.0",
+    "transformers>=4.45.0",
+    "rapidocr-onnxruntime>=1.3.0",
+]
+# Vision-language escalation for the residual band; a separate extra because
+# the checkpoints are large and the backend is not implemented yet.
+curation-vlm = [
+    "filecluster[curation]",
+]
+
 [project.scripts]
 filecluster = "filecluster.cli:app"
 

@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "comment": "Prompt bank for the semantic stage. Several prompts per class keep a label from depending on one phrasing. Bump 'version' on any edit: it is part of the cache fingerprint.",
+  "labels": {
+    "personal_people": [
+      "a personal family photograph with people",
+      "a candid photograph of friends or relatives",
+      "a snapshot of people together at home or outdoors"
+    ],
+    "family_home": [
+      "a photograph taken inside a family home",
+      "an everyday domestic scene photographed by a family member"
+    ],
+    "portrait": [
+      "a portrait photograph of one person",
+      "a close-up photograph of somebody's face"
+    ],
+    "landscape": [
+      "a landscape photograph of nature",
+      "a photograph of mountains, forest, sea or fields"
+    ],
+    "city_travel": [
+      "a travel photograph of a city street or landmark",
+      "a holiday photograph taken while travelling"
+    ],
+    "event": [
+      "a photograph from a celebration such as a birthday or wedding",
+      "a photograph of people at a party or ceremony"
+    ],
+    "pet": [
+      "a photograph of a pet dog or cat",
+      "a photograph of a domestic animal at home"
+    ],
+    "artistic_photo": [
+      "an artistic photograph with deliberate composition",
+      "a fine art photograph"
+    ],
+    "screenshot": [
+      "a screenshot from a mobile phone application",
+      "a captured phone screen with user interface elements",
+      "a screenshot of a desktop computer window"
+    ],
+    "document": [
+      "a photograph or scan of a printed document",
+      "a photographed sheet of paper with printed text"
+    ],
+    "receipt_invoice": [
+      "a photo of a receipt, bill, or invoice",
+      "a photographed paper receipt with prices and totals"
+    ],
+    "book_page": [
+      "a photograph of a page of a book",
+      "a photographed page of printed text from a book or magazine"
+    ],
+    "label_packaging": [
+      "a photograph of a product label or packaging",
+      "a close-up photograph of a barcode or an ingredients list"
+    ],
+    "product_reference": [
+      "a reference photograph of a product taken for shopping purposes",
+      "a photograph of an object taken to remember a model or price"
+    ],
+    "whiteboard_notes": [
+      "a photograph of a whiteboard with handwritten notes",
+      "a photograph of handwritten notes on paper"
+    ],
+    "low_information": [
+      "a blurry accidental photograph with no clear subject",
+      "an almost empty photograph of a wall, floor or dark frame"
+    ],
+    "other": [
+      "a photograph that does not fit any other category"
+    ]
+  },
+  "negative": [
+    "a photograph taken with a camera",
+    "a screenshot of a computer or phone screen"
+  ]
+}

@@ -11,9 +11,12 @@ subdirectories)
 * add sidecar with location to cr2 files if location available in photos
 from phone
 * deep learning:
-    * detect blurry photos
+    * detect blurry photos — done for the curation cascade (`technical_quality`)
     * face detection
-    * detect documents
+    * detect documents — done in `filecluster.curation` (metadata + pixel +
+      semantic stages); see `docs/curation.md`
     * detect Natalia's selfies
     * detect photo series (similar shots) (low resolution comparison?)
-    * learn which is best photo (representative photo)
+    * learn which is best photo (representative photo) — the preference model in
+      `filecluster.curation.providers.preference` is the start; it still needs a
+      feedback path and an aesthetic provider
