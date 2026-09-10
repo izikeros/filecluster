@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-10
+
 ### Added
 - **`filecluster.curation` subpackage** — cascaded photo curation that sorts an
   inbox into `keep` / `review` / `reject` before clustering, so screenshots,
