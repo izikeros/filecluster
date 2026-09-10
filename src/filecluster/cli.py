@@ -1,9 +1,10 @@
 """Command line interface.
 
-Thin wrapper around :func:`filecluster.file_cluster.main`: it parses options,
-sets up rendering, and turns exceptions into readable messages. All layout
-decisions live in :mod:`filecluster.ui`, and all orchestration in
-``file_cluster``, so this module stays free of both.
+Thin wrapper around :func:`filecluster.file_cluster.main` and
+:func:`filecluster.reconcile.reconcile`: it parses options, sets up
+rendering, and turns exceptions into readable messages.  All layout decisions
+live in :mod:`filecluster.ui`, and all orchestration in ``file_cluster`` /
+``reconcile``, so this module stays free of both.
 """
 
 from __future__ import annotations
@@ -12,7 +13,9 @@ import json
 from pathlib import Path
 from typing import Annotated, Any, NoReturn
 
+import click
 import typer
+from typer.core import TyperGroup
 
 from filecluster import ui
 from filecluster.configuration import CopyMode
@@ -26,9 +29,30 @@ EXIT_FAILURE = 1
 EXIT_USAGE = 2
 EXIT_INTERRUPTED = 130
 
+
+class _DefaultRunGroup(TyperGroup):
+    """Typer group that falls back to the ``run`` subcommand.
+
+    When the first CLI token is not a known subcommand name, ``run`` is
+    prepended so that ``filecluster -i … -o …`` keeps working after
+    ``reconcile`` was added as a second command.
+    """
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        # If the first token is not a registered command name, assume ``run``.
+        if args and args[0] not in self.commands:
+            args = ["run", *args]
+        # Bare invocation (no args at all) also defaults to ``run``.
+        if not args:
+            args = ["run"]
+        return super().parse_args(ctx, args)
+
+
 app = typer.Typer(
+    cls=_DefaultRunGroup,
     add_completion=False,
     no_args_is_help=False,
+    invoke_without_command=True,
     context_settings={"help_option_names": ["-h", "--help"]},
     help="Group photos and videos into event folders based on their timestamps.",
 )
@@ -253,6 +277,152 @@ def run(  # noqa: C901 - a CLI entry point is a flat list of options by nature
         if config.mode == CopyMode.NOP and plan is not None:
             ui.plan_preview(console, plan.destinations, str(config.out_dir_name))
         ui.render_diagnostics(console, verbose=verbose)
+        console.print()
+
+    raise typer.Exit(EXIT_OK)
+
+
+@app.command()
+def reconcile_cmd(  # noqa: C901
+    source: Annotated[
+        Path,
+        typer.Option(
+            "-s",
+            "--source",
+            help="Directory to reconcile (inbox or output dir with event folders).",
+            exists=True,
+            file_okay=False,
+            readable=True,
+        ),
+    ],
+    library: Annotated[
+        Path,
+        typer.Option(
+            "-l",
+            "--library",
+            help="Main photo library root.",
+            exists=True,
+            file_okay=False,
+            readable=True,
+        ),
+    ],
+    duplicates_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "-d",
+            "--duplicates-dir",
+            help="Where to move confirmed duplicates. Defaults to <source>/../duplicates.",
+            file_okay=False,
+        ),
+    ] = None,
+    execute: Annotated[
+        bool,
+        typer.Option(
+            "--execute",
+            help="Apply the plan (move files). Without this flag nothing is written.",
+        ),
+    ] = False,
+    report: Annotated[
+        Path | None,
+        typer.Option(
+            "--report",
+            help="Write a per-file CSV report to this path.",
+            dir_okay=False,
+            writable=True,
+        ),
+    ] = None,
+    force_reindex: Annotated[
+        bool,
+        typer.Option(
+            "-f",
+            "--force-reindex",
+            help=(
+                "Rebuild the library index from scratch. Backs up the existing "
+                "catalog before clearing it."
+            ),
+        ),
+    ] = False,
+    as_json: Annotated[
+        bool,
+        typer.Option("--json", help="Print a machine-readable JSON summary."),
+    ] = False,
+    color: Annotated[
+        bool | None,
+        typer.Option("--color/--no-color", help="Force colour on or off."),
+    ] = None,
+    verbose: Annotated[
+        int,
+        typer.Option("-v", "--verbose", count=True, help="-v for info, -vv for debug."),
+    ] = 0,
+    quiet: Annotated[
+        bool,
+        typer.Option("-q", "--quiet", help="Only report errors."),
+    ] = False,
+) -> None:
+    """Reconcile a source directory against the main photo library.
+
+    Checks which source files already exist in the library (by content hash)
+    and plans to move duplicates aside and new files into the library.
+    Dry-run by default; pass --execute to apply.
+    """
+    from filecluster.reconcile import reconcile
+
+    ui.configure_logging(verbosity=verbose, quiet=quiet)
+    render = not as_json and not quiet
+    console = ui.make_console(color=False if as_json else color)
+    err_console = ui.make_console(stderr=True, color=color)
+    reporter = (
+        ui.RichReporter(console, verbose=verbose) if render else ui.NullReporter()
+    )
+
+    dup_dir = duplicates_dir or (source.parent / "duplicates")
+
+    try:
+        if render:
+            ui.reconcile_banner(console, source, library, dup_dir, execute)
+
+        with reporter.phase("Index library") as phase:
+            # Phase is used for the spinner; the actual progress is inside reconcile
+            pass
+
+        with reporter.phase("Reconcile") as phase:
+            plan = reconcile(
+                source=source,
+                library=library,
+                duplicates_dir=dup_dir,
+                execute=execute,
+                force_reindex=force_reindex,
+                progress=phase,
+            )
+            phase.detail = f"{plan.n_new} new, {plan.n_duplicates} dup"
+
+    except KeyboardInterrupt:
+        ui.error_panel(err_console, "Interrupted. No further files were touched.")
+        raise typer.Exit(EXIT_INTERRUPTED) from None
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        _fail(err_console, exc, verbose, hint="Check the -s and -l paths.")
+    except PermissionError as exc:
+        _fail(err_console, exc, verbose, hint="Check file and folder permissions.")
+    except ValueError as exc:
+        _fail(err_console, exc, verbose)
+
+    if report is not None:
+        n_rows = plan.write_csv(report)
+        if render:
+            console.print(
+                f"\n  [dim]Wrote {ui.fmt_count(n_rows)} rows to {report}[/]",
+                highlight=False,
+            )
+
+    if as_json:
+        typer.echo(json.dumps(plan.summary_dict(), indent=2))
+        raise typer.Exit(EXIT_OK)
+
+    if render:
+        ui.reconcile_results(console, plan)
+        if plan.folder_results:
+            ui.reconcile_folder_table(console, plan)
+        ui.reconcile_plan_preview(console, plan, execute)
         console.print()
 
     raise typer.Exit(EXIT_OK)

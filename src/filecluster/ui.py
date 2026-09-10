@@ -715,6 +715,166 @@ def write_report(path: Path | str, plan, config) -> int:
     return len(rows)
 
 
+# ---------------------------------------------------------------------------
+# Reconcile renderers
+# ---------------------------------------------------------------------------
+def reconcile_banner(
+    console: Console,
+    source: Path,
+    library: Path,
+    duplicates_dir: Path,
+    execute: bool,
+) -> None:
+    """Show the reconcile configuration before work starts."""
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", width=12)
+    grid.add_column(overflow="fold")
+    grid.add_row("Source", str(source))
+    grid.add_row("Library", str(library))
+    grid.add_row("Duplicates", str(duplicates_dir))
+    grid.add_row("Mode", "[bold]EXECUTE[/]" if execute else "[bold]DRY RUN[/]")
+
+    console.print()
+    console.print(f"  [bold cyan]filecluster reconcile[/] [dim]{get_version()}[/]")
+    console.print(_indent(grid))
+    console.print()
+
+
+def reconcile_results(console: Console, plan) -> None:
+    """Render the reconcile summary as an aligned table of counts."""
+    rows: list[tuple[str, str]] = [
+        ("Source mode", plan.source_mode.value),
+        ("Total files", fmt_count(len(plan.file_matches))),
+        ("Duplicates", fmt_count(plan.n_duplicates)),
+        ("New files", fmt_count(plan.n_new)),
+    ]
+    if plan.n_name_collisions:
+        rows.append(("Name collisions", fmt_count(plan.n_name_collisions)))
+    if plan.folder_results:
+        from filecluster.reconcile import FolderStatus
+
+        n_all_dup = sum(
+            1 for f in plan.folder_results if f.status == FolderStatus.ALL_DUPLICATE
+        )
+        n_all_new = sum(
+            1 for f in plan.folder_results if f.status == FolderStatus.ALL_NEW
+        )
+        n_partial = sum(
+            1 for f in plan.folder_results if f.status == FolderStatus.PARTIAL
+        )
+        rows.append(("Folders (all dup)", fmt_count(n_all_dup)))
+        rows.append(("Folders (all new)", fmt_count(n_all_new)))
+        rows.append(("Folders (partial)", fmt_count(n_partial)))
+    rows.append(("Planned moves", fmt_count(plan.n_moves)))
+
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", width=_LABEL_WIDTH)
+    grid.add_column(justify="right", style="bold")
+    for label, value in rows:
+        grid.add_row(label, value)
+
+    console.print()
+    console.print("  [bold]Results[/]")
+    console.print(_indent(grid))
+
+
+def reconcile_folder_table(
+    console: Console,
+    plan,
+    limit: int = MAX_CLUSTER_ROWS,
+) -> None:
+    """Per-folder status table for event-folder mode."""
+    if not plan.folder_results:
+        return
+
+    from filecluster.reconcile import FolderStatus
+
+    _status_style = {
+        FolderStatus.ALL_DUPLICATE: "[red]all duplicate[/]",
+        FolderStatus.ALL_NEW: "[green]all new[/]",
+        FolderStatus.PARTIAL: "[yellow]partial[/]",
+    }
+
+    table = Table(
+        box=None,
+        pad_edge=False,
+        show_header=True,
+        header_style="dim",
+        padding=(0, 2),
+    )
+    table.add_column("Folder", overflow="ellipsis", no_wrap=True, max_width=52)
+    table.add_column("Files", justify="right")
+    table.add_column("Dup", justify="right")
+    table.add_column("New", justify="right")
+    table.add_column("Status")
+
+    shown = plan.folder_results[:limit] if limit > 0 else plan.folder_results
+    for fr in shown:
+        table.add_row(
+            fr.folder_name,
+            fmt_count(len(fr.files)),
+            fmt_count(fr.n_duplicates),
+            fmt_count(fr.n_new),
+            _status_style.get(fr.status, str(fr.status)),
+        )
+
+    console.print()
+    console.print("  [bold]Folders[/]")
+    console.print(_indent(table))
+
+    remaining = plan.folder_results[len(shown) :]
+    if remaining:
+        console.print(f"    [dim]… and {fmt_count(len(remaining))} more folders[/]")
+
+
+def reconcile_plan_preview(
+    console: Console,
+    plan,
+    executed: bool,
+    limit: int = MAX_TREE_FOLDERS,
+) -> None:
+    """Tree view of planned (or executed) moves."""
+    from filecluster.reconcile import MoveOp
+
+    moves = [op for op in plan.ops if isinstance(op, MoveOp)]
+    if not moves:
+        return
+
+    # Group by destination directory
+    grouped: dict[str, list[tuple[str, str]]] = {}
+    for op in moves:
+        folder = str(op.dst.parent)
+        grouped.setdefault(folder, []).append((op.src.name, op.dst.name))
+
+    ordered = sorted(grouped.items(), key=lambda item: len(item[1]), reverse=True)
+    shown = ordered if limit <= 0 else ordered[:limit]
+
+    tree = Tree("[bold]Moves[/]")
+    for folder, entries in shown:
+        node = tree.add(f"[cyan]{folder}[/] [dim]{fmt_files(len(entries))}[/]")
+        for src, dst in entries[:MAX_TREE_SAMPLES]:
+            label = src if src == dst else f"{src} [yellow]→ {dst}[/]"
+            node.add(f"[dim]{label}[/]")
+        hidden = len(entries) - MAX_TREE_SAMPLES
+        if hidden > 0:
+            node.add(f"[dim]… {fmt_count(hidden)} more[/]")
+
+    console.print()
+    if executed:
+        console.print("  [bold]Executed moves[/]")
+    else:
+        console.print("  [bold]Planned moves[/] [dim](nothing written)[/]")
+    console.print(_indent(tree))
+
+    remaining = ordered[len(shown) :]
+    if remaining:
+        files = sum(len(entries) for _, entries in remaining)
+        console.print(
+            f"    [dim]… and {fmt_count(len(remaining))} more folders"
+            f" ({fmt_files(files)})[/]"
+        )
+
+
 def confirm_plan(console: Console, plan, config) -> bool:
     """Ask before touching files, and assume yes when not interactive.
 

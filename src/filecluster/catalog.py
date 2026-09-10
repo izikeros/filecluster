@@ -17,7 +17,7 @@ The catalog is transparent to the user: no new CLI flags are needed.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS files (
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class LibraryCatalog:
@@ -204,7 +204,9 @@ class LibraryCatalog:
         ).fetchall()
         return {r["path"]: (r["size"], r["partial_hash"], r["full_hash"]) for r in rows}
 
-    def get_file_hashes_by_size(self) -> dict[int, list[tuple[str, str | None, str | None]]]:
+    def get_file_hashes_by_size(
+        self,
+    ) -> dict[int, list[tuple[str, str | None, str | None]]]:
         """Return ``{size: [(path, partial_hash, full_hash), ...]}``."""
         rows = self._conn.execute(
             "SELECT path, size, partial_hash, full_hash FROM files"
@@ -240,11 +242,45 @@ class LibraryCatalog:
         )
         self._conn.commit()
 
+    def clear_file_hashes(self) -> int:
+        """Delete every row from the files table.
+
+        Returns the number of rows deleted.  Used by force-reindex to start
+        from a clean slate after the database file has been backed up.
+        """
+        cursor = self._conn.execute("SELECT COUNT(*) FROM files")
+        count = cursor.fetchone()[0]
+        if count:
+            self._conn.execute("DELETE FROM files")
+            self._conn.commit()
+            logger.debug(f"Cleared {count} file-hash rows from catalog")
+        return count
+
+    @staticmethod
+    def backup(library_path: str | Path) -> Path | None:
+        """Copy the catalog database to a timestamped backup file.
+
+        Returns the backup path, or *None* if no catalog exists to back up.
+        The backup is a simple file copy (the WAL is checkpointed first when
+        possible).
+        """
+        import shutil
+        from datetime import UTC, datetime
+
+        db_path = Path(library_path) / LibraryCatalog.DB_FILENAME
+        if not db_path.exists():
+            return None
+
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        backup_path = db_path.with_suffix(f".{stamp}.bak")
+        shutil.copy2(str(db_path), str(backup_path))
+        logger.info(f"Backed up catalog to {backup_path}")
+        return backup_path
+
     def prune_files(self, existing_rel_paths: set[str]) -> int:
         """Delete file rows whose path is no longer on disk."""
         all_paths = {
-            r["path"]
-            for r in self._conn.execute("SELECT path FROM files").fetchall()
+            r["path"] for r in self._conn.execute("SELECT path FROM files").fetchall()
         }
         stale = all_paths - existing_rel_paths
         if not stale:

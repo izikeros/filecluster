@@ -70,8 +70,10 @@ class TestVersionAndHelp:
     def test_every_documented_option_exists(self):
         """The documented flag set is asserted on the parser, not on rendered
         help, which the terminal width would otherwise truncate."""
-        command = get_command(app)
-        declared = {opt for param in command.params for opt in param.opts}
+        group = get_command(app)
+        # ``run`` is a subcommand of the default-group; inspect it directly.
+        run_cmd = group.commands["run"]
+        declared = {opt for param in run_cmd.params for opt in param.opts}
 
         assert declared >= {
             # inherited from the previous argparse CLI

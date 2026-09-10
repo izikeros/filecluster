@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`filecluster reconcile` command** — checks whether files in a source
+  directory (inbox or filecluster output dirs with event folders) already exist
+  in the main library, then moves duplicates aside and integrates new files.
+  - Auto-detects event-folder mode (`[YYYY_MM_DD]…` subdirs) vs flat inbox mode.
+  - Uses the same 3-level matching cascade as `mark_inbox_duplicates`:
+    size → partial hash (1 MB MD5) → full hash (SHA1).
+  - Classifies each file as DUPLICATE, NEW, or NAME_COLLISION; in event-folder
+    mode, each folder gets an aggregate status (ALL_DUPLICATE, ALL_NEW, PARTIAL).
+  - Dry-run by default; `--execute` applies moves.
+  - `--report` exports a per-file CSV; `--json` prints a machine-readable summary.
+  - `-f`/`--force-reindex` backs up the existing `.filecluster.db` catalog with
+    a timestamp, clears it, and eagerly recomputes all partial hashes.
+- `LibraryCatalog.backup()` creates a timestamped `.bak` copy of the SQLite catalog.
+- `LibraryCatalog.clear_file_hashes()` deletes all file-hash rows for a clean reindex.
+
+### Changed
+- CLI restructured as a multi-command app (`run` + `reconcile`). Bare invocation
+  (`filecluster -i … -o …`) still defaults to `run` for full backwards compatibility.
+
 ## [0.6.2] - 2026-09-09
 
 ## [0.6.1] - 2026-09-09
