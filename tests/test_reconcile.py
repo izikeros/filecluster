@@ -1,25 +1,35 @@
 """Tests for the reconcile module.
 
-Covers LibraryIndex (indexing, caching, incremental update, force-reindex
-with backup), file matching (size, partial hash, full hash, filename),
-integration with temp directories, dry-run vs execute mode, event-folder
-mode vs flat mode detection, and partial-match folder handling.
+Covers LibraryIndex (indexing, hash caching and mtime-based invalidation,
+force-reindex with backup), file matching (size, partial hash, full hash,
+filename), source-mode detection across event-folder, flat and mixed layouts,
+recursion and sidecar handling, duplicates found inside the source itself,
+matching against several libraries, move/copy/scan actions, overwrite
+protection, rejection of overlapping roots, dry runs that write nothing at
+all, and dry-run vs execute behaviour.
 """
 
+import os
+import time
 from pathlib import Path
 
+import pytest
+
 from filecluster.catalog import LibraryCatalog
+from filecluster.exceptions import OverlappingPathsError
+from filecluster.file_operations import CopyOp, MoveOp, SkipOp
 from filecluster.reconcile import (
     FileMatch,
     FileStatus,
     FolderResult,
     FolderStatus,
     LibraryIndex,
+    ReconcileAction,
     ReconcilePlan,
     SourceMode,
-    _extract_year_from_folder,
     _library_dest_for_event_folder,
     _match_file,
+    _unique_roots,
     detect_source_mode,
     reconcile,
 )
@@ -74,20 +84,6 @@ class TestDetectSourceMode:
 
     def test_empty_dir_is_flat(self, tmp_path):
         assert detect_source_mode(tmp_path) == SourceMode.FLAT
-
-
-# ---------------------------------------------------------------------------
-# Year extraction
-# ---------------------------------------------------------------------------
-class TestExtractYear:
-    def test_standard_event_folder(self):
-        assert _extract_year_from_folder("[2024_01_15]_birthday") == "2024"
-
-    def test_no_match_returns_none(self):
-        assert _extract_year_from_folder("random_folder") is None
-
-    def test_partial_match(self):
-        assert _extract_year_from_folder("[2023_06_20]") == "2023"
 
 
 # ---------------------------------------------------------------------------
@@ -649,3 +645,636 @@ class TestCatalogBackup:
         with LibraryCatalog.open(tmp_path) as cat:
             cleared = cat.clear_file_hashes()
             assert cleared == 0
+
+
+# ---------------------------------------------------------------------------
+# Overwrite protection
+# ---------------------------------------------------------------------------
+class TestNoOverwrite:
+    def test_new_file_never_replaces_a_library_file(self, tmp_path):
+        """A same-name, different-content file must not clobber the library."""
+        lib = tmp_path / "library"
+        target = _write(
+            lib / "2024" / "[2024_01_15]_party" / "IMG_1.jpg", b"ORIGINAL-LIBRARY"
+        )
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_15]_party" / "IMG_1.jpg", b"DIFFERENT-CONTENT")
+
+        plan = reconcile(source, lib, tmp_path / "dup", execute=True)
+
+        assert plan.n_new == 1
+        assert target.read_bytes() == b"ORIGINAL-LIBRARY"
+        assert plan.n_renamed == 1
+        renamed = lib / "2024" / "[2024_01_15]_party" / "IMG_1 (1).jpg"
+        assert renamed.read_bytes() == b"DIFFERENT-CONTENT"
+
+    def test_duplicate_never_replaces_a_quarantined_file(self, tmp_path):
+        lib = tmp_path / "library"
+        content = b"identical-duplicate-content"
+        _write(lib / "2024" / "[2024_01_01]_ev" / "a.jpg", content)
+
+        dup_dir = tmp_path / "duplicates"
+        existing = _write(dup_dir / "[2024_01_01]_ev" / "a.jpg", b"ALREADY-HERE")
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_01]_ev" / "a.jpg", content)
+
+        reconcile(source, lib, dup_dir, execute=True)
+
+        assert existing.read_bytes() == b"ALREADY-HERE"
+        assert (dup_dir / "[2024_01_01]_ev" / "a (1).jpg").read_bytes() == content
+
+    def test_two_source_files_with_one_name_both_survive(self, tmp_path):
+        """Distinct content from two folders must not collapse into one file."""
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "cam_a" / "IMG_1.jpg", b"from-camera-a")
+        _write(source / "cam_b" / "IMG_1.jpg", b"from-camera-b")
+
+        plan = reconcile(source, lib, tmp_path / "dup", execute=True)
+
+        assert plan.n_new == 2
+        found = sorted(p.read_bytes() for p in lib.rglob("*.jpg"))
+        assert found == [b"from-camera-a", b"from-camera-b"]
+
+
+# ---------------------------------------------------------------------------
+# Stale cache invalidation
+# ---------------------------------------------------------------------------
+class TestStaleHashCache:
+    def test_changed_file_invalidates_cached_hash(self, tmp_path):
+        """Same size but new content must not be reported as a duplicate."""
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+        lib_file = _write(lib / "photo.jpg", b"AAAAAAAAAAAA")
+
+        idx = LibraryIndex(lib)
+        idx.partial_hash(lib_file)
+        idx.full_hash(lib_file)
+        idx.close()
+
+        # Rewrite with different content of identical length.
+        time.sleep(0.01)
+        lib_file.write_bytes(b"BBBBBBBBBBBB")
+
+        source = tmp_path / "source"
+        _write(source / "copy.jpg", b"AAAAAAAAAAAA")
+
+        idx2 = LibraryIndex(lib)
+        assert idx2.n_stale_cache_entries == 1
+        match = _match_file(source / "copy.jpg", idx2)
+        idx2.close()
+
+        assert match.status == FileStatus.NEW
+
+    def test_unchanged_file_keeps_cached_hash(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+        lib_file = _write(lib / "photo.jpg", b"stable-content")
+
+        idx = LibraryIndex(lib)
+        idx.full_hash(lib_file)
+        idx.close()
+
+        idx2 = LibraryIndex(lib)
+        assert idx2.n_stale_cache_entries == 0
+        assert str(lib_file) in idx2._full_cache
+        idx2.close()
+
+
+# ---------------------------------------------------------------------------
+# Mixed sources and recursion
+# ---------------------------------------------------------------------------
+class TestMixedAndRecursive:
+    def test_mixed_source_mode_detected(self, tmp_path):
+        source = tmp_path / "source"
+        _write(source / "[2024_01_15]_ev" / "a.jpg", b"in-event-folder")
+        _write(source / "loose.jpg", b"outside-any-event-folder")
+        assert detect_source_mode(source) == SourceMode.MIXED
+
+    def test_loose_files_are_not_skipped_in_mixed_source(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_15]_ev" / "a.jpg", b"in-event-folder")
+        _write(source / "loose.jpg", b"outside-any-event-folder")
+
+        plan = reconcile(source, lib, tmp_path / "dup")
+
+        assert plan.source_mode == SourceMode.MIXED
+        assert plan.n_new == 2
+        planned = {m.source_path.name for m in plan.file_matches}
+        assert planned == {"a.jpg", "loose.jpg"}
+
+    def test_nested_media_inside_event_folder_is_moved(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_15]_ev" / "top.jpg", b"top-level-photo")
+        _write(source / "[2024_01_15]_ev" / "raw" / "deep.jpg", b"nested-photo")
+
+        plan = reconcile(source, lib, tmp_path / "dup", execute=True)
+
+        assert plan.n_new == 2
+        dest = lib / "2024" / "[2024_01_15]_ev"
+        assert (dest / "top.jpg").exists()
+        assert (dest / "raw" / "deep.jpg").exists()
+
+    def test_no_recursive_stops_at_top_level(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "top.jpg", b"top-level-photo")
+        _write(source / "sub" / "deep.jpg", b"nested-photo")
+
+        plan = reconcile(source, lib, tmp_path / "dup", recursive=False)
+
+        assert plan.n_new == 1
+        assert plan.file_matches[0].source_path.name == "top.jpg"
+
+    def test_cluster_ini_follows_the_folder(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_15]_ev" / "a.jpg", b"event-photo")
+        _write(source / "[2024_01_15]_ev" / ".cluster.ini", b"[Cluster]\n")
+
+        plan = reconcile(source, lib, tmp_path / "dup", execute=True)
+
+        assert plan.n_extra_files == 1
+        assert (lib / "2024" / "[2024_01_15]_ev" / ".cluster.ini").exists()
+
+    def test_all_duplicate_folder_takes_its_metadata_along(self, tmp_path):
+        lib = tmp_path / "library"
+        content = b"already-in-the-library"
+        _write(lib / "2024" / "[2024_01_15]_ev" / "a.jpg", content)
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_15]_ev" / "a.jpg", content)
+        _write(source / "[2024_01_15]_ev" / ".cluster.ini", b"[Cluster]\n")
+
+        dup_dir = tmp_path / "duplicates"
+        reconcile(source, lib, dup_dir, execute=True)
+
+        assert (dup_dir / "[2024_01_15]_ev" / "a.jpg").exists()
+        assert (dup_dir / "[2024_01_15]_ev" / ".cluster.ini").exists()
+
+
+# ---------------------------------------------------------------------------
+# Sidecars
+# ---------------------------------------------------------------------------
+class TestSidecars:
+    def test_sidecar_follows_its_media_file(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_15]_ev" / "a.jpg", b"raw-photo")
+        _write(source / "[2024_01_15]_ev" / "a.xmp", b"<x:xmpmeta/>")
+
+        plan = reconcile(source, lib, tmp_path / "dup", execute=True)
+
+        assert plan.n_sidecars == 1
+        dest = lib / "2024" / "[2024_01_15]_ev"
+        assert (dest / "a.jpg").exists()
+        assert (dest / "a.xmp").exists()
+
+    def test_appended_extension_sidecar_is_recognised(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "a.jpg", b"raw-photo")
+        _write(source / "a.jpg.xmp", b"<x:xmpmeta/>")
+
+        plan = reconcile(source, lib, tmp_path / "dup", execute=True)
+
+        assert plan.n_sidecars == 1
+        assert len(list(lib.rglob("a.jpg.xmp"))) == 1
+
+    def test_sidecar_of_a_duplicate_goes_to_the_duplicates_dir(self, tmp_path):
+        lib = tmp_path / "library"
+        content = b"already-in-library"
+        _write(lib / "2024" / "[2024_01_01]_ev" / "a.jpg", content)
+
+        source = tmp_path / "source"
+        _write(source / "a.jpg", content)
+        _write(source / "a.aae", b"adjustments")
+
+        dup_dir = tmp_path / "duplicates"
+        reconcile(source, lib, dup_dir, execute=True)
+
+        assert (dup_dir / "a.jpg").exists()
+        assert (dup_dir / "a.aae").exists()
+
+    def test_no_sidecars_flag_leaves_them_behind(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "a.jpg", b"raw-photo")
+        sidecar = _write(source / "a.xmp", b"<x:xmpmeta/>")
+
+        plan = reconcile(
+            source, lib, tmp_path / "dup", execute=True, include_sidecars=False
+        )
+
+        assert plan.n_sidecars == 0
+        assert sidecar.exists()
+
+    def test_no_sidecars_flag_also_applies_inside_event_folders(self, tmp_path):
+        """An event folder sweeps up its extra files; sidecars must be exempt."""
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_15]_ev" / "a.jpg", b"raw-photo")
+        sidecar = _write(source / "[2024_01_15]_ev" / "a.xmp", b"<x:xmpmeta/>")
+
+        plan = reconcile(
+            source, lib, tmp_path / "dup", execute=True, include_sidecars=False
+        )
+
+        assert plan.n_sidecars == 0
+        assert sidecar.exists()
+        assert list(lib.rglob("*.xmp")) == []
+
+    def test_event_folder_metadata_still_follows_the_folder(self, tmp_path):
+        """Turning sidecars off must not strand the cluster ini file."""
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_15]_ev" / "a.jpg", b"raw-photo")
+        _write(source / "[2024_01_15]_ev" / ".cluster.ini", b"[Cluster]\n")
+
+        reconcile(source, lib, tmp_path / "dup", execute=True, include_sidecars=False)
+
+        assert (lib / "2024" / "[2024_01_15]_ev" / ".cluster.ini").exists()
+
+
+# ---------------------------------------------------------------------------
+# Duplicates inside the source itself
+# ---------------------------------------------------------------------------
+class TestSourceDuplicates:
+    def test_same_content_twice_in_source(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "a" / "photo.jpg", b"the-very-same-bytes")
+        _write(source / "b" / "photo_copy.jpg", b"the-very-same-bytes")
+
+        plan = reconcile(source, lib, tmp_path / "dup")
+
+        assert plan.n_new == 1
+        assert plan.n_source_duplicates == 1
+        dupe = next(
+            m for m in plan.file_matches if m.status == FileStatus.SOURCE_DUPLICATE
+        )
+        assert dupe.source_duplicate_of is not None
+
+    def test_source_duplicate_goes_to_duplicates_dir(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "one.jpg", b"repeated-content")
+        _write(source / "two.jpg", b"repeated-content")
+
+        dup_dir = tmp_path / "duplicates"
+        reconcile(source, lib, dup_dir, execute=True)
+
+        assert len(list(dup_dir.rglob("*.jpg"))) == 1
+        assert len(list(lib.rglob("*.jpg"))) == 1
+
+    def test_detection_can_be_disabled(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "one.jpg", b"repeated-content")
+        _write(source / "two.jpg", b"repeated-content")
+
+        plan = reconcile(source, lib, tmp_path / "dup", detect_source_duplicates=False)
+
+        assert plan.n_source_duplicates == 0
+        assert plan.n_new == 2
+
+
+# ---------------------------------------------------------------------------
+# Multiple libraries
+# ---------------------------------------------------------------------------
+class TestMultipleLibraries:
+    def test_match_found_in_second_library(self, tmp_path):
+        lib_a = tmp_path / "lib_a"
+        lib_b = tmp_path / "lib_b"
+        lib_a.mkdir()
+        content = b"lives-in-the-second-library"
+        _write(lib_b / "2024" / "[2024_01_01]_ev" / "x.jpg", content)
+
+        source = tmp_path / "source"
+        _write(source / "x.jpg", content)
+
+        plan = reconcile(source, [lib_a, lib_b], tmp_path / "dup")
+
+        assert plan.n_duplicates == 1
+        assert plan.file_matches[0].library_match.is_relative_to(lib_b)
+
+    def test_new_files_land_in_the_first_library(self, tmp_path):
+        lib_a = tmp_path / "lib_a"
+        lib_b = tmp_path / "lib_b"
+        lib_a.mkdir()
+        lib_b.mkdir()
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_01]_ev" / "new.jpg", b"brand-new")
+
+        reconcile(source, [lib_a, lib_b], tmp_path / "dup", execute=True)
+
+        assert list(lib_a.rglob("new.jpg"))
+        assert not list(lib_b.rglob("new.jpg"))
+
+    def test_all_library_matches_are_reported(self, tmp_path):
+        lib = tmp_path / "library"
+        content = b"stored-twice-in-the-library"
+        _write(lib / "2024" / "[2024_01_01]_a" / "x.jpg", content)
+        _write(lib / "2024" / "[2024_01_02]_b" / "y.jpg", content)
+
+        source = tmp_path / "source"
+        _write(source / "z.jpg", content)
+
+        plan = reconcile(source, lib, tmp_path / "dup")
+
+        assert plan.file_matches[0].n_library_matches == 2
+
+
+# ---------------------------------------------------------------------------
+# Copy and scan-only modes
+# ---------------------------------------------------------------------------
+class TestActions:
+    def test_copy_mode_leaves_the_source_in_place(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        src_file = _write(source / "a.jpg", b"copy-me")
+
+        plan = reconcile(
+            source,
+            lib,
+            tmp_path / "dup",
+            execute=True,
+            action=ReconcileAction.COPY,
+        )
+
+        assert plan.n_copies == 1
+        assert plan.n_moves == 0
+        assert any(isinstance(op, CopyOp) for op in plan.ops)
+        assert src_file.exists()
+        assert len(list(lib.rglob("a.jpg"))) == 1
+
+    def test_scan_only_writes_nothing(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        src_file = _write(source / "a.jpg", b"scan-me")
+
+        plan = reconcile(
+            source,
+            lib,
+            tmp_path / "dup",
+            execute=True,
+            action=ReconcileAction.SCAN,
+        )
+
+        assert plan.n_moves == 0
+        assert plan.n_copies == 0
+        assert plan.n_skips == 1
+        assert all(isinstance(op, SkipOp) for op in plan.ops)
+        assert src_file.exists()
+        assert not list(lib.rglob("a.jpg"))
+
+    def test_scan_only_still_previews_destinations(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "[2024_01_01]_ev" / "a.jpg", b"scan-me")
+
+        plan = reconcile(source, lib, tmp_path / "dup", action=ReconcileAction.SCAN)
+
+        folders = {folder for folder, _, _ in plan.move_destinations}
+        assert str(lib / "2024" / "[2024_01_01]_ev") in folders
+
+    def test_move_is_the_default(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir(parents=True)
+
+        source = tmp_path / "source"
+        _write(source / "a.jpg", b"move-me")
+
+        plan = reconcile(source, lib, tmp_path / "dup")
+        assert plan.action == ReconcileAction.MOVE
+        assert any(isinstance(op, MoveOp) for op in plan.ops)
+
+
+# ---------------------------------------------------------------------------
+# Library self-duplicates via the index
+# ---------------------------------------------------------------------------
+class TestLibraryDuplicateGroups:
+    def test_finds_duplicates_across_library_folders(self, tmp_path):
+        lib = tmp_path / "library"
+        content = b"the-same-photo-filed-twice"
+        _write(lib / "2024" / "[2024_01_01]_a" / "x.jpg", content)
+        _write(lib / "2024" / "[2024_06_01]_b" / "y.jpg", content)
+        _write(lib / "2024" / "[2024_06_01]_b" / "unique.jpg", b"only-once-here")
+
+        idx = LibraryIndex(lib)
+        groups = idx.duplicate_groups()
+        idx.close()
+
+        assert len(groups) == 1
+        assert len(groups[0]) == 2
+
+    def test_no_groups_when_all_unique(self, tmp_path):
+        lib = tmp_path / "library"
+        _write(lib / "a.jpg", b"first-unique")
+        _write(lib / "b.jpg", b"second-unique-longer")
+
+        idx = LibraryIndex(lib)
+        assert idx.duplicate_groups() == []
+        idx.close()
+
+
+# ---------------------------------------------------------------------------
+# Overlapping roots
+# ---------------------------------------------------------------------------
+class TestOverlappingRoots:
+    """Roots that overlap are rejected before anything is read or written."""
+
+    def test_source_equal_to_library_is_rejected(self, tmp_path):
+        lib = tmp_path / "library"
+        photo = _write(lib / "2024" / "[2024_01_01]_ev" / "a.jpg", b"only-copy")
+
+        with pytest.raises(OverlappingPathsError):
+            reconcile(lib, lib, tmp_path / "dup", execute=True)
+
+        assert photo.read_bytes() == b"only-copy"
+
+    def test_source_inside_library_is_rejected(self, tmp_path):
+        lib = tmp_path / "library"
+        _write(lib / "a.jpg", b"library-file")
+        source = lib / "inbox"
+        _write(source / "b.jpg", b"incoming-file")
+
+        with pytest.raises(OverlappingPathsError):
+            reconcile(source, lib, tmp_path / "dup")
+
+    def test_library_inside_source_is_rejected(self, tmp_path):
+        source = tmp_path / "source"
+        lib = source / "library"
+        _write(lib / "a.jpg", b"library-file")
+        _write(source / "b.jpg", b"incoming-file")
+
+        with pytest.raises(OverlappingPathsError):
+            reconcile(source, lib, tmp_path / "dup")
+
+    def test_symlinked_alias_of_the_library_is_rejected(self, tmp_path):
+        lib = tmp_path / "library"
+        _write(lib / "a.jpg", b"library-file")
+        alias = tmp_path / "alias"
+        os.symlink(lib, alias)
+
+        with pytest.raises(OverlappingPathsError):
+            reconcile(alias, lib, tmp_path / "dup")
+
+    def test_duplicates_dir_inside_the_library_is_rejected(self, tmp_path):
+        lib = tmp_path / "library"
+        _write(lib / "a.jpg", b"library-file")
+        source = tmp_path / "source"
+        _write(source / "b.jpg", b"incoming-file")
+
+        with pytest.raises(OverlappingPathsError):
+            reconcile(source, lib, lib / "duplicates")
+
+    def test_duplicates_dir_inside_the_source_is_rejected(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir()
+        source = tmp_path / "source"
+        _write(source / "b.jpg", b"incoming-file")
+
+        with pytest.raises(OverlappingPathsError):
+            reconcile(source, lib, source / "duplicates")
+
+    def test_duplicates_dir_beside_the_source_is_allowed(self, tmp_path):
+        lib = tmp_path / "library"
+        lib.mkdir()
+        source = tmp_path / "source"
+        _write(source / "b.jpg", b"incoming-file")
+
+        plan = reconcile(source, lib, tmp_path / "duplicates")
+
+        assert plan.n_new == 1
+
+    def test_one_library_overlapping_out_of_several_is_rejected(self, tmp_path):
+        lib_a = tmp_path / "lib_a"
+        lib_a.mkdir()
+        source = tmp_path / "source"
+        _write(source / "b.jpg", b"incoming-file")
+
+        with pytest.raises(OverlappingPathsError):
+            reconcile(source, [lib_a, source / "nested"], tmp_path / "dup")
+
+
+class TestUniqueRoots:
+    """The same library passed twice must be indexed once."""
+
+    def test_repeated_root_is_dropped(self, tmp_path):
+        assert _unique_roots([tmp_path, tmp_path]) == [tmp_path]
+
+    def test_symlinked_alias_is_dropped(self, tmp_path):
+        real = tmp_path / "library"
+        real.mkdir()
+        alias = tmp_path / "alias"
+        os.symlink(real, alias)
+
+        assert _unique_roots([real, alias]) == [real]
+
+    def test_distinct_roots_are_kept_in_order(self, tmp_path):
+        first = tmp_path / "a"
+        second = tmp_path / "b"
+
+        assert _unique_roots([first, second]) == [first, second]
+
+    def test_library_given_twice_does_not_self_duplicate(self, tmp_path):
+        lib = tmp_path / "library"
+        _write(lib / "2024" / "[2024_01_01]_ev" / "a.jpg", b"library-file")
+        source = tmp_path / "source"
+        _write(source / "b.jpg", b"incoming-file")
+
+        plan = reconcile(source, [lib, lib], tmp_path / "dup")
+
+        assert plan.n_new == 1
+        assert plan.n_duplicates == 0
+
+
+# ---------------------------------------------------------------------------
+# Dry runs write nothing
+# ---------------------------------------------------------------------------
+class TestDryRunIsReadOnly:
+    def test_preview_creates_no_catalog(self, tmp_path):
+        lib = tmp_path / "library"
+        _write(lib / "2024" / "[2024_01_01]_ev" / "a.jpg", b"library-file")
+        source = tmp_path / "source"
+        _write(source / "b.jpg", b"incoming-file")
+
+        reconcile(source, lib, tmp_path / "dup", execute=False)
+
+        assert list(lib.glob(".filecluster*")) == []
+
+    def test_preview_does_not_write_new_hashes(self, tmp_path):
+        lib = tmp_path / "library"
+        _write(lib / "a.jpg", b"library-file")
+        source = tmp_path / "source"
+        _write(source / "b.jpg", b"library-file")
+        with LibraryCatalog.open(lib) as cat:
+            cat.put_file_hashes([("seed.jpg", 1, 1.0, "p", "f")])
+
+        reconcile(source, lib, tmp_path / "dup", execute=False)
+
+        with LibraryCatalog.open(lib) as cat:
+            assert set(cat.get_file_hashes()) == {"seed.jpg"}
+
+    def test_force_reindex_preview_keeps_the_cached_hashes(self, tmp_path):
+        """A dry run must not clear the cache it was only supposed to read."""
+        lib = tmp_path / "library"
+        _write(lib / "a.jpg", b"library-file")
+        source = tmp_path / "source"
+        _write(source / "b.jpg", b"incoming-file")
+        with LibraryCatalog.open(lib) as cat:
+            cat.put_file_hashes([("a.jpg", 12, 1.0, "p", "f")])
+
+        reconcile(source, lib, tmp_path / "dup", execute=False, force_reindex=True)
+
+        with LibraryCatalog.open(lib) as cat:
+            assert set(cat.get_file_hashes()) == {"a.jpg"}
+        assert LibraryCatalog.list_backups(lib) == []
+
+    def test_execute_still_writes_the_catalog(self, tmp_path):
+        lib = tmp_path / "library"
+        _write(lib / "a.jpg", b"library-file")
+        source = tmp_path / "source"
+        _write(source / "b.jpg", b"library-file")
+
+        reconcile(source, lib, tmp_path / "dup", execute=True)
+
+        assert (lib / LibraryCatalog.DB_FILENAME).exists()

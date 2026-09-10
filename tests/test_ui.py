@@ -601,3 +601,112 @@ class TestConfigureLogging:
         captured = capsys.readouterr()
         assert "probe message" in captured.err
         assert captured.out == ""
+
+
+# ---------------------------------------------------------------------------
+# Byte formatting
+# ---------------------------------------------------------------------------
+class TestFmtBytes:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (0, "0 B"),
+            (512, "512 B"),
+            (1024, "1.0 KiB"),
+            (1536, "1.5 KiB"),
+            (1024**2, "1.0 MiB"),
+            (1024**3, "1.0 GiB"),
+            (1024**4, "1.0 TiB"),
+        ],
+    )
+    def test_binary_units(self, value, expected):
+        assert ui.fmt_bytes(value) == expected
+
+
+# ---------------------------------------------------------------------------
+# Dedup renderers
+# ---------------------------------------------------------------------------
+class TestDedupRenderers:
+    def _plan(self, tmp_path, with_duplicates=True):
+        from filecluster.dedup import DedupAction, DedupPlan, DuplicateGroup
+
+        groups = []
+        if with_duplicates:
+            groups = [
+                DuplicateGroup(
+                    full_hash="h",
+                    size=2048,
+                    files=[tmp_path / "a.jpg", tmp_path / "sub" / "b.jpg"],
+                )
+            ]
+        return DedupPlan(
+            root=tmp_path, groups=groups, action=DedupAction.REPORT, n_scanned=2
+        )
+
+    def test_results_show_counts_and_reclaimable_space(self, console, tmp_path):
+        ui.dedup_results(console, self._plan(tmp_path))
+        out = output(console)
+        assert "Duplicate groups" in out
+        assert "Reclaimable" in out
+        assert "2.0 KiB" in out
+
+    def test_groups_tree_marks_the_kept_copy(self, console, tmp_path):
+        ui.dedup_groups(console, self._plan(tmp_path))
+        out = output(console)
+        assert "keep" in out
+        assert "dup" in out
+
+    def test_clean_tree_message(self, console, tmp_path):
+        ui.dedup_groups(console, self._plan(tmp_path, with_duplicates=False))
+        assert "No duplicates found" in output(console)
+
+    def test_banner_shows_dry_run(self, console, tmp_path):
+        ui.dedup_banner(console, tmp_path, None, "report", execute=False)
+        assert "DRY RUN" in output(console)
+
+
+# ---------------------------------------------------------------------------
+# Catalog renderers
+# ---------------------------------------------------------------------------
+class TestCatalogRenderers:
+    def test_stats_table(self, console, tmp_path):
+        ui.catalog_stats(
+            console,
+            tmp_path,
+            {
+                "db_path": str(tmp_path / ".filecluster.db"),
+                "db_bytes": 4096,
+                "schema_version": 1,
+                "clusters": 3,
+                "files": 10,
+                "partial_hashes": 10,
+                "full_hashes": 4,
+                "total_bytes": 1024,
+            },
+        )
+        out = output(console)
+        assert "File rows" in out
+        assert "4.0 KiB" in out
+        assert "none" in out
+
+    def test_stats_names_the_newest_backup(self, console, tmp_path):
+        ui.catalog_stats(
+            console,
+            tmp_path,
+            {
+                "db_path": str(tmp_path / ".filecluster.db"),
+                "backups": [
+                    str(tmp_path / ".filecluster.20240101T000000Z.bak"),
+                    str(tmp_path / ".filecluster.20240202T000000Z.bak"),
+                ],
+            },
+        )
+        out = output(console)
+        assert "Backups" in out
+        assert ".filecluster.20240202T000000Z.bak" in out
+
+    def test_message_rows(self, console):
+        ui.catalog_message(console, "Catalog restored", [("Library", "/photos")])
+        out = output(console)
+        assert "Catalog restored" in out
+        assert "/photos" in out

@@ -434,3 +434,302 @@ class TestScale:
         # absolute ceiling those caps impose.
         assert big_lines < small_lines * 2
         assert big_lines < 100
+
+
+# ---------------------------------------------------------------------------
+# Subcommand registration
+# ---------------------------------------------------------------------------
+def _media(path, content=b"a-photo"):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return path
+
+
+class TestSubcommands:
+    """The documented command names must be the ones Typer registers."""
+
+    def test_registered_command_names(self):
+        group = get_command(app)
+        assert sorted(group.commands) == ["catalog", "dedup", "reconcile", "run"]
+
+    @pytest.mark.parametrize("name", ["run", "reconcile", "dedup", "catalog"])
+    def test_help_is_available(self, name):
+        result = runner.invoke(app, [name, "--help"])
+        assert result.exit_code == EXIT_OK
+
+    def test_bare_options_still_default_to_run(self, inbox, out_dir):
+        result = runner.invoke(app, ["-i", str(inbox), "-o", str(out_dir), "-n"])
+        assert result.exit_code == EXIT_OK
+
+
+class TestReconcileCommand:
+    def test_dry_run_reports_without_writing(self, tmp_path):
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        source = tmp_path / "src"
+        photo = _media(source / "[2024_01_01]_ev" / "a.jpg")
+
+        result = runner.invoke(app, ["reconcile", "-s", str(source), "-l", str(lib)])
+
+        assert result.exit_code == EXIT_OK
+        assert "DRY RUN" in result.stdout
+        assert photo.exists()
+        assert not list(lib.rglob("a.jpg"))
+
+    def test_execute_moves_new_files(self, tmp_path):
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        source = tmp_path / "src"
+        _media(source / "[2024_01_01]_ev" / "a.jpg")
+
+        result = runner.invoke(
+            app, ["reconcile", "-s", str(source), "-l", str(lib), "--execute"]
+        )
+
+        assert result.exit_code == EXIT_OK
+        assert (lib / "2024" / "[2024_01_01]_ev" / "a.jpg").exists()
+
+    def test_json_summary_is_the_only_stdout(self, tmp_path):
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        source = tmp_path / "src"
+        _media(source / "a.jpg")
+
+        result = runner.invoke(
+            app, ["reconcile", "-s", str(source), "-l", str(lib), "--json"]
+        )
+
+        payload = json.loads(result.stdout)
+        assert payload["new"] == 1
+        assert payload["action"] == "move"
+
+    def test_report_writes_csv(self, tmp_path):
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        source = tmp_path / "src"
+        _media(source / "a.jpg")
+        report = tmp_path / "report.csv"
+
+        runner.invoke(
+            app,
+            [
+                "reconcile",
+                "-s",
+                str(source),
+                "-l",
+                str(lib),
+                "--report",
+                str(report),
+                "--json",
+            ],
+        )
+
+        assert report.read_text().count("\n") == 2
+
+    def test_scan_only_writes_nothing(self, tmp_path):
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        source = tmp_path / "src"
+        photo = _media(source / "a.jpg")
+
+        result = runner.invoke(
+            app,
+            [
+                "reconcile",
+                "-s",
+                str(source),
+                "-l",
+                str(lib),
+                "--execute",
+                "--scan-only",
+                "--json",
+            ],
+        )
+
+        assert json.loads(result.stdout)["moves"] == 0
+        assert photo.exists()
+
+    def test_repeated_library_option(self, tmp_path):
+        lib_a = tmp_path / "a"
+        lib_b = tmp_path / "b"
+        lib_a.mkdir()
+        _media(lib_b / "2024" / "[2024_01_01]_ev" / "x.jpg", b"already-stored")
+        source = tmp_path / "src"
+        _media(source / "x.jpg", b"already-stored")
+
+        result = runner.invoke(
+            app,
+            [
+                "reconcile",
+                "-s",
+                str(source),
+                "-l",
+                str(lib_a),
+                "-l",
+                str(lib_b),
+                "--json",
+            ],
+        )
+
+        assert json.loads(result.stdout)["duplicates"] == 1
+
+    def test_missing_source_is_a_usage_error(self, tmp_path):
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        result = runner.invoke(
+            app, ["reconcile", "-s", str(tmp_path / "nope"), "-l", str(lib)]
+        )
+        assert result.exit_code == EXIT_USAGE
+
+    def test_source_equal_to_library_is_refused(self, tmp_path):
+        lib = tmp_path / "lib"
+        photo = _media(lib / "2024" / "[2024_01_01]_ev" / "a.jpg")
+
+        result = runner.invoke(
+            app, ["reconcile", "-s", str(lib), "-l", str(lib), "--execute"]
+        )
+
+        assert result.exit_code == EXIT_USAGE
+        assert photo.exists()
+
+    def test_dry_run_leaves_no_catalog_behind(self, tmp_path):
+        lib = tmp_path / "lib"
+        _media(lib / "2024" / "[2024_01_01]_ev" / "a.jpg", b"library-file")
+        source = tmp_path / "src"
+        _media(source / "b.jpg", b"incoming-file")
+
+        result = runner.invoke(
+            app, ["reconcile", "-s", str(source), "-l", str(lib), "--json"]
+        )
+
+        assert result.exit_code == EXIT_OK
+        assert list(lib.glob(".filecluster*")) == []
+
+
+class TestDedupCommand:
+    def test_reports_duplicates(self, tmp_path):
+        root = tmp_path / "lib"
+        _media(root / "a.jpg", b"same-bytes")
+        _media(root / "b.jpg", b"same-bytes")
+
+        result = runner.invoke(app, ["dedup", "-d", str(root), "--json"])
+
+        payload = json.loads(result.stdout)
+        assert payload["duplicate_groups"] == 1
+        assert payload["duplicate_files"] == 1
+        assert payload["action"] == "report"
+        assert list(root.glob(".filecluster*")) == []
+
+    def test_clean_tree_says_so(self, tmp_path):
+        root = tmp_path / "lib"
+        _media(root / "a.jpg", b"one")
+        _media(root / "b.jpg", b"two-longer")
+
+        result = runner.invoke(app, ["dedup", "-d", str(root)])
+
+        assert result.exit_code == EXIT_OK
+        assert "No duplicates found" in result.stdout
+
+    def test_quarantine_execute_moves_copies(self, tmp_path):
+        root = tmp_path / "lib"
+        _media(root / "IMG_1.jpg", b"same-bytes")
+        _media(root / "IMG_1-Kopiuj.jpg", b"same-bytes")
+        quarantine = tmp_path / "quarantine"
+
+        result = runner.invoke(
+            app,
+            ["dedup", "-d", str(root), "-q", str(quarantine), "--execute", "--json"],
+        )
+
+        assert json.loads(result.stdout)["moves"] == 1
+        assert (root / "IMG_1.jpg").exists()
+        assert (quarantine / "IMG_1-Kopiuj.jpg").exists()
+
+    def test_execute_without_quarantine_is_rejected(self, tmp_path):
+        root = tmp_path / "lib"
+        _media(root / "a.jpg", b"same-bytes")
+
+        result = runner.invoke(app, ["dedup", "-d", str(root), "--execute"])
+
+        assert result.exit_code == EXIT_USAGE
+
+    def test_report_writes_one_row_per_copy(self, tmp_path):
+        root = tmp_path / "lib"
+        _media(root / "a.jpg", b"same-bytes")
+        _media(root / "b.jpg", b"same-bytes")
+        report = tmp_path / "dupes.csv"
+
+        runner.invoke(
+            app, ["dedup", "-d", str(root), "--report", str(report), "--json"]
+        )
+
+        assert report.read_text().count("\n") == 3
+
+
+class TestCatalogCommand:
+    def test_stats_on_a_fresh_library(self, tmp_path):
+        result = runner.invoke(app, ["catalog", "stats", "-l", str(tmp_path), "--json"])
+
+        payload = json.loads(result.stdout)
+        assert payload["files"] == 0
+        assert payload["clusters"] == 0
+        assert payload["backups"] == []
+
+    def test_stats_renders_a_table(self, tmp_path):
+        result = runner.invoke(app, ["catalog", "stats", "-l", str(tmp_path)])
+        assert result.exit_code == EXIT_OK
+        assert "Catalog" in result.stdout
+
+    def test_backup_then_restore_round_trip(self, tmp_path):
+        from filecluster.catalog import LibraryCatalog
+
+        with LibraryCatalog.open(tmp_path) as cat:
+            cat.put_file_hashes([("a.jpg", 1, 1.0, "p", "f")])
+
+        backup = runner.invoke(
+            app, ["catalog", "backup", "-l", str(tmp_path), "--json"]
+        )
+        assert json.loads(backup.stdout)["backup"] is not None
+
+        with LibraryCatalog.open(tmp_path) as cat:
+            cat.clear_file_hashes()
+
+        restore = runner.invoke(
+            app, ["catalog", "restore", "-l", str(tmp_path), "--json"]
+        )
+        assert restore.exit_code == EXIT_OK
+
+        with LibraryCatalog.open(tmp_path) as cat:
+            assert "a.jpg" in cat.get_file_hashes()
+
+    def test_restore_without_backup_fails_cleanly(self, tmp_path):
+        result = runner.invoke(app, ["catalog", "restore", "-l", str(tmp_path)])
+        assert result.exit_code == EXIT_USAGE
+
+    def test_verify_reports_missing_rows(self, tmp_path):
+        from filecluster.catalog import LibraryCatalog
+
+        with LibraryCatalog.open(tmp_path) as cat:
+            cat.put_file_hashes([("gone.jpg", 1, 1.0, "p", "f")])
+
+        result = runner.invoke(
+            app, ["catalog", "verify", "-l", str(tmp_path), "--json"]
+        )
+
+        payload = json.loads(result.stdout)
+        assert payload["missing"] == 1
+        assert payload["pruned"] == 0
+
+    def test_verify_prune_removes_stale_rows(self, tmp_path):
+        from filecluster.catalog import LibraryCatalog
+
+        with LibraryCatalog.open(tmp_path) as cat:
+            cat.put_file_hashes([("gone.jpg", 1, 1.0, "p", "f")])
+
+        result = runner.invoke(
+            app, ["catalog", "verify", "-l", str(tmp_path), "--prune", "--json"]
+        )
+
+        assert json.loads(result.stdout)["pruned"] == 1
+        with LibraryCatalog.open(tmp_path) as cat:
+            assert cat.get_file_hashes() == {}

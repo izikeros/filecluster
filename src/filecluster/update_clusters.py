@@ -143,9 +143,7 @@ def get_or_create_library_cluster_ini_as_dataframe(
     def _on_folder_found(count: int) -> None:
         nonlocal _folder_count
         _folder_count += count
-        progress.update_description(
-            f"Discovering {lib_name} ({_folder_count} folders)"
-        )
+        progress.update_description(f"Discovering {lib_name} ({_folder_count} folders)")
 
     progress.update_description(f"Discovering folders in {lib_name}")
     subfolders = fast_scandir(library_path, _on_found=_on_folder_found)
@@ -204,9 +202,7 @@ def get_or_create_library_cluster_ini_as_dataframe(
     # Stale folders always get a deep scan: either the user asked for it
     # globally (-f) or the catalog detected a mtime change.  Without this,
     # get_this_ini would read a stale .cluster.ini instead of rescanning.
-    pool_args = [
-        (event_dir, True, library_path) for event_dir in stale_event_dirs
-    ]
+    pool_args = [(event_dir, True, library_path) for event_dir in stale_event_dirs]
     scanned_results: list[dict | Path | None] = []
     for result in pool.imap(_scan_event_dir, pool_args):
         scanned_results.append(result)
@@ -223,9 +219,7 @@ def get_or_create_library_cluster_ini_as_dataframe(
                 except OSError:
                     disk_mtime = 0.0
                 cat_row = _dict_to_catalog_row(result)
-                catalog.put_cluster(
-                    event_dir_name, folder_mtime=disk_mtime, **cat_row
-                )
+                catalog.put_cluster(event_dir_name, folder_mtime=disk_mtime, **cat_row)
 
         # Prune folders that no longer exist on disk
         existing_rel_paths = {ed[0] for ed in event_dirs}

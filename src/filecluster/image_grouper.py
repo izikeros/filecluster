@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 import random
 from collections.abc import Iterator
@@ -24,18 +23,16 @@ from filecluster.exceptions import MissingDfClusterColumnError
 from filecluster.file_operations import FileOperationPlan, build_file_operation_plan
 from filecluster.filecluster_types import ClustersDataFrame, MediaDataFrame
 from filecluster.ui import NullProgress, ProgressSink
-from filecluster.utlis import hash_file
+from filecluster.utlis import PARTIAL_HASH_SIZE, get_partial_hash, hash_file
 
-PARTIAL_HASH_SIZE = 1024 * 1024
-
-
-def get_partial_hash(filepath, size: int = PARTIAL_HASH_SIZE) -> str | None:
-    """Hash the first *size* bytes of a file, or None if it cannot be read."""
-    try:
-        with open(filepath, "rb") as f:
-            return hashlib.md5(f.read(size)).hexdigest()
-    except OSError:
-        return None
+# Re-exported so callers (and tests that monkeypatch this module) keep working
+# now that the implementations live in ``utlis``.
+__all__ = [
+    "PARTIAL_HASH_SIZE",
+    "ImageGrouper",
+    "TargetPathCreator",
+    "get_partial_hash",
+]
 
 
 class TargetPathCreator:
@@ -540,14 +537,16 @@ class ImageGrouper:
             """Record that *filepath* had a hash freshly computed."""
             try:
                 st = os.stat(filepath)
-                new_hashes.append((
-                    key,
-                    Path(filepath),
-                    st.st_size,
-                    st.st_mtime,
-                    partial_hash_cache.get(key),
-                    full_hash_cache.get(key),
-                ))
+                new_hashes.append(
+                    (
+                        key,
+                        Path(filepath),
+                        st.st_size,
+                        st.st_mtime,
+                        partial_hash_cache.get(key),
+                        full_hash_cache.get(key),
+                    )
+                )
             except OSError:
                 pass
 

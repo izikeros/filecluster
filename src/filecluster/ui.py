@@ -91,6 +91,17 @@ def fmt_files(count: int) -> str:
     return f"{fmt_count(count)} file{'' if count == 1 else 's'}"
 
 
+def fmt_bytes(size: float) -> str:
+    """Format a byte count using binary units."""
+    value = float(size)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if abs(value) < 1024 or unit == "TiB":
+            precision = 0 if unit == "B" else 1
+            return f"{value:.{precision}f} {unit}"
+        value /= 1024
+    return f"{value:.1f} TiB"  # pragma: no cover - unreachable
+
+
 def supports_animation(console: Console) -> bool:
     """Whether *console* can host a redrawing spinner or progress bar.
 
@@ -721,17 +732,21 @@ def write_report(path: Path | str, plan, config) -> int:
 def reconcile_banner(
     console: Console,
     source: Path,
-    library: Path,
+    library: Path | Sequence[Path],
     duplicates_dir: Path,
     execute: bool,
+    action: str = "move",
 ) -> None:
     """Show the reconcile configuration before work starts."""
+    libraries = [library] if isinstance(library, str | Path) else list(library)
     grid = Table.grid(padding=(0, 2))
     grid.add_column(style="dim", width=12)
     grid.add_column(overflow="fold")
     grid.add_row("Source", str(source))
-    grid.add_row("Library", str(library))
+    for i, lib in enumerate(libraries):
+        grid.add_row("Library" if i == 0 else "", str(lib))
     grid.add_row("Duplicates", str(duplicates_dir))
+    grid.add_row("Action", action)
     grid.add_row("Mode", "[bold]EXECUTE[/]" if execute else "[bold]DRY RUN[/]")
 
     console.print()
@@ -745,11 +760,19 @@ def reconcile_results(console: Console, plan) -> None:
     rows: list[tuple[str, str]] = [
         ("Source mode", plan.source_mode.value),
         ("Total files", fmt_count(len(plan.file_matches))),
-        ("Duplicates", fmt_count(plan.n_duplicates)),
+        ("In library already", fmt_count(plan.n_duplicates)),
         ("New files", fmt_count(plan.n_new)),
     ]
+    if plan.n_source_duplicates:
+        rows.append(("Dupes within source", fmt_count(plan.n_source_duplicates)))
     if plan.n_name_collisions:
         rows.append(("Name collisions", fmt_count(plan.n_name_collisions)))
+    if plan.n_renamed:
+        rows.append(("Renamed to be safe", fmt_count(plan.n_renamed)))
+    if plan.n_sidecars:
+        rows.append(("Sidecar files", fmt_count(plan.n_sidecars)))
+    if plan.n_extra_files:
+        rows.append(("Other folder files", fmt_count(plan.n_extra_files)))
     if plan.folder_results:
         from filecluster.reconcile import FolderStatus
 
@@ -765,6 +788,8 @@ def reconcile_results(console: Console, plan) -> None:
         rows.append(("Folders (all dup)", fmt_count(n_all_dup)))
         rows.append(("Folders (all new)", fmt_count(n_all_new)))
         rows.append(("Folders (partial)", fmt_count(n_partial)))
+    if plan.n_copies:
+        rows.append(("Planned copies", fmt_count(plan.n_copies)))
     rows.append(("Planned moves", fmt_count(plan.n_moves)))
 
     grid = Table.grid(padding=(0, 2))
@@ -833,18 +858,15 @@ def reconcile_plan_preview(
     executed: bool,
     limit: int = MAX_TREE_FOLDERS,
 ) -> None:
-    """Tree view of planned (or executed) moves."""
-    from filecluster.reconcile import MoveOp
-
-    moves = [op for op in plan.ops if isinstance(op, MoveOp)]
-    if not moves:
+    """Tree view of planned (or executed) file operations."""
+    entries = plan.move_destinations
+    if not entries:
         return
 
     # Group by destination directory
     grouped: dict[str, list[tuple[str, str]]] = {}
-    for op in moves:
-        folder = str(op.dst.parent)
-        grouped.setdefault(folder, []).append((op.src.name, op.dst.name))
+    for folder, src_name, dst_name in entries:
+        grouped.setdefault(folder, []).append((src_name, dst_name))
 
     ordered = sorted(grouped.items(), key=lambda item: len(item[1]), reverse=True)
     shown = ordered if limit <= 0 else ordered[:limit]
@@ -873,6 +895,143 @@ def reconcile_plan_preview(
             f"    [dim]… and {fmt_count(len(remaining))} more folders"
             f" ({fmt_files(files)})[/]"
         )
+
+
+# ---------------------------------------------------------------------------
+# Dedup renderers
+# ---------------------------------------------------------------------------
+def dedup_banner(
+    console: Console,
+    root: Path,
+    quarantine_dir: Path | None,
+    action: str,
+    execute: bool,
+) -> None:
+    """Show the dedup configuration before work starts."""
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", width=12)
+    grid.add_column(overflow="fold")
+    grid.add_row("Scan", str(root))
+    if quarantine_dir is not None:
+        grid.add_row("Quarantine", str(quarantine_dir))
+    grid.add_row("Action", action)
+    grid.add_row("Mode", "[bold]EXECUTE[/]" if execute else "[bold]DRY RUN[/]")
+
+    console.print()
+    console.print(f"  [bold cyan]filecluster dedup[/] [dim]{get_version()}[/]")
+    console.print(_indent(grid))
+    console.print()
+
+
+def dedup_results(console: Console, plan) -> None:
+    """Render the dedup summary as an aligned table of counts."""
+    rows: list[tuple[str, str]] = [
+        ("Files scanned", fmt_count(plan.n_scanned)),
+        ("Files hashed", fmt_count(plan.n_hashed)),
+        ("Duplicate groups", fmt_count(plan.n_groups)),
+        ("Redundant copies", fmt_count(plan.n_duplicate_files)),
+        ("Same folder", fmt_count(plan.n_intra_folder_groups)),
+        ("Across folders", fmt_count(plan.n_cross_folder_groups)),
+        ("Reclaimable", fmt_bytes(plan.wasted_bytes)),
+    ]
+    if plan.n_moves:
+        rows.append(("Planned moves", fmt_count(plan.n_moves)))
+
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", width=_LABEL_WIDTH)
+    grid.add_column(justify="right", style="bold")
+    for label, value in rows:
+        grid.add_row(label, value)
+
+    console.print()
+    console.print("  [bold]Results[/]")
+    console.print(_indent(grid))
+
+
+def dedup_groups(console: Console, plan, limit: int = MAX_TREE_FOLDERS) -> None:
+    """Tree of the largest duplicate groups, kept copy first."""
+    if not plan.groups:
+        console.print()
+        console.print("  [green]No duplicates found.[/]")
+        return
+
+    ordered = sorted(
+        plan.groups, key=lambda g: (g.wasted_bytes, g.n_copies), reverse=True
+    )
+    shown = ordered if limit <= 0 else ordered[:limit]
+
+    tree = Tree("[bold]Duplicate groups[/]")
+    for group in shown:
+        scope = "same folder" if group.is_intra_folder else "across folders"
+        node = tree.add(
+            f"[cyan]{fmt_count(group.n_copies)} copies[/]"
+            f" [dim]{fmt_bytes(group.size)} · {scope}[/]"
+        )
+        node.add(f"[green]keep[/] [dim]{group.canonical}[/]")
+        for dup in group.duplicates[:MAX_TREE_SAMPLES]:
+            node.add(f"[yellow]dup [/] [dim]{dup}[/]")
+        hidden = len(group.duplicates) - MAX_TREE_SAMPLES
+        if hidden > 0:
+            node.add(f"[dim]… {fmt_count(hidden)} more[/]")
+
+    console.print()
+    console.print(_indent(tree))
+
+    remaining = len(ordered) - len(shown)
+    if remaining > 0:
+        console.print(f"    [dim]… and {fmt_count(remaining)} more groups[/]")
+
+
+# ---------------------------------------------------------------------------
+# Catalog renderers
+# ---------------------------------------------------------------------------
+def catalog_stats(console: Console, library: Path, stats: dict) -> None:
+    """Render the contents of one library catalog."""
+    rows = [
+        ("Library", str(library)),
+        ("Database", str(stats.get("db_path", ""))),
+        ("Database size", fmt_bytes(stats.get("db_bytes", 0))),
+        ("Schema version", fmt_count(stats.get("schema_version", 0))),
+        ("Cluster rows", fmt_count(stats.get("clusters", 0))),
+        ("File rows", fmt_count(stats.get("files", 0))),
+        ("Partial hashes", fmt_count(stats.get("partial_hashes", 0))),
+        ("Full hashes", fmt_count(stats.get("full_hashes", 0))),
+        ("Indexed bytes", fmt_bytes(stats.get("total_bytes", 0))),
+    ]
+    backups = list(stats.get("backups") or [])
+    if backups:
+        # Backups are listed newest last, and that is the one `restore` picks
+        # by default, so it is the only one worth naming here.
+        rows.append(("Backups", fmt_count(len(backups))))
+        rows.append(("Newest backup", Path(backups[-1]).name))
+    else:
+        rows.append(("Backups", "none"))
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", width=_LABEL_WIDTH)
+    grid.add_column(overflow="fold")
+    for label, value in rows:
+        grid.add_row(label, value)
+
+    console.print()
+    console.print("  [bold]Catalog[/]")
+    console.print(_indent(grid))
+    console.print()
+
+
+def catalog_message(
+    console: Console, title: str, rows: Sequence[tuple[str, str]]
+) -> None:
+    """Render the outcome of a catalog maintenance action."""
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", width=_LABEL_WIDTH)
+    grid.add_column(overflow="fold")
+    for label, value in rows:
+        grid.add_row(label, value)
+
+    console.print()
+    console.print(f"  [bold]{title}[/]")
+    console.print(_indent(grid))
+    console.print()
 
 
 def confirm_plan(console: Console, plan, config) -> bool:

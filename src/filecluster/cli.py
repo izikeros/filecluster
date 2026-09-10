@@ -13,13 +13,12 @@ import json
 from pathlib import Path
 from typing import Annotated, Any, NoReturn
 
-import click
 import typer
 from typer.core import TyperGroup
 
 from filecluster import ui
 from filecluster.configuration import CopyMode
-from filecluster.exceptions import DateStringNoneError
+from filecluster.exceptions import DateStringNoneError, OverlappingPathsError
 from filecluster.file_cluster import main
 from filecluster.version import get_version
 
@@ -38,7 +37,10 @@ class _DefaultRunGroup(TyperGroup):
     ``reconcile`` was added as a second command.
     """
 
-    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+    # ``ctx`` is deliberately untyped: typer vendors its own copy of click, so
+    # the base signature refers to ``typer._click.Context``, which is private
+    # and not the same class as the public ``click.Context``.
+    def parse_args(self, ctx: Any, args: list[str]) -> list[str]:
         # If the first token is not a registered command name, assume ``run``.
         if args and args[0] not in self.commands:
             args = ["run", *args]
@@ -282,8 +284,8 @@ def run(  # noqa: C901 - a CLI entry point is a flat list of options by nature
     raise typer.Exit(EXIT_OK)
 
 
-@app.command()
-def reconcile_cmd(  # noqa: C901
+@app.command("reconcile")
+def reconcile_cmd(  # noqa: C901 - a CLI entry point is a flat list of options by nature
     source: Annotated[
         Path,
         typer.Option(
@@ -296,11 +298,11 @@ def reconcile_cmd(  # noqa: C901
         ),
     ],
     library: Annotated[
-        Path,
+        list[Path],
         typer.Option(
             "-l",
             "--library",
-            help="Main photo library root.",
+            help="Main photo library root. Repeatable; new files go to the first.",
             exists=True,
             file_okay=False,
             readable=True,
@@ -311,7 +313,10 @@ def reconcile_cmd(  # noqa: C901
         typer.Option(
             "-d",
             "--duplicates-dir",
-            help="Where to move confirmed duplicates. Defaults to <source>/../duplicates.",
+            help=(
+                "Where to move confirmed duplicates. "
+                "Defaults to <source>/../duplicates."
+            ),
             file_okay=False,
         ),
     ] = None,
@@ -320,6 +325,43 @@ def reconcile_cmd(  # noqa: C901
         typer.Option(
             "--execute",
             help="Apply the plan (move files). Without this flag nothing is written.",
+        ),
+    ] = False,
+    copy_mode: Annotated[
+        bool,
+        typer.Option(
+            "-y",
+            "--copy-mode",
+            help="Copy files into the library instead of moving them.",
+        ),
+    ] = False,
+    scan_only: Annotated[
+        bool,
+        typer.Option(
+            "--scan-only",
+            help="Classify and report only; plan no moves even with --execute.",
+        ),
+    ] = False,
+    no_recursive: Annotated[
+        bool,
+        typer.Option(
+            "--no-recursive",
+            help="Only look at the top level of the source directory.",
+        ),
+    ] = False,
+    no_sidecars: Annotated[
+        bool,
+        typer.Option(
+            "--no-sidecars",
+            help="Leave companion files (.xmp, .aae, …) behind instead of "
+            "moving them with their media file.",
+        ),
+    ] = False,
+    no_source_dupes: Annotated[
+        bool,
+        typer.Option(
+            "--no-source-dupes",
+            help="Skip detection of files duplicated inside the source itself.",
         ),
     ] = False,
     report: Annotated[
@@ -365,7 +407,7 @@ def reconcile_cmd(  # noqa: C901
     and plans to move duplicates aside and new files into the library.
     Dry-run by default; pass --execute to apply.
     """
-    from filecluster.reconcile import reconcile
+    from filecluster.reconcile import ReconcileAction, reconcile
 
     ui.configure_logging(verbosity=verbose, quiet=quiet)
     render = not as_json and not quiet
@@ -376,14 +418,18 @@ def reconcile_cmd(  # noqa: C901
     )
 
     dup_dir = duplicates_dir or (source.parent / "duplicates")
+    if scan_only:
+        action = ReconcileAction.SCAN
+    elif copy_mode:
+        action = ReconcileAction.COPY
+    else:
+        action = ReconcileAction.MOVE
 
     try:
         if render:
-            ui.reconcile_banner(console, source, library, dup_dir, execute)
-
-        with reporter.phase("Index library") as phase:
-            # Phase is used for the spinner; the actual progress is inside reconcile
-            pass
+            ui.reconcile_banner(
+                console, source, library, dup_dir, execute, action.value
+            )
 
         with reporter.phase("Reconcile") as phase:
             plan = reconcile(
@@ -393,6 +439,10 @@ def reconcile_cmd(  # noqa: C901
                 execute=execute,
                 force_reindex=force_reindex,
                 progress=phase,
+                action=action,
+                recursive=not no_recursive,
+                include_sidecars=not no_sidecars,
+                detect_source_duplicates=not no_source_dupes,
             )
             phase.detail = f"{plan.n_new} new, {plan.n_duplicates} dup"
 
@@ -403,6 +453,15 @@ def reconcile_cmd(  # noqa: C901
         _fail(err_console, exc, verbose, hint="Check the -s and -l paths.")
     except PermissionError as exc:
         _fail(err_console, exc, verbose, hint="Check file and folder permissions.")
+    except OverlappingPathsError as exc:
+        _fail(
+            err_console,
+            exc,
+            verbose,
+            hint=(
+                "Give -s, -l and -d separate directories. Nothing was read or written."
+            ),
+        )
     except ValueError as exc:
         _fail(err_console, exc, verbose)
 
@@ -422,9 +481,295 @@ def reconcile_cmd(  # noqa: C901
         ui.reconcile_results(console, plan)
         if plan.folder_results:
             ui.reconcile_folder_table(console, plan)
-        ui.reconcile_plan_preview(console, plan, execute)
+        ui.reconcile_plan_preview(console, plan, execute and not scan_only)
+        ui.render_diagnostics(console, verbose=verbose)
         console.print()
 
+    raise typer.Exit(EXIT_OK)
+
+
+@app.command("dedup")
+def dedup_cmd(
+    directory: Annotated[
+        Path,
+        typer.Option(
+            "-d",
+            "--dir",
+            help="Directory tree to scan for duplicate media files.",
+            exists=True,
+            file_okay=False,
+            readable=True,
+        ),
+    ],
+    quarantine_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "-q",
+            "--quarantine-dir",
+            help=(
+                "Move redundant copies here instead of only reporting them. "
+                "One copy of each group is always left in place."
+            ),
+            file_okay=False,
+        ),
+    ] = None,
+    execute: Annotated[
+        bool,
+        typer.Option(
+            "--execute",
+            help="Apply the plan. Requires --quarantine-dir.",
+        ),
+    ] = False,
+    min_size: Annotated[
+        int,
+        typer.Option(
+            "--min-size",
+            help="Ignore files smaller than this many bytes.",
+            min=0,
+        ),
+    ] = 1,
+    no_recursive: Annotated[
+        bool,
+        typer.Option("--no-recursive", help="Only look at the top level."),
+    ] = False,
+    show: Annotated[
+        int,
+        typer.Option(
+            "--show",
+            help="How many duplicate groups to list. 0 lists all of them.",
+            min=0,
+        ),
+    ] = ui.MAX_TREE_FOLDERS,
+    report: Annotated[
+        Path | None,
+        typer.Option(
+            "--report",
+            help="Write one CSV row per copy to this path.",
+            dir_okay=False,
+            writable=True,
+        ),
+    ] = None,
+    as_json: Annotated[
+        bool,
+        typer.Option("--json", help="Print a machine-readable JSON summary."),
+    ] = False,
+    color: Annotated[
+        bool | None,
+        typer.Option("--color/--no-color", help="Force colour on or off."),
+    ] = None,
+    verbose: Annotated[
+        int,
+        typer.Option("-v", "--verbose", count=True, help="-v for info, -vv for debug."),
+    ] = 0,
+    quiet: Annotated[bool, typer.Option("--quiet", help="Only report errors.")] = False,
+) -> None:
+    """Find media files stored more than once inside one directory tree.
+
+    Detects duplicates both within a single folder and across folders, picks
+    one copy of each group to keep, and reports the rest. Dry-run by default.
+    """
+    from filecluster.dedup import DedupAction, dedup
+
+    ui.configure_logging(verbosity=verbose, quiet=quiet)
+    render = not as_json and not quiet
+    console = ui.make_console(color=False if as_json else color)
+    err_console = ui.make_console(stderr=True, color=color)
+    reporter = (
+        ui.RichReporter(console, verbose=verbose) if render else ui.NullReporter()
+    )
+
+    action = DedupAction.QUARANTINE if quarantine_dir else DedupAction.REPORT
+    if execute and quarantine_dir is None:
+        _fail(
+            err_console,
+            ValueError("--execute needs --quarantine-dir"),
+            verbose,
+            message="Nothing to execute: no quarantine directory was given.",
+            hint="Add -q/--quarantine-dir to say where redundant copies go.",
+        )
+
+    try:
+        if render:
+            ui.dedup_banner(console, directory, quarantine_dir, action.value, execute)
+
+        with reporter.phase("Scan for duplicates") as phase:
+            plan = dedup(
+                directory,
+                quarantine_dir,
+                action=action,
+                execute=execute,
+                min_size=min_size,
+                recursive=not no_recursive,
+                progress=phase,
+            )
+            phase.detail = f"{plan.n_groups} groups, {plan.n_duplicate_files} copies"
+    except KeyboardInterrupt:
+        ui.error_panel(err_console, "Interrupted. No further files were touched.")
+        raise typer.Exit(EXIT_INTERRUPTED) from None
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        _fail(err_console, exc, verbose, hint="Check the -d path.")
+    except PermissionError as exc:
+        _fail(err_console, exc, verbose, hint="Check file and folder permissions.")
+
+    if report is not None:
+        n_rows = plan.write_csv(report)
+        if render:
+            console.print(
+                f"\n  [dim]Wrote {ui.fmt_count(n_rows)} rows to {report}[/]",
+                highlight=False,
+            )
+
+    if as_json:
+        typer.echo(json.dumps(plan.summary_dict(), indent=2))
+        raise typer.Exit(EXIT_OK)
+
+    if render:
+        ui.dedup_results(console, plan)
+        ui.dedup_groups(console, plan, limit=show)
+        console.print()
+
+    raise typer.Exit(EXIT_OK)
+
+
+catalog_app = typer.Typer(
+    add_completion=False,
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    help="Inspect and maintain the per-library SQLite catalog.",
+)
+app.add_typer(catalog_app, name="catalog")
+
+_LibraryOption = Annotated[
+    Path,
+    typer.Option(
+        "-l",
+        "--library",
+        help="Library root holding the .filecluster.db catalog.",
+        exists=True,
+        file_okay=False,
+        readable=True,
+    ),
+]
+_JsonOption = Annotated[
+    bool, typer.Option("--json", help="Print a machine-readable JSON summary.")
+]
+
+
+def _catalog_console(as_json: bool) -> Any:
+    return ui.make_console(color=False if as_json else None)
+
+
+@catalog_app.command("stats")
+def catalog_stats_cmd(library: _LibraryOption, as_json: _JsonOption = False) -> None:
+    """Show what the catalog currently holds."""
+    from filecluster.catalog import LibraryCatalog
+
+    with LibraryCatalog.open(library) as catalog:
+        stats = catalog.stats()
+    stats["backups"] = [str(p) for p in LibraryCatalog.list_backups(library)]
+
+    if as_json:
+        typer.echo(json.dumps(stats, indent=2))
+        raise typer.Exit(EXIT_OK)
+    ui.catalog_stats(_catalog_console(as_json), library, stats)
+    raise typer.Exit(EXIT_OK)
+
+
+@catalog_app.command("backup")
+def catalog_backup_cmd(library: _LibraryOption, as_json: _JsonOption = False) -> None:
+    """Copy the catalog to a timestamped .bak file."""
+    from filecluster.catalog import LibraryCatalog
+
+    path = LibraryCatalog.backup(library)
+    if as_json:
+        typer.echo(json.dumps({"backup": str(path) if path else None}, indent=2))
+        raise typer.Exit(EXIT_OK)
+
+    console = _catalog_console(as_json)
+    if path is None:
+        ui.catalog_message(console, "Nothing to back up", [("Library", str(library))])
+    else:
+        ui.catalog_message(console, "Catalog backed up", [("Backup", str(path))])
+    raise typer.Exit(EXIT_OK)
+
+
+@catalog_app.command("restore")
+def catalog_restore_cmd(
+    library: _LibraryOption,
+    backup: Annotated[
+        Path | None,
+        typer.Option(
+            "--from",
+            help="Backup file to restore. Defaults to the newest one.",
+            dir_okay=False,
+            exists=True,
+        ),
+    ] = None,
+    as_json: _JsonOption = False,
+) -> None:
+    """Restore the catalog from a backup, backing up the current one first."""
+    from filecluster.catalog import LibraryCatalog
+
+    err_console = ui.make_console(stderr=True)
+    try:
+        restored = LibraryCatalog.restore(library, backup)
+    except FileNotFoundError as exc:
+        _fail(err_console, exc, 0, hint="Run `filecluster catalog backup` first.")
+
+    if as_json:
+        typer.echo(json.dumps({"restored_from": str(restored)}, indent=2))
+        raise typer.Exit(EXIT_OK)
+    ui.catalog_message(
+        _catalog_console(as_json),
+        "Catalog restored",
+        [("Restored from", str(restored)), ("Library", str(library))],
+    )
+    raise typer.Exit(EXIT_OK)
+
+
+@catalog_app.command("verify")
+def catalog_verify_cmd(
+    library: _LibraryOption,
+    prune: Annotated[
+        bool,
+        typer.Option(
+            "--prune",
+            help="Delete rows for files that are missing or have changed.",
+        ),
+    ] = False,
+    as_json: _JsonOption = False,
+) -> None:
+    """Check cached file rows against the files on disk."""
+    from filecluster.catalog import LibraryCatalog
+
+    with LibraryCatalog.open(library) as catalog:
+        result = catalog.verify(library)
+        removed = 0
+        if prune:
+            removed = catalog.delete_file_rows(result["missing"] + result["stale"])
+            catalog.vacuum()
+
+    payload = {
+        "library": str(library),
+        "ok": len(result["ok"]),
+        "stale": len(result["stale"]),
+        "missing": len(result["missing"]),
+        "pruned": removed,
+    }
+    if as_json:
+        typer.echo(json.dumps(payload, indent=2))
+        raise typer.Exit(EXIT_OK)
+
+    rows = [
+        ("Up to date", ui.fmt_count(payload["ok"])),
+        ("Changed on disk", ui.fmt_count(payload["stale"])),
+        ("Gone from disk", ui.fmt_count(payload["missing"])),
+    ]
+    if prune:
+        rows.append(("Rows pruned", ui.fmt_count(removed)))
+    else:
+        rows.append(("Next step", "re-run with --prune to clean up"))
+    ui.catalog_message(_catalog_console(as_json), "Catalog verification", rows)
     raise typer.Exit(EXIT_OK)
 
 
