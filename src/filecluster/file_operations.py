@@ -374,8 +374,13 @@ def reserve_exclusive(dst: Path) -> Path:
         return candidate
 
 
-def _write_file(op: CopyOp | MoveOp) -> None:
-    """Perform one copy or move without ever replacing an existing file."""
+def execute_file_operation(op: CopyOp | MoveOp) -> Path:
+    """Perform one copy or move and return its exclusively reserved destination.
+
+    The destination may gain a numeric suffix when another process creates the
+    planned name after the plan was built.  Callers that maintain their own
+    plans can use the returned path to report that outcome accurately.
+    """
     dst = reserve_exclusive(op.dst)
     try:
         if isinstance(op, MoveOp):
@@ -388,6 +393,7 @@ def _write_file(op: CopyOp | MoveOp) -> None:
         with suppress(OSError):
             os.unlink(dst)
         raise
+    return dst
 
 
 def _move_onto(src: Path, dst: Path) -> None:
@@ -430,7 +436,7 @@ def execute_plan(plan: FileOperationPlan, progress: ProgressSink | None = None) 
         if isinstance(op, MkdirOp):
             os.makedirs(op.path, exist_ok=True)
         elif isinstance(op, CopyOp | MoveOp):
-            _write_file(op)
+            execute_file_operation(op)
         progress.advance()
 
     if plan.n_skips:

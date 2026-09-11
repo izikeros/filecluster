@@ -16,12 +16,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from shutil import copy2, move
 
 from filecluster import logger
 from filecluster.curation.exceptions import UnsafeRelativePathError
 from filecluster.curation.types import CurationDecision, CurationResult
-from filecluster.file_operations import DestinationAllocator
+from filecluster.file_operations import (
+    CopyOp,
+    DestinationAllocator,
+    MoveOp,
+    execute_file_operation,
+)
 from filecluster.ui import NullProgress, ProgressSink
 
 
@@ -190,9 +194,9 @@ def execute_plan(
     for op in plan.ops:
         try:
             if op.mode is OperationMode.COPY:
-                copy2(str(op.src), str(op.dst))
+                execute_file_operation(CopyOp(src=op.src, dst=op.dst))
             else:
-                move(str(op.src), str(op.dst))
+                execute_file_operation(MoveOp(src=op.src, dst=op.dst))
             plan.statuses[str(op.src)] = OperationStatus.COMPLETED
         except OSError as exc:
             logger.warning(f"Could not {op.mode.value} {op.src}: {exc}")

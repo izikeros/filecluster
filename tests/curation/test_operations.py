@@ -164,6 +164,19 @@ class TestExecution:
         assert existing.read_bytes() == b"existing"
         assert (out_dir / "keep" / "a (1).jpg").exists()
 
+    @pytest.mark.parametrize("mode", [OperationMode.COPY, OperationMode.MOVE])
+    def test_write_time_collision_never_overwrites(self, tmp_path, out_dir, mode):
+        source = write_photo(tmp_path / "a.jpg")
+        plan = build_operation_plan([result_for(source)], out_dir, mode)
+        destination = plan.ops[0].dst
+        destination.parent.mkdir(parents=True)
+        destination.write_bytes(b"existing")
+
+        execute_plan(plan)
+
+        assert destination.read_bytes() == b"existing"
+        assert (destination.parent / "a (1).jpg").exists()
+
     def test_a_failing_file_is_recorded_and_the_rest_continue(self, tmp_path, out_dir):
         good = write_photo(tmp_path / "a.jpg")
         missing = tmp_path / "gone.jpg"
