@@ -11,7 +11,12 @@ from filecluster.curation.pipeline import (
     curate,
     discover_media,
 )
-from filecluster.curation.providers.base import OcrAggregates, Providers
+from filecluster.curation.providers.base import (
+    OcrAggregates,
+    ProviderInfo,
+    Providers,
+    VlmJudgement,
+)
 from filecluster.curation.types import CurationDecision, MediaKind, StageResult
 
 from .conftest import (
@@ -177,6 +182,33 @@ class TestCascade:
         assert result.top_label == "personal_people"
         assert result.signal("personal_probability") == 0.97
         assert result.decision is CurationDecision.KEEP
+
+    def test_a_qualified_vlm_judgement_becomes_the_final_verdict(self, tmp_path):
+        class FakeVlmProvider:
+            def info(self):
+                return ProviderInfo(name="fake-vlm", model_id="fake-vlm-1")
+
+            def judge(self, image):
+                return VlmJudgement(
+                    decision=CurationDecision.KEEP,
+                    confidence=0.9,
+                    labels=("portrait",),
+                    reasons=("clear personal photograph",),
+                )
+
+        settings = CurationSettings(
+            enable_vlm=True,
+            thresholds=Thresholds(keep=0.95, reject=0.05, vlm_band=(0.25, 0.75)),
+        )
+        providers = Providers(vlm=FakeVlmProvider())
+        item = make_item(write_photo(tmp_path / "a.jpg"))
+
+        result = CurationPipeline(settings, providers).analyze(item)
+
+        assert result.decision is CurationDecision.KEEP
+        assert result.confidence == 0.9
+        assert result.top_label == "portrait"
+        assert reasons.VLM_DECISION in result.reasons
 
     def test_ocr_contributes_only_aggregates(self, tmp_path):
         settings = CurationSettings(enable_ocr=True)

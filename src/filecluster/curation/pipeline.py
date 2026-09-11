@@ -336,13 +336,20 @@ class CurationPipeline:
                 scores.update(outcome.scores)
                 labels = outcome.labels or labels
                 notes.extend(outcome.reasons)
-                if not outcome.failed and outcome.terminal_decision is not None:
-                    verdict = fuse(
+                decision = outcome.terminal_decision
+                if (
+                    not outcome.failed
+                    and decision is not None
+                    and self._is_terminal(outcome)
+                ):
+                    return self._result(
+                        item,
+                        decision,
+                        float(outcome.confidence or 1.0),
                         scores,
                         labels,
                         notes,
-                        self.settings,
-                        stage_failed=False,
+                        trace,
                     )
 
         return self._result(
