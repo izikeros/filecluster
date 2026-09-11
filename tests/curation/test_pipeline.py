@@ -94,6 +94,13 @@ class TestStageAssembly:
 
         assert names == ["metadata", "features"]
 
+    def test_requested_stages_without_providers_are_reported(self, inbox):
+        settings = CurationSettings(enable_semantic=True, enable_ocr=True)
+
+        run = CurationPipeline(settings).run(inbox)
+
+        assert run.unavailable_stages == ("ocr", "semantic")
+
     def test_providers_are_added_in_cost_order(self):
         settings = CurationSettings(enable_semantic=True, enable_ocr=True)
         providers = Providers(

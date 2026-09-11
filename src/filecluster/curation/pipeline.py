@@ -74,6 +74,7 @@ class CurationRun:
     n_skipped: int = 0
     elapsed_seconds: float = 0.0
     executed: bool = False
+    unavailable_stages: tuple[str, ...] = ()
 
     @property
     def n_cache_hits(self) -> int:
@@ -194,6 +195,21 @@ def build_stages(
     return stages
 
 
+def unavailable_stages(
+    settings: CurationSettings, providers: Providers
+) -> tuple[str, ...]:
+    """Return enabled model-backed stages that cannot run in this pipeline."""
+    requested = (
+        ("ocr", settings.enable_ocr, providers.ocr),
+        ("semantic", settings.enable_semantic, providers.semantic),
+        ("quality", settings.enable_quality, providers.quality),
+        ("vlm", settings.enable_vlm, providers.vlm),
+    )
+    return tuple(
+        name for name, enabled, provider in requested if enabled and provider is None
+    )
+
+
 class CurationPipeline:
     """Runs the cascade over an inbox and returns one verdict per file."""
 
@@ -217,6 +233,7 @@ class CurationPipeline:
             if settings.enable_vlm and self.providers.vlm is not None
             else None
         )
+        self.unavailable_stages = unavailable_stages(settings, self.providers)
         self.cache_key = CacheKey(
             pipeline_version=PIPELINE_VERSION,
             config_fingerprint=settings.fingerprint(),
@@ -241,6 +258,7 @@ class CurationPipeline:
             settings=self.settings,
             cache_key=self.cache_key,
             n_discovered=len(discovered),
+            unavailable_stages=self.unavailable_stages,
         )
         progress.start(len(discovered), "Curating")
         for candidate in discovered:

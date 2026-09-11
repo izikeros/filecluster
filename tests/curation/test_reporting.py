@@ -126,6 +126,11 @@ class TestJsonSummary:
         assert summary["config_fingerprint"]
         assert summary["model_fingerprint"]
 
+    def test_reports_requested_but_unavailable_stages(self, inbox):
+        run = run_over(inbox, CurationSettings(enable_semantic=True))
+
+        assert json_summary(run)["unavailable_stages"] == ["semantic"]
+
     def test_operation_counts_come_from_the_plan(self, inbox, settings, out_dir):
         run = run_over(inbox, settings)
         plan = build_operation_plan(run.results, out_dir, OperationMode.MOVE)

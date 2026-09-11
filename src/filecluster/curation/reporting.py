@@ -118,6 +118,7 @@ def json_summary(
         "cache_hits": run.n_cache_hits,
         "decisions": run.decision_counts(),
         "errors": run.n_errors,
+        "unavailable_stages": list(run.unavailable_stages),
         "elapsed_seconds": round(run.elapsed_seconds, 3),
         "executed": run.executed,
         "pipeline_version": run.cache_key.pipeline_version,
