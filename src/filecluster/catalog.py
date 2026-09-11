@@ -37,7 +37,7 @@ from filecluster.media_integrity import (
     verify_video,
 )
 from filecluster.ui import NullProgress, ProgressSink
-from filecluster.utlis import (
+from filecluster.utils import (
     crc32_file,
     get_exif_date,
     get_partial_hash,

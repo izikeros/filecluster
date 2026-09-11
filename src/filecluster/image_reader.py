@@ -10,7 +10,7 @@ import pandas as pd
 from pandas import DataFrame
 from pydantic import BaseModel
 
-import filecluster.utlis as ut
+import filecluster.utils as ut
 from filecluster import logger
 from filecluster.configuration import (
     Config,

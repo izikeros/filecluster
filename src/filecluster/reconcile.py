@@ -41,7 +41,7 @@ from filecluster.file_operations import (
     execute_plan,
 )
 from filecluster.ui import NullProgress, ProgressSink
-from filecluster.utlis import (
+from filecluster.utils import (
     EVENT_FOLDER_RE,
     extract_year_from_folder,
     find_sidecar_files,
@@ -766,7 +766,7 @@ def _library_dest_for_flat_file(source_file: Path, library: Path) -> Path:
 
     Uses EXIF date or mtime to group into ``library/YYYY/[YYYY_MM_DD]_unsorted``.
     """
-    from filecluster.utlis import get_date_from_file
+    from filecluster.utils import get_date_from_file
 
     try:
         m_time, _c_time, exif_date = get_date_from_file(str(source_file))

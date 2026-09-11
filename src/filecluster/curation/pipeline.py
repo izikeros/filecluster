@@ -44,7 +44,7 @@ from filecluster.curation.types import (
     StageResult,
 )
 from filecluster.ui import NullProgress, ProgressSink
-from filecluster.utlis import SKIP_DIR_NAMES
+from filecluster.utils import SKIP_DIR_NAMES
 
 #: Files the pipeline creates itself, never candidates for curation.
 _OWN_FILES: tuple[str, ...] = (".filecluster-curation.db", ".filecluster.db")

@@ -23,7 +23,7 @@ from filecluster.exceptions import MissingDfClusterColumnError
 from filecluster.file_operations import FileOperationPlan, build_file_operation_plan
 from filecluster.filecluster_types import ClustersDataFrame, MediaDataFrame
 from filecluster.ui import NullProgress, ProgressSink
-from filecluster.utlis import PARTIAL_HASH_SIZE, get_partial_hash, hash_file
+from filecluster.utils import PARTIAL_HASH_SIZE, get_partial_hash, hash_file
 
 # Re-exported so callers (and tests that monkeypatch this module) keep working
 # now that the implementations live in ``utlis``.

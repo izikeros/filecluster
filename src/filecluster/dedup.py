@@ -33,7 +33,7 @@ from filecluster.file_operations import (
     strip_copy_suffix,
 )
 from filecluster.ui import NullProgress, ProgressSink
-from filecluster.utlis import (
+from filecluster.utils import (
     get_partial_hash,
     hash_file,
     is_event_folder_name,
