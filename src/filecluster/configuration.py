@@ -20,7 +20,7 @@ from typing import Any
 
 from pydantic import field_validator
 from pydantic.dataclasses import dataclass
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from filecluster import logger
 
@@ -70,6 +70,12 @@ class FileClusterSettings(BaseSettings):
 
     Can be overridden via environment variables with FILECLUSTER_ prefix.
     """
+
+    model_config = SettingsConfigDict(
+        env_prefix="FILECLUSTER_",
+        env_file=".env",
+        extra="ignore",
+    )
 
     # Common file settings
     ini_filename: str = ".cluster.ini"
@@ -153,12 +159,6 @@ class FileClusterSettings(BaseSettings):
     def lowercase_extensions(cls, extensions: list[str]) -> list[str]:
         """Ensure all extensions are lowercase."""
         return [ext.lower() for ext in extensions]
-
-    class Config:
-        env_prefix = "FILECLUSTER_"
-        env_file = ".env"
-        extra = "ignore"
-
 
 @dataclass
 class Config:
