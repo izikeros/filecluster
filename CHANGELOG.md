@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-11
+
 ### Added
 - **Recursive inbox scanning by default (`--flat` / `--no-recursive`)** —
   `filecluster run` now recursively scans subdirectories in the inbox directory
