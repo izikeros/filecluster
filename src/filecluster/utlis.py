@@ -5,10 +5,14 @@ import hashlib
 import logging
 import os
 import re
+import zlib
+from collections.abc import Callable
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
+import blake3
 import exifread
 from PIL import Image
 
@@ -20,6 +24,15 @@ from filecluster.exceptions import DateStringNoneError
 logging.getLogger("exifread").setLevel(logging.CRITICAL)
 
 BLOCK_SIZE_FOR_HASHING = 4096 * 32
+
+#: Hash algorithms the catalog can use, keyed by the name stored in the
+#: ``hash_algo`` column. ``blake3`` is the modern default for opt-in builds;
+#: ``md5``/``sha1`` remain for the legacy fast-prefilter/full-hash split.
+HASH_CONSTRUCTORS: dict[str, Callable[[], Any]] = {
+    "md5": hashlib.md5,
+    "sha1": hashlib.sha1,
+    "blake3": blake3.blake3,
+}
 
 #: Event-folder names produced by filecluster: ``[YYYY_MM_DD]_optional_name``.
 EVENT_FOLDER_RE = re.compile(r"^\[(\d{4})_(\d{2})_(\d{2})\]")
@@ -72,11 +85,19 @@ def is_sidecar_file(file_name: str) -> bool:
     return file_name.lower().endswith(SIDECAR_EXTENSIONS)
 
 
-def get_partial_hash(filepath, size: int = PARTIAL_HASH_SIZE) -> str | None:
-    """Hash the first *size* bytes of a file, or None if it cannot be read."""
+def get_partial_hash(
+    filepath, size: int = PARTIAL_HASH_SIZE, *, algo: str = "md5"
+) -> str | None:
+    """Hash the first *size* bytes of a file, or None if it cannot be read.
+
+    *algo* selects the digest (``md5`` by default for the fast dedup
+    prefilter; ``blake3`` when the catalog is built with that algorithm).
+    """
     try:
         with open(filepath, "rb") as f:
-            return hashlib.md5(f.read(size)).hexdigest()
+            hasher = HASH_CONSTRUCTORS[algo]()
+            hasher.update(f.read(size))
+            return hasher.hexdigest()
     except OSError:
         return None
 
@@ -87,6 +108,7 @@ def walk_media_files(
     *,
     recursive: bool = True,
     skip_dir_names: frozenset[str] = SKIP_DIR_NAMES,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> list[Path]:
     """Collect every supported media file under *root*.
 
@@ -95,13 +117,16 @@ def walk_media_files(
         ext_list: Recognised media extensions.
         recursive: When False, only direct children of *root* are returned.
         skip_dir_names: Directory names to prune from the walk.
+        on_progress: Called with ``(n_folders, n_files)`` found so far, once per
+            visited directory. Walking a large or network-mounted tree takes
+            long enough that the caller needs to show it is making headway.
 
     Returns:
         Sorted list of media file paths.
     """
     root = Path(root)
     found: list[Path] = []
-    for dirpath, dirnames, filenames in os.walk(root):
+    for n_folders, (dirpath, dirnames, filenames) in enumerate(os.walk(root), start=1):
         dirnames[:] = [d for d in dirnames if d not in skip_dir_names]
         if not recursive:
             dirnames.clear()
@@ -109,6 +134,8 @@ def walk_media_files(
         found.extend(
             here / name for name in filenames if is_supported_filetype(name, ext_list)
         )
+        if on_progress is not None:
+            on_progress(n_folders, len(found))
     return sorted(found)
 
 
@@ -245,15 +272,39 @@ def image_formatter(im_base64):
     return f'<img src="data:image/jpeg;base64,{image_base64(im_base64)}">'
 
 
-def hash_file(fname, hash_funct=hashlib.sha1):
-    """Hash function can be e.g.: md5, sha1, sha256,..."""
+def hash_file(fname, hash_funct=hashlib.sha1, *, algo: str | None = None):
+    """Hash a whole file, streaming it in blocks.
+
+    *hash_funct* is a ``hashlib``-style constructor (default SHA-1). Pass
+    *algo* (``"sha1"`` or ``"blake3"``) to select the digest by name instead;
+    it overrides *hash_funct* and is what the catalog uses to hash with the
+    algorithm recorded for a build.
+    """
     # modified version of
     # https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
-    hash_value = hash_funct()
+    constructor = HASH_CONSTRUCTORS[algo] if algo is not None else hash_funct
+    hash_value = constructor()
     with open(fname, "rb") as f:
         for chunk in iter(lambda: f.read(BLOCK_SIZE_FOR_HASHING), b""):
             hash_value.update(chunk)
     return hash_value.hexdigest()
+
+
+def crc32_file(fname) -> str | None:
+    """Return the CRC32 of a whole file as 8 lowercase hex digits, or None.
+
+    CRC32 is a cheap, non-cryptographic checksum: it cannot detect deliberate
+    tampering but is a fast way to catch bit rot on repeated verifications.
+    Returns None when the file cannot be read.
+    """
+    checksum = 0
+    try:
+        with open(fname, "rb") as f:
+            for chunk in iter(lambda: f.read(BLOCK_SIZE_FOR_HASHING), b""):
+                checksum = zlib.crc32(chunk, checksum)
+    except OSError:
+        return None
+    return f"{checksum & 0xFFFFFFFF:08x}"
 
 
 # def read_version():

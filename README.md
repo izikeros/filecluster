@@ -7,6 +7,7 @@ Python library for creating image and video catalog. Catalog is organized by the
 ### Features
 - clustering media (images, video) by event, using EXIF timestamps with a
   filesystem-timestamp fallback
+- recursive inbox scanning by default, with `--flat` / `--no-recursive` to scan top-level files only
 - detecting duplicate files and storing them in a separate output dir
 - detecting media belonging to events that are already in the library
 - assigning imported media to an event already present in the library
@@ -55,9 +56,60 @@ filecluster reconcile -s to_sort -l zdjecia          # add --execute to apply
 # 4. find photos stored twice inside one tree
 filecluster dedup -d zdjecia                         # add -q DIR --execute to quarantine
 
-# 5. inspect the per-library index
+# 5. build (or update) the per-library SQLite index from an organised library
+filecluster catalog build -l zdjecia                 # add -f to rebuild from scratch
+
+# 6. inspect the per-library index
 filecluster catalog stats -l zdjecia
 ```
+
+Catalog builds store a short hash of the first 1 MiB for every file. Images
+also get a full SHA-1 hash by default, while videos stay short to avoid reading
+hundreds of megabytes per file. Configure the policies independently:
+
+```bash
+filecluster catalog build -l zdjecia --image-hash full --video-hash short
+filecluster catalog build -l zdjecia --image-hash short --video-hash full
+filecluster catalog build -l zdjecia --full-hash     # full for both
+```
+
+The digest defaults to SHA-1 (with an MD5 fast prefilter). Pass
+`--hash-algo blake3` to use BLAKE3 — a fast, modern, cryptographically strong
+hash — for both hashes instead. The algorithm is recorded per file so old and
+new catalogs coexist. Independently, `--crc32` stores a cheap whole-file CRC32
+checksum per file for bit-rot detection:
+
+```bash
+filecluster catalog build -l zdjecia --hash-algo blake3     # BLAKE3 for both hashes
+filecluster catalog build -l zdjecia --crc32                # add CRC32 checksums
+filecluster catalog build -l zdjecia --hash-algo blake3 --crc32
+```
+
+The algorithm and CRC32 choice are pinned to the library on its first build,
+so it never accumulates a mix of incomparable hashes. A plain re-run keeps the
+stored policy; explicitly asking for a different one is refused unless you pass
+`--rebuild`, which backs up the catalog and re-hashes every file (confirmed
+interactively; refused in `--json`/non-interactive mode). `catalog stats` shows
+the pinned hash algorithm and CRC32 policy.
+
+`catalog verify` compares cached rows against the files on disk by size and
+mtime. Add `--deep` to also catch *content-level* corruption in two ways:
+decodable images are fully decoded with Pillow and videos are validated with
+`ffprobe` (install it separately; without it videos are reported as not checked
+rather than failing), and the stored full hash and CRC32 are recomputed and
+compared to catch silent bit rot — even in RAW/HEIC files that cannot be
+decoded here. An edited file (size/mtime changed) is only decoded, never
+flagged as corrupt. The stored baseline is never overwritten.
+
+```bash
+filecluster catalog verify -l zdjecia                # fast: size/mtime only
+filecluster catalog verify -l zdjecia --deep         # decode + re-hash vs baseline
+```
+
+To browse and search the resulting `.filecluster.db` without any server, open
+[`webui/catalog-browser.html`](webui/catalog-browser.html) in a browser and drop
+the catalog file onto the page. It reads the database in-browser with sql.js;
+nothing is uploaded. See [`webui/README.md`](webui/README.md).
 
 A dry run over a small inbox looks like this:
 

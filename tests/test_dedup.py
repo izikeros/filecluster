@@ -368,6 +368,20 @@ class TestHashCaching:
         assert groups_second == []
         assert hashed >= 1
 
+    def test_blake3_catalog_rows_are_not_reused(self, tmp_path):
+        from filecluster.catalog import HashAlgo
+
+        root = tmp_path / "lib"
+        _write(root / "a.jpg", b"same-photo-bytes")
+        _write(root / "b.jpg", b"same-photo-bytes")
+        # A blake3-built catalog stores blake3 hashes; dedup computes MD5/SHA-1
+        # and must recompute rather than trust the incompatible cached values.
+        LibraryCatalog.build(root, hash_algo=HashAlgo.BLAKE3)
+
+        groups, _, hashed = find_duplicate_groups(root)
+        assert len(groups) == 1  # still correctly detected as duplicates
+        assert hashed == 2  # both were re-hashed, not reused
+
 
 # ---------------------------------------------------------------------------
 # Dry runs write nothing

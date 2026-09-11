@@ -250,6 +250,40 @@ class TestHashFile:
         assert isinstance(h, str)
         assert len(h) == 32  # MD5 hex digest length
 
+    def test_algo_selects_blake3(self, assets_dir):
+        img_pth = str(assets_dir / "set_1" / "IMG_3784.jpg")
+        sha1 = hash_file(fname=img_pth, algo="sha1")
+        b3 = hash_file(fname=img_pth, algo="blake3")
+        assert sha1 == hash_file(fname=img_pth)  # default is sha1
+        assert b3 != sha1
+        assert len(b3) == 64  # blake3 default 32-byte digest, hex
+
+
+class TestCrc32File:
+    def test_returns_eight_hex_digits(self, tmp_path):
+        from filecluster.utlis import crc32_file
+
+        f = tmp_path / "a.bin"
+        f.write_bytes(b"hello world")
+        crc = crc32_file(str(f))
+        assert crc is not None
+        assert len(crc) == 8
+        assert int(crc, 16) >= 0
+
+    def test_changes_when_content_changes(self, tmp_path):
+        from filecluster.utlis import crc32_file
+
+        f = tmp_path / "a.bin"
+        f.write_bytes(b"hello world")
+        before = crc32_file(str(f))
+        f.write_bytes(b"hello worlD")
+        assert crc32_file(str(f)) != before
+
+    def test_missing_file_returns_none(self, tmp_path):
+        from filecluster.utlis import crc32_file
+
+        assert crc32_file(str(tmp_path / "nope.bin")) is None
+
 
 # ---------------------------------------------------------------------------
 # Thumbnail and base64
@@ -313,6 +347,16 @@ class TestGetPartialHash:
         b.write_bytes(b"headYYYY")
         assert get_partial_hash(str(a), size=4) == get_partial_hash(str(b), size=4)
 
+    def test_algo_selects_blake3(self, tmp_path):
+        from filecluster.utlis import get_partial_hash
+
+        f = tmp_path / "a.bin"
+        f.write_bytes(b"some-photo-bytes")
+        md5 = get_partial_hash(str(f))  # default md5
+        b3 = get_partial_hash(str(f), algo="blake3")
+        assert md5 != b3
+        assert len(md5) == 32 and len(b3) == 64
+
     def test_missing_file_returns_none(self, tmp_path):
         from filecluster.utlis import get_partial_hash
 
@@ -372,6 +416,33 @@ class TestWalkMediaFiles:
         from filecluster.utlis import walk_media_files
 
         assert walk_media_files(tmp_path, [".jpg"]) == []
+
+    def test_progress_callback_reports_running_totals(self, tmp_path):
+        """The walk reports headway, so a slow scan does not look like a hang."""
+        from filecluster.utlis import walk_media_files
+
+        for i in range(3):
+            sub = tmp_path / f"sub_{i}"
+            sub.mkdir()
+            (sub / f"a_{i}.jpg").write_bytes(b"1")
+
+        seen: list[tuple[int, int]] = []
+        walk_media_files(
+            tmp_path, [".jpg"], on_progress=lambda f, n: seen.append((f, n))
+        )
+
+        # One call per visited directory: the root plus the three subfolders.
+        assert len(seen) == 4
+        # Folder and file counts only ever grow.
+        assert [folders for folders, _ in seen] == [1, 2, 3, 4]
+        assert seen[-1][1] == 3
+
+    def test_progress_callback_is_optional(self, tmp_path):
+        """Library callers that pass nothing keep the original behaviour."""
+        from filecluster.utlis import walk_media_files
+
+        (tmp_path / "a.jpg").write_bytes(b"1")
+        assert [p.name for p in walk_media_files(tmp_path, [".jpg"])] == ["a.jpg"]
 
 
 # ---------------------------------------------------------------------------

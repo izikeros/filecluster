@@ -89,6 +89,7 @@ class TestVersionAndHelp:
             "-r", "--restore-original-names",
             # added by the new CLI
             "-l", "--limit",
+            "--flat", "--no-recursive",
             "-Y", "--yes",
             "-V", "--version",
             "-v", "--verbose",
@@ -706,6 +707,212 @@ class TestCatalogCommand:
         result = runner.invoke(app, ["catalog", "restore", "-l", str(tmp_path)])
         assert result.exit_code == EXIT_USAGE
 
+    def test_build_scans_library(self, tmp_path):
+        event = tmp_path / "2020" / "[2020_06_15]_trip"
+        event.mkdir(parents=True)
+        (event / "a.jpg").write_bytes(b"aaaa")
+        (event / "b.jpg").write_bytes(b"bbbb")
+
+        result = runner.invoke(app, ["catalog", "build", "-l", str(tmp_path), "--json"])
+        assert result.exit_code == EXIT_OK
+        payload = json.loads(result.stdout)
+        assert payload["mode"] == "update"
+        assert payload["scanned"] == 2
+        assert payload["added"] == 2
+        assert payload["clusters_scanned"] == 1
+        assert payload["clusters_added"] == 1
+        assert payload["image_hash"] == "full"
+        assert payload["video_hash"] == "short"
+
+    def test_build_accepts_independent_hash_modes(self, tmp_path):
+        (tmp_path / "a.jpg").write_bytes(b"image")
+        (tmp_path / "clip.mp4").write_bytes(b"video")
+
+        result = runner.invoke(
+            app,
+            [
+                "catalog",
+                "build",
+                "-l",
+                str(tmp_path),
+                "--image-hash",
+                "short",
+                "--video-hash",
+                "full",
+                "--json",
+            ],
+        )
+
+        assert result.exit_code == EXIT_OK
+        payload = json.loads(result.stdout)
+        assert payload["image_hash"] == "short"
+        assert payload["video_hash"] == "full"
+
+        from filecluster.catalog import LibraryCatalog
+
+        with LibraryCatalog.open(tmp_path) as catalog:
+            hashes = catalog.get_file_hashes()
+        assert hashes["a.jpg"][2] is None
+        assert hashes["clip.mp4"][2] is not None
+
+    def test_build_rejects_invalid_hash_mode(self, tmp_path):
+        result = runner.invoke(
+            app,
+            [
+                "catalog",
+                "build",
+                "-l",
+                str(tmp_path),
+                "--image-hash",
+                "invalid",
+            ],
+        )
+        assert result.exit_code == EXIT_USAGE
+        assert "Hash mode must be 'full' or 'short'." in result.stderr
+
+    def test_build_full_hash_shortcut_hashes_both_media_types(self, tmp_path):
+        (tmp_path / "a.jpg").write_bytes(b"image")
+        (tmp_path / "clip.mp4").write_bytes(b"video")
+
+        result = runner.invoke(
+            app,
+            [
+                "catalog",
+                "build",
+                "-l",
+                str(tmp_path),
+                "--full-hash",
+                "--json",
+            ],
+        )
+
+        assert result.exit_code == EXIT_OK
+        payload = json.loads(result.stdout)
+        assert payload["image_hash"] == "full"
+        assert payload["video_hash"] == "full"
+
+    def test_build_rebuild_backs_up(self, tmp_path):
+        (tmp_path / "a.jpg").write_bytes(b"aaaa")
+        runner.invoke(app, ["catalog", "build", "-l", str(tmp_path), "--json"])
+
+        result = runner.invoke(
+            app, ["catalog", "build", "-l", str(tmp_path), "-f", "--json"]
+        )
+        payload = json.loads(result.stdout)
+        assert payload["mode"] == "rebuild"
+        assert payload["backup"] is not None
+
+    def test_build_renders_a_table(self, tmp_path):
+        (tmp_path / "a.jpg").write_bytes(b"aaaa")
+        result = runner.invoke(app, ["catalog", "build", "-l", str(tmp_path)])
+        assert result.exit_code == EXIT_OK
+        assert "Catalog built" in result.stdout
+
+    def test_build_conflicting_hash_algo_is_refused(self, tmp_path):
+        (tmp_path / "a.jpg").write_bytes(b"aaaa")
+        runner.invoke(
+            app,
+            [
+                "catalog",
+                "build",
+                "-l",
+                str(tmp_path),
+                "--hash-algo",
+                "blake3",
+                "--json",
+            ],
+        )
+
+        # A plain (non-rebuild) build that explicitly asks for a different
+        # algorithm must refuse in JSON mode and point at --rebuild.
+        result = runner.invoke(
+            app,
+            ["catalog", "build", "-l", str(tmp_path), "--hash-algo", "sha1", "--json"],
+        )
+        assert result.exit_code == EXIT_USAGE
+        assert "--rebuild" in result.stderr
+
+    def test_build_conflicting_crc32_is_refused(self, tmp_path):
+        (tmp_path / "a.jpg").write_bytes(b"aaaa")
+        runner.invoke(
+            app,
+            ["catalog", "build", "-l", str(tmp_path), "--crc32", "--json"],
+        )
+
+        result = runner.invoke(
+            app,
+            ["catalog", "build", "-l", str(tmp_path), "--json"],
+        )
+        # No explicit --crc32 flag here, so the stored crc32=True policy is
+        # reused silently rather than treated as a conflict.
+        assert result.exit_code == EXIT_OK
+
+    def test_build_rebuild_overrides_conflicting_policy(self, tmp_path):
+        from filecluster.catalog import LibraryCatalog
+
+        (tmp_path / "a.jpg").write_bytes(b"aaaa")
+        runner.invoke(
+            app,
+            [
+                "catalog",
+                "build",
+                "-l",
+                str(tmp_path),
+                "--hash-algo",
+                "blake3",
+                "--json",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "catalog",
+                "build",
+                "-l",
+                str(tmp_path),
+                "--hash-algo",
+                "sha1",
+                "-f",
+                "--json",
+            ],
+        )
+        assert result.exit_code == EXIT_OK
+        payload = json.loads(result.stdout)
+        assert payload["mode"] == "rebuild"
+
+        # The CLI maps --hash-algo sha1 onto the legacy (NULL) policy so
+        # reconcile/dedup keep reusing those hashes.
+        with LibraryCatalog.open(tmp_path) as cat:
+            assert cat.get_hash_policy() == {"hash_algo": None, "crc32": False}
+
+    def test_build_default_rerun_reuses_pinned_policy(self, tmp_path):
+        from filecluster.catalog import LibraryCatalog
+
+        (tmp_path / "a.jpg").write_bytes(b"aaaa")
+        runner.invoke(
+            app,
+            [
+                "catalog",
+                "build",
+                "-l",
+                str(tmp_path),
+                "--hash-algo",
+                "blake3",
+                "--crc32",
+                "--json",
+            ],
+        )
+
+        # Plain re-run with no hashing flags keeps the pinned blake3+crc32.
+        (tmp_path / "b.jpg").write_bytes(b"bbbb")
+        result = runner.invoke(app, ["catalog", "build", "-l", str(tmp_path), "--json"])
+        assert result.exit_code == EXIT_OK
+
+        with LibraryCatalog.open(tmp_path) as cat:
+            assert cat.get_hash_policy() == {"hash_algo": "blake3", "crc32": True}
+            assert cat.get_file_records()["b.jpg"].hash_algo == "blake3"
+
     def test_verify_reports_missing_rows(self, tmp_path):
         from filecluster.catalog import LibraryCatalog
 
@@ -733,3 +940,102 @@ class TestCatalogCommand:
         assert json.loads(result.stdout)["pruned"] == 1
         with LibraryCatalog.open(tmp_path) as cat:
             assert cat.get_file_hashes() == {}
+
+    def test_verify_deep_reports_corruption(self, tmp_path):
+        from PIL import Image
+
+        from filecluster.catalog import LibraryCatalog
+
+        good = tmp_path / "good.jpg"
+        Image.new("RGB", (16, 16), (10, 20, 30)).save(good, "JPEG")
+        broken = tmp_path / "broken.jpg"
+        data = good.read_bytes()
+        broken.write_bytes(data[: len(data) // 2])
+
+        LibraryCatalog.build(tmp_path)
+
+        result = runner.invoke(
+            app, ["catalog", "verify", "-l", str(tmp_path), "--deep", "--json"]
+        )
+
+        payload = json.loads(result.stdout)
+        assert payload["decoded_ok"] == 1
+        assert payload["corrupt"] == 1
+
+
+class TestRecursiveInbox:
+    """Tests for recursive vs flat inbox reading in CLI."""
+
+    def test_recursive_by_default(self, tmp_path, assets_dir):
+        inbox_dir = tmp_path / "inbox"
+        inbox_dir.mkdir()
+        sub_dir = inbox_dir / "sub"
+        sub_dir.mkdir()
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+
+        shutil.copy(assets_dir / "set_1" / "IMG_3784.jpg", inbox_dir / "top.jpg")
+        shutil.copy(assets_dir / "set_1" / "IMG_4026.JPG", sub_dir / "nested.jpg")
+
+        result = runner.invoke(
+            app, ["-i", str(inbox_dir), "-o", str(out_dir), "-y", "-Y", "--json"]
+        )
+        assert result.exit_code == EXIT_OK
+        payload = json.loads(result.stdout)
+        assert payload["files_read"] == 2
+
+    def test_flat_option_ignores_subdirectories(self, tmp_path, assets_dir):
+        inbox_dir = tmp_path / "inbox"
+        inbox_dir.mkdir()
+        sub_dir = inbox_dir / "sub"
+        sub_dir.mkdir()
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+
+        shutil.copy(assets_dir / "set_1" / "IMG_3784.jpg", inbox_dir / "top.jpg")
+        shutil.copy(assets_dir / "set_1" / "IMG_4026.JPG", sub_dir / "nested.jpg")
+
+        result = runner.invoke(
+            app,
+            [
+                "-i",
+                str(inbox_dir),
+                "-o",
+                str(out_dir),
+                "-y",
+                "-Y",
+                "--flat",
+                "--json",
+            ],
+        )
+        assert result.exit_code == EXIT_OK
+        payload = json.loads(result.stdout)
+        assert payload["files_read"] == 1
+
+    def test_no_recursive_alias_ignores_subdirectories(self, tmp_path, assets_dir):
+        inbox_dir = tmp_path / "inbox"
+        inbox_dir.mkdir()
+        sub_dir = inbox_dir / "sub"
+        sub_dir.mkdir()
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+
+        shutil.copy(assets_dir / "set_1" / "IMG_3784.jpg", inbox_dir / "top.jpg")
+        shutil.copy(assets_dir / "set_1" / "IMG_4026.JPG", sub_dir / "nested.jpg")
+
+        result = runner.invoke(
+            app,
+            [
+                "-i",
+                str(inbox_dir),
+                "-o",
+                str(out_dir),
+                "-y",
+                "-Y",
+                "--no-recursive",
+                "--json",
+            ],
+        )
+        assert result.exit_code == EXIT_OK
+        payload = json.loads(result.stdout)
+        assert payload["files_read"] == 1

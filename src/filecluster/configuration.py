@@ -109,6 +109,7 @@ class FileClusterSettings(BaseSettings):
     assign_to_clusters_existing_in_libs: bool = False
     skip_duplicated_existing_in_libs: bool = False
     restore_original_names: bool = False
+    recursive_inbox: bool = True
 
     # Time settings
     time_granularity_minutes: int = 60
@@ -179,6 +180,7 @@ class Config:
         restore_original_names: Whether to revert copy-suffixed file names to
             their originals when moving/copying into cluster folders
         inbox_limit: Maximum number of inbox files to ingest, or None for all
+        recursive_inbox: Whether to recursively scan subdirectories in the inbox
     """
 
     in_dir_name: Path
@@ -195,6 +197,7 @@ class Config:
     skip_duplicated_existing_in_libs: bool
     restore_original_names: bool = False
     inbox_limit: int | None = None
+    recursive_inbox: bool = True
 
     def __repr__(self) -> str:
         rep = [f"{p}:\t{self.__getattribute__(p)}" for p in self.__dataclass_fields__]
@@ -300,6 +303,7 @@ class ConfigFactory:
             assign_to_clusters_existing_in_libs=self.settings.assign_to_clusters_existing_in_libs,
             skip_duplicated_existing_in_libs=self.settings.skip_duplicated_existing_in_libs,
             restore_original_names=self.settings.restore_original_names,
+            recursive_inbox=self.settings.recursive_inbox,
         )
 
     @staticmethod
@@ -315,6 +319,8 @@ class ConfigFactory:
         use_existing_clusters: bool | None = None,
         restore_original_names: bool | None = None,
         limit: int | None = None,
+        flat: bool | None = None,
+        recursive: bool | None = None,
         **kwargs: Any,
     ) -> Config:
         """Override config parameters with CLI arguments.
@@ -354,6 +360,10 @@ class ConfigFactory:
             config.assign_to_clusters_existing_in_libs = use_existing_clusters
         if restore_original_names is not None:
             config.restore_original_names = restore_original_names
+        if flat is not None:
+            config.recursive_inbox = not flat
+        if recursive is not None:
+            config.recursive_inbox = recursive
         if limit is not None:
             if limit < 1:
                 raise ValueError("Limit must be a positive number of files")
@@ -415,6 +425,8 @@ def override_config_with_cli_params(
     drop_duplicates: bool | None = None,
     use_existing_clusters: bool | None = None,
     restore_original_names: bool | None = None,
+    flat: bool | None = None,
+    recursive: bool | None = None,
 ) -> Config:
     """Override config with CLI parameters (backwards compatibility)."""
     return default_factory.override_from_cli(
@@ -428,4 +440,6 @@ def override_config_with_cli_params(
         drop_duplicates=drop_duplicates,
         use_existing_clusters=use_existing_clusters,
         restore_original_names=restore_original_names,
+        flat=flat,
+        recursive=recursive,
     )

@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Filecluster Catalog Browser</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --border: #2a2f3a;
+    --text: #e6e8ec;
+    --muted: #9aa2b1;
+    --accent: #5aa0ff;
+    --good: #5ad19a;
+    --warn: #e0b74c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  main { padding: 20px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  button, .fake-btn {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  button:hover, .fake-btn:hover { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type="search"], select {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  input[type="search"] { min-width: 320px; }
+  #dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 48px;
+    text-align: center;
+    color: var(--muted);
+    background: var(--panel);
+    transition: border-color .15s, background .15s;
+  }
+  #dropzone.drag { border-color: var(--accent); background: var(--panel-2); }
+  .stats { display: flex; gap: 20px; flex-wrap: wrap; margin: 16px 0; }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    min-width: 120px;
+  }
+  .stat .k { color: var(--muted); font-size: 12px; }
+  .stat .v { font-size: 18px; font-weight: 600; margin-top: 2px; }
+  .tabs { display: flex; gap: 8px; margin: 8px 0 16px; }
+  .tab.active { border-color: var(--accent); color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 520px;
+  }
+  th { color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--bg); }
+  th .arrow { color: var(--accent); }
+  tr:hover td { background: var(--panel); }
+  td.path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .hash { font-family: ui-monospace, monospace; color: var(--muted); cursor: copy; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; border: 1px solid var(--border); }
+  .pill.yes { color: var(--good); border-color: #295; }
+  .pill.no { color: var(--muted); }
+  .pager { display: flex; gap: 12px; align-items: center; margin-top: 14px; color: var(--muted); }
+  .hidden { display: none !important; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  a { color: var(--accent); }
+  code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Filecluster Catalog Browser</h1>
+  <span class="sub" id="dbname">no catalog loaded</span>
+  <span style="flex:1"></span>
+  <label class="fake-btn">
+    Open .filecluster.db
+    <input id="filepick" type="file" accept=".db,.sqlite,.filecluster.db" class="hidden" />
+  </label>
+</header>
+
+<main>
+  <section id="loader">
+    <div id="dropzone">
+      <p><strong>Drop your <code>.filecluster.db</code> here</strong> or use “Open” above.</p>
+      <p class="note">
+        Everything runs in your browser; the file is never uploaded.
+        Point it at the <code>.filecluster.db</code> at the root of a library
+        built with <code>filecluster catalog build</code>.
+      </p>
+    </div>
+  </section>
+
+  <section id="app" class="hidden">
+    <div class="stats" id="stats"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="files">Files</button>
+      <button class="tab" data-tab="clusters">Clusters</button>
+    </div>
+
+    <!-- Files tab -->
+    <div id="tab-files">
+      <div class="row">
+        <input id="search" type="search" placeholder="Search path or hash (substring)…" />
+        <label class="note"><input id="imagesOnly" type="checkbox" /> only rows with an EXIF date</label>
+        <span style="flex:1"></span>
+        <select id="pagesize">
+          <option value="50">50 / page</option>
+          <option value="100" selected>100 / page</option>
+          <option value="250">250 / page</option>
+          <option value="500">500 / page</option>
+        </select>
+      </div>
+      <div style="overflow:auto; max-height:65vh; margin-top:12px; border:1px solid var(--border); border-radius:10px;">
+        <table id="filesTable">
+          <thead>
+            <tr>
+              <th data-col="path">Path</th>
+              <th data-col="size" class="num">Size</th>
+              <th data-col="exif_date">EXIF date</th>
+              <th data-col="mtime">Modified</th>
+              <th data-col="partial_hash">Partial</th>
+              <th data-col="full_hash">Full</th>
+              <th data-col="crc32">CRC32</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="prev">‹ Prev</button>
+        <span id="pageinfo"></span>
+        <button id="next">Next ›</button>
+      </div>
+    </div>
+
+    <!-- Clusters tab -->
+    <div id="tab-clusters" class="hidden">
+      <div class="row">
+        <input id="csearch" type="search" placeholder="Search cluster path…" />
+      </div>
+      <div style="overflow:auto; max-height:65vh; margin-top:12px; border:1px solid var(--border); border-radius:10px;">
+        <table id="clustersTable">
+          <thead>
+            <tr>
+              <th data-col="path">Cluster folder</th>
+              <th data-col="start_date">Start</th>
+              <th data-col="end_date">End</th>
+              <th data-col="median">Median</th>
+              <th data-col="file_count" class="num">Files</th>
+              <th data-col="is_continuous">Continuous</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="cprev">‹ Prev</button>
+        <span id="cpageinfo"></span>
+        <button id="cnext">Next ›</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/sql-wasm.js"></script>
+<script>
+"use strict";
+
+const SQL_BASE = "https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/";
+let sqlPromise = null;
+let db = null;
+
+// ---- helpers --------------------------------------------------------------
+function fmtBytes(n) {
+  if (n == null) return "";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0, v = Number(n);
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return (i === 0 ? v : v.toFixed(1)) + " " + u[i];
+}
+function fmtEpoch(sec) {
+  if (sec == null) return "";
+  const d = new Date(Number(sec) * 1000);
+  if (isNaN(d)) return "";
+  return d.toISOString().slice(0, 19).replace("T", " ");
+}
+function shortHash(h) { return h ? h.slice(0, 10) + "…" : ""; }
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function queryAll(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  return rows;
+}
+function queryScalar(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  let v = null;
+  if (stmt.step()) v = stmt.get()[0];
+  stmt.free();
+  return v;
+}
+function tableExists(name) {
+  return queryScalar(
+    "SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", [name]
+  ) > 0;
+}
+function columnExists(table, column) {
+  if (!tableExists(table)) return false;
+  const rows = queryAll(`PRAGMA table_info(${table})`);
+  return rows.some(r => r.name === column);
+}
+
+// ---- loading --------------------------------------------------------------
+async function loadArrayBuffer(buf, name) {
+  if (!sqlPromise) sqlPromise = initSqlJs({ locateFile: f => SQL_BASE + f });
+  const SQL = await sqlPromise;
+  if (db) { db.close(); db = null; }
+  try {
+    db = new SQL.Database(new Uint8Array(buf));
+    db.exec("SELECT 1 FROM sqlite_master LIMIT 1");
+  } catch (e) {
+    alert("Could not open this file as a SQLite database:\n" + e.message);
+    return;
+  }
+  document.getElementById("dbname").textContent = name;
+  document.getElementById("loader").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  renderStats();
+  filesState.page = 0; renderFiles();
+  clustersState.page = 0; renderClusters();
+}
+
+function renderStats() {
+  const el = document.getElementById("stats");
+  const files = tableExists("files") ? queryScalar("SELECT COUNT(*) FROM files") : 0;
+  const bytes = tableExists("files") ? queryScalar("SELECT COALESCE(SUM(size),0) FROM files") : 0;
+  const clusters = tableExists("clusters") ? queryScalar("SELECT COUNT(*) FROM clusters") : 0;
+  const withExif = tableExists("files") ? queryScalar("SELECT COUNT(*) FROM files WHERE exif_date IS NOT NULL") : 0;
+  const withFull = tableExists("files") ? queryScalar("SELECT COUNT(*) FROM files WHERE full_hash IS NOT NULL") : 0;
+  const withCrc = columnExists("files", "crc32") ? queryScalar("SELECT COUNT(*) FROM files WHERE crc32 IS NOT NULL") : 0;
+  const stats = [
+    ["Files", Number(files).toLocaleString()],
+    ["Indexed size", fmtBytes(bytes)],
+    ["Clusters", Number(clusters).toLocaleString()],
+    ["With EXIF date", Number(withExif).toLocaleString()],
+    ["With full hash", Number(withFull).toLocaleString()],
+    ["With CRC32", Number(withCrc).toLocaleString()],
+  ];
+  el.innerHTML = stats.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+}
+
+// ---- files table ----------------------------------------------------------
+const FILE_COLS = new Set(["path", "size", "exif_date", "mtime", "partial_hash", "full_hash", "crc32"]);
+const filesState = { term: "", imagesOnly: false, sort: "path", dir: "ASC", page: 0, size: 100 };
+
+function filesWhere() {
+  const clauses = [];
+  const params = [];
+  if (filesState.term) {
+    clauses.push("(path LIKE ? OR partial_hash LIKE ? OR full_hash LIKE ?)");
+    const like = "%" + filesState.term + "%";
+    params.push(like, like, like);
+  }
+  if (filesState.imagesOnly) clauses.push("exif_date IS NOT NULL");
+  return { sql: clauses.length ? " WHERE " + clauses.join(" AND ") : "", params };
+}
+
+function renderFiles() {
+  if (!tableExists("files")) {
+    document.querySelector("#filesTable tbody").innerHTML =
+      `<tr><td colspan="7">This catalog has no <code>files</code> table.</td></tr>`;
+    document.getElementById("pageinfo").textContent = "";
+    return;
+  }
+  const hasCrc = columnExists("files", "crc32");
+  const { sql: where, params } = filesWhere();
+  const total = Number(queryScalar("SELECT COUNT(*) FROM files" + where, params));
+  const pages = Math.max(1, Math.ceil(total / filesState.size));
+  filesState.page = Math.min(filesState.page, pages - 1);
+
+  const rows = queryAll(
+    `SELECT path, size, mtime, partial_hash, full_hash, exif_date,
+            ${hasCrc ? "crc32" : "NULL AS crc32"}
+       FROM files ${where}
+      ORDER BY ${filesState.sort} ${filesState.dir}
+      LIMIT ? OFFSET ?`,
+    [...params, filesState.size, filesState.page * filesState.size]
+  );
+
+  document.querySelector("#filesTable tbody").innerHTML = rows.map(r => `
+    <tr>
+      <td class="path" title="${esc(r.path)}">${esc(r.path)}</td>
+      <td class="num">${fmtBytes(r.size)}</td>
+      <td>${esc((r.exif_date || "").replace("T", " ").slice(0, 19))}</td>
+      <td>${fmtEpoch(r.mtime)}</td>
+      <td class="hash" title="${esc(r.partial_hash || "")}" data-copy="${esc(r.partial_hash || "")}">${shortHash(r.partial_hash)}</td>
+      <td>${r.full_hash ? `<span class="pill yes hash" title="${esc(r.full_hash)}" data-copy="${esc(r.full_hash)}">${shortHash(r.full_hash)}</span>` : '<span class="pill no">—</span>'}</td>
+      <td class="hash" title="${esc(r.crc32 || "")}" data-copy="${esc(r.crc32 || "")}">${r.crc32 ? esc(r.crc32) : '<span class="pill no">—</span>'}</td>
+    </tr>`).join("") || `<tr><td colspan="7">No matches.</td></tr>`;
+
+  document.getElementById("pageinfo").textContent =
+    `${total.toLocaleString()} file${total === 1 ? "" : "s"} · page ${filesState.page + 1} / ${pages}`;
+  document.getElementById("prev").disabled = filesState.page <= 0;
+  document.getElementById("next").disabled = filesState.page >= pages - 1;
+  updateSortArrows("#filesTable", filesState);
+}
+
+// ---- clusters table -------------------------------------------------------
+const CLUSTER_COLS = new Set(["path", "start_date", "end_date", "median", "file_count", "is_continuous"]);
+const clustersState = { term: "", sort: "path", dir: "ASC", page: 0, size: 200 };
+
+function renderClusters() {
+  if (!tableExists("clusters")) {
+    document.querySelector("#clustersTable tbody").innerHTML =
+      `<tr><td colspan="6">This catalog has no <code>clusters</code> table.</td></tr>`;
+    document.getElementById("cpageinfo").textContent = "";
+    return;
+  }
+  const where = clustersState.term ? " WHERE path LIKE ?" : "";
+  const params = clustersState.term ? ["%" + clustersState.term + "%"] : [];
+  const total = Number(queryScalar("SELECT COUNT(*) FROM clusters" + where, params));
+  const pages = Math.max(1, Math.ceil(total / clustersState.size));
+  clustersState.page = Math.min(clustersState.page, pages - 1);
+
+  const rows = queryAll(
+    `SELECT path, start_date, end_date, median, file_count, is_continuous
+       FROM clusters ${where}
+      ORDER BY ${clustersState.sort} ${clustersState.dir}
+      LIMIT ? OFFSET ?`,
+    [...params, clustersState.size, clustersState.page * clustersState.size]
+  );
+
+  document.querySelector("#clustersTable tbody").innerHTML = rows.map(r => `
+    <tr>
+      <td class="path" title="${esc(r.path)}">${esc(r.path)}</td>
+      <td>${esc((r.start_date || "").slice(0, 19))}</td>
+      <td>${esc((r.end_date || "").slice(0, 19))}</td>
+      <td>${esc((r.median || "").slice(0, 19))}</td>
+      <td class="num">${r.file_count ?? ""}</td>
+      <td>${r.is_continuous ? '<span class="pill yes">yes</span>' : '<span class="pill no">no</span>'}</td>
+    </tr>`).join("") || `<tr><td colspan="6">No matches.</td></tr>`;
+
+  document.getElementById("cpageinfo").textContent =
+    `${total.toLocaleString()} cluster${total === 1 ? "" : "s"} · page ${clustersState.page + 1} / ${pages}`;
+  document.getElementById("cprev").disabled = clustersState.page <= 0;
+  document.getElementById("cnext").disabled = clustersState.page >= pages - 1;
+  updateSortArrows("#clustersTable", clustersState);
+}
+
+function updateSortArrows(tableSel, state) {
+  document.querySelectorAll(tableSel + " th").forEach(th => {
+    const base = th.textContent.replace(/[ ▲▼]+$/, "");
+    th.innerHTML = base + (th.dataset.col === state.sort
+      ? ` <span class="arrow">${state.dir === "ASC" ? "▲" : "▼"}</span>` : "");
+  });
+}
+
+// ---- events ---------------------------------------------------------------
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+document.getElementById("filepick").addEventListener("change", async e => {
+  const f = e.target.files[0];
+  if (f) loadArrayBuffer(await f.arrayBuffer(), f.name);
+});
+
+const dz = document.getElementById("dropzone");
+["dragenter", "dragover"].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add("drag"); }));
+["dragleave", "drop"].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove("drag"); }));
+dz.addEventListener("drop", async e => {
+  const f = e.dataTransfer.files[0];
+  if (f) loadArrayBuffer(await f.arrayBuffer(), f.name);
+});
+
+document.getElementById("search").addEventListener("input", debounce(e => {
+  filesState.term = e.target.value.trim(); filesState.page = 0; renderFiles();
+}, 200));
+document.getElementById("imagesOnly").addEventListener("change", e => {
+  filesState.imagesOnly = e.target.checked; filesState.page = 0; renderFiles();
+});
+document.getElementById("pagesize").addEventListener("change", e => {
+  filesState.size = Number(e.target.value); filesState.page = 0; renderFiles();
+});
+document.getElementById("prev").addEventListener("click", () => { filesState.page--; renderFiles(); });
+document.getElementById("next").addEventListener("click", () => { filesState.page++; renderFiles(); });
+
+document.getElementById("csearch").addEventListener("input", debounce(e => {
+  clustersState.term = e.target.value.trim(); clustersState.page = 0; renderClusters();
+}, 200));
+document.getElementById("cprev").addEventListener("click", () => { clustersState.page--; renderClusters(); });
+document.getElementById("cnext").addEventListener("click", () => { clustersState.page++; renderClusters(); });
+
+document.querySelectorAll("#filesTable th").forEach(th => th.addEventListener("click", () => {
+  const c = th.dataset.col;
+  if (!FILE_COLS.has(c)) return;
+  if (filesState.sort === c) filesState.dir = filesState.dir === "ASC" ? "DESC" : "ASC";
+  else { filesState.sort = c; filesState.dir = "ASC"; }
+  renderFiles();
+}));
+document.querySelectorAll("#clustersTable th").forEach(th => th.addEventListener("click", () => {
+  const c = th.dataset.col;
+  if (!CLUSTER_COLS.has(c)) return;
+  if (clustersState.sort === c) clustersState.dir = clustersState.dir === "ASC" ? "DESC" : "ASC";
+  else { clustersState.sort = c; clustersState.dir = "ASC"; }
+  renderClusters();
+}));
+
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  t.classList.add("active");
+  const which = t.dataset.tab;
+  document.getElementById("tab-files").classList.toggle("hidden", which !== "files");
+  document.getElementById("tab-clusters").classList.toggle("hidden", which !== "clusters");
+}));
+
+// Copy a hash to the clipboard when clicked.
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-copy]");
+  if (el && el.dataset.copy) {
+    navigator.clipboard?.writeText(el.dataset.copy);
+    const prev = el.textContent;
+    el.textContent = "copied";
+    setTimeout(() => { el.textContent = prev; }, 700);
+  }
+});
+</script>
+</body>
+</html>

@@ -50,6 +50,16 @@ MAX_DIAGNOSTIC_SAMPLES = 20
 # Progress advances are batched so a 50k-file loop does not issue 50k redraws.
 MAX_PROGRESS_BATCH = 64
 
+# Fractions at which a phase reports itself when no progress bar can be drawn
+# (dumb terminal, redirected output). Bounded on purpose: three lines per phase
+# regardless of how many files it processes.
+PLAIN_PROGRESS_STEPS = (0.25, 0.5, 0.75)
+
+# Minimum seconds between two plain-text status lines. Callers may retitle a
+# phase thousands of times, so the fallback is throttled by wall clock: often
+# enough to prove the run is alive, rare enough to stay a few lines.
+PLAIN_STATUS_INTERVAL = 3.0
+
 _LABEL_WIDTH = 20
 _DETAIL_WIDTH = 34
 
@@ -109,11 +119,29 @@ def supports_animation(console: Console) -> bool:
     which is right for colour but wrong for animation: redrawing into a pipe
     leaves one line of debris per refresh. Animation therefore requires a real
     tty.
+
+    A dumb terminal (``TERM=dumb``, as used by some IDE consoles) is excluded
+    too: rich silently drops every live redraw there, which would otherwise
+    leave the user staring at nothing for the length of a phase.
+    """
+    if not console.is_terminal or console.is_dumb_terminal:
+        return False
+    try:
+        return bool(console.file.isatty())
+    except (AttributeError, ValueError):
+        return False
+
+
+def is_interactive(console: Console) -> bool:
+    """Whether a prompt can be answered on *console*.
+
+    Separate from :func:`supports_animation`: a dumb terminal still carries
+    keystrokes, it just cannot redraw a line.
     """
     if not console.is_terminal:
         return False
     try:
-        return bool(console.file.isatty())
+        return bool(console.file.isatty()) and sys.stdin.isatty()
     except (AttributeError, ValueError):
         return False
 
@@ -246,6 +274,9 @@ class NullReporter:
     def note(self, message: str) -> None:
         """Ignore an informational note."""
 
+    def step(self, message: str) -> None:
+        """Ignore an in-flight progress line."""
+
 
 class _Phase:
     """Live state of one pipeline phase, and its progress sink."""
@@ -258,16 +289,28 @@ class _Phase:
         self._task_id: TaskID | None = None
         self._pending = 0
         self._batch = 1
+        # Plain-text fallback state, used when no bar can be drawn.
+        self._plain_total = 0
+        self._plain_done = 0
+        self._plain_next_step = 0
+
+    @property
+    def _animated(self) -> bool:
+        return supports_animation(self._reporter.console)
 
     # -- ProgressSink ------------------------------------------------------
     def update_description(self, text: str) -> None:
-        """Update the spinner text shown before the progress bar starts.
+        """Report what the phase is currently doing.
 
         Useful for long discovery phases (e.g. scanning a network share) where
-        the user needs feedback before the total item count is known.
+        the user needs feedback before the total item count is known. On an
+        animated console this rewrites the spinner line in place; elsewhere it
+        prints one dim line so the phase is not silent.
         """
         if self._reporter._status is not None:
             self._reporter._status.update(f"[bold]{text}[/]…")
+        elif not self._animated:
+            self._reporter.step_throttled(text)
 
     def start(self, total: int, description: str = "") -> None:
         """Replace the spinner with a determinate progress bar.
@@ -283,8 +326,14 @@ class _Phase:
         self._batch = max(1, min(MAX_PROGRESS_BATCH, (total // 100) or 1))
 
         # A live bar redrawing into a pipe or log file would emit one line per
-        # refresh, so progress is shown on real terminals only.
-        if not supports_animation(self._reporter.console):
+        # refresh, so progress is shown on real terminals only. Everywhere else
+        # a handful of static milestone lines stand in for it, because a long
+        # phase with no output at all looks like a hang.
+        if not self._animated:
+            if self._plain_total == 0 and total > 0:
+                self._reporter.step(f"{description or self._name}: {fmt_count(total)}")
+            self._plain_total += total
+            self._plain_next_step = 0
             return
 
         self._reporter._stop_status()
@@ -306,9 +355,25 @@ class _Phase:
 
     def advance(self, step: int = 1) -> None:
         """Advance the bar, flushing in batches to limit redraws."""
+        if self._progress is None and self._plain_total:
+            self._advance_plain(step)
+            return
         self._pending += step
         if self._pending >= self._batch:
             self._flush()
+
+    def _advance_plain(self, step: int) -> None:
+        """Report quarter-way milestones when no bar can be drawn."""
+        self._plain_done += step
+        while self._plain_next_step < len(PLAIN_PROGRESS_STEPS):
+            fraction = PLAIN_PROGRESS_STEPS[self._plain_next_step]
+            if self._plain_done < fraction * self._plain_total:
+                break
+            self._plain_next_step += 1
+            self._reporter.step(
+                f"{self._name}: {fmt_count(self._plain_done)}"
+                f" of {fmt_count(self._plain_total)}"
+            )
 
     def _flush(self) -> None:
         if self._progress is None or self._task_id is None or not self._pending:
@@ -338,6 +403,7 @@ class RichReporter:
         self.console = console
         self.verbose = verbose
         self._status = None
+        self._last_step = 0.0
 
     # -- phases ------------------------------------------------------------
     @contextmanager
@@ -369,6 +435,13 @@ class RichReporter:
 
     def _start_status(self, name: str) -> None:
         if not supports_animation(self.console):
+            # No spinner is possible here, so the phase announces itself with a
+            # static line instead. Without it a multi-minute phase produces no
+            # output at all until it finishes, which reads as a hang.
+            self.console.print(f"  [dim]…[/] [bold]{name}[/][dim]…[/]")
+            # Let this phase's first status line through unthrottled: it names
+            # what is being scanned, which the phase label alone does not.
+            self._last_step = 0.0
             return
         self._status = self.console.status(f"[bold]{name}[/]…", spinner="dots")
         self._status.start()
@@ -381,6 +454,22 @@ class RichReporter:
     def note(self, message: str) -> None:
         """Print a dim informational line."""
         self.console.print(f"  [dim]{message}[/]")
+
+    def step(self, message: str) -> None:
+        """Print an indented progress line for a phase still in flight."""
+        self._last_step = perf_counter()
+        self.console.print(f"      [dim]{message}[/]", highlight=False)
+
+    def step_throttled(self, message: str) -> None:
+        """Print a progress line, but no more than once every few seconds.
+
+        Callers retitle a phase far more often than a reader needs to see it,
+        so on a console without animation the extra updates are dropped rather
+        than scrolled past.
+        """
+        if perf_counter() - self._last_step < PLAIN_STATUS_INTERVAL:
+            return
+        self.step(message)
 
 
 Reporter = NullReporter | RichReporter
@@ -994,8 +1083,16 @@ def catalog_stats(console: Console, library: Path, stats: dict) -> None:
         ("Schema version", fmt_count(stats.get("schema_version", 0))),
         ("Cluster rows", fmt_count(stats.get("clusters", 0))),
         ("File rows", fmt_count(stats.get("files", 0))),
+        ("Hash algo", str(stats.get("hash_algo") or "not set")),
+        (
+            "CRC32 policy",
+            "on"
+            if stats.get("crc32_policy")
+            else ("off" if stats.get("crc32_policy") is not None else "not set"),
+        ),
         ("Partial hashes", fmt_count(stats.get("partial_hashes", 0))),
         ("Full hashes", fmt_count(stats.get("full_hashes", 0))),
+        ("CRC32 checksums", fmt_count(stats.get("crc32_checksums", 0))),
         ("Indexed bytes", fmt_bytes(stats.get("total_bytes", 0))),
     ]
     backups = list(stats.get("backups") or [])
@@ -1018,6 +1115,60 @@ def catalog_stats(console: Console, library: Path, stats: dict) -> None:
     console.print()
 
 
+def catalog_build_banner(
+    console: Console,
+    library: Path,
+    rebuild: bool,
+    image_hash: str,
+    video_hash: str,
+    read_exif: bool,
+    *,
+    hash_algo: str = "sha1",
+    crc32: bool = False,
+) -> None:
+    """Announce a catalog build before the scan starts."""
+    mode = "rebuild (backs up first)" if rebuild else "update"
+    dates = "EXIF dates" if read_exif else "no EXIF dates"
+    console.print()
+    console.print("  [bold]Build catalog[/]")
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim", width=_LABEL_WIDTH)
+    grid.add_column(overflow="fold")
+    grid.add_row("Library", str(library))
+    grid.add_row("Mode", mode)
+    grid.add_row("Image hash", image_hash)
+    grid.add_row("Video hash", video_hash)
+    grid.add_row("Hash algo", hash_algo)
+    grid.add_row("CRC32", "yes" if crc32 else "no")
+    grid.add_row("Dates", dates)
+    console.print(_indent(grid))
+    console.print()
+
+
+def catalog_build_results(console: Console, library: Path, result: dict) -> None:
+    """Render the outcome of `catalog build`."""
+    rows = [
+        ("Library", str(library)),
+        ("Database", str(result.get("db_path", ""))),
+        ("Mode", str(result.get("mode", ""))),
+        ("Hash algo", str(result.get("hash_algo", ""))),
+        ("CRC32", "yes" if result.get("crc32") else "no"),
+        ("Files scanned", fmt_count(result.get("scanned", 0))),
+        ("Files added", fmt_count(result.get("added", 0))),
+        ("Files updated", fmt_count(result.get("updated", 0))),
+        ("Files unchanged", fmt_count(result.get("skipped", 0))),
+        ("Files pruned", fmt_count(result.get("pruned", 0))),
+        ("Clusters scanned", fmt_count(result.get("clusters_scanned", 0))),
+        ("Clusters added", fmt_count(result.get("clusters_added", 0))),
+        ("Clusters updated", fmt_count(result.get("clusters_updated", 0))),
+        ("Clusters unchanged", fmt_count(result.get("clusters_skipped", 0))),
+        ("Clusters pruned", fmt_count(result.get("clusters_pruned", 0))),
+    ]
+    if result.get("backup"):
+        rows.append(("Backup", Path(str(result["backup"])).name))
+    catalog_message(console, "Catalog built", rows)
+
+
 def catalog_message(
     console: Console, title: str, rows: Sequence[tuple[str, str]]
 ) -> None:
@@ -1031,6 +1182,21 @@ def catalog_message(
     console.print()
     console.print(f"  [bold]{title}[/]")
     console.print(_indent(grid))
+    console.print()
+
+
+def catalog_damaged_files(
+    console: Console, paths: Sequence[str], limit: int = 20
+) -> None:
+    """List the files that failed a deep integrity check, capped at *limit*."""
+    if not paths:
+        return
+    console.print("  [bold red]Damaged files[/]")
+    for rel in paths[:limit]:
+        console.print(f"    [red]•[/] {rel}")
+    remaining = len(paths) - limit
+    if remaining > 0:
+        console.print(f"    [dim]… and {fmt_count(remaining)} more[/]")
     console.print()
 
 
@@ -1053,6 +1219,6 @@ def confirm_plan(console: Console, plan, config) -> bool:
             f"  [yellow]{fmt_count(plan.n_renamed)} files will be renamed[/]"
             " [dim]to avoid overwriting existing files[/]"
         )
-    if not supports_animation(console) or not sys.stdin.isatty():
+    if not is_interactive(console):
         return True
     return Confirm.ask("  Proceed?", console=console, default=True)

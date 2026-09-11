@@ -306,6 +306,16 @@ class TestCliOverride:
         updated = default_factory.override_from_cli(config, restore_original_names=True)
         assert updated.restore_original_names is True
 
+    def test_recursive_inbox_defaults_to_true(self):
+        """Recursive inbox scanning is enabled by default."""
+        assert get_default_config().recursive_inbox is True
+
+    def test_override_flat_disables_recursive_inbox(self):
+        """CLI flat=True disables recursive inbox scanning."""
+        config = get_default_config()
+        updated = default_factory.override_from_cli(config, flat=True)
+        assert updated.recursive_inbox is False
+
     def test_inbox_limit_defaults_to_none(self):
         """Ingestion is unlimited unless asked otherwise."""
         assert get_default_config().inbox_limit is None

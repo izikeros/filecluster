@@ -24,6 +24,25 @@ from filecluster.image_reader import (
 )
 
 
+class RecordingProgress:
+    """A progress sink that remembers everything it was told."""
+
+    def __init__(self):
+        self.total = None
+        self.detail = ""
+        self.advances = 0
+        self.descriptions: list[str] = []
+
+    def start(self, total, description=""):
+        self.total = total
+
+    def advance(self, step=1):
+        self.advances += step
+
+    def update_description(self, text):
+        self.descriptions.append(text)
+
+
 # ---------------------------------------------------------------------------
 # Metadata
 # ---------------------------------------------------------------------------
@@ -297,6 +316,54 @@ class TestInboxReader:
         assert reader.media_df.empty
         assert {"date", "cluster_id", "status"}.issubset(reader.media_df.columns)
 
+    def test_recursive_reading_by_default(self, tmp_path, assets_dir):
+        """
+        Test Description: InboxReader recursively discovers files in subdirectories
+        by default.
+        """
+        # Set up top-level and nested files
+        sub_dir = tmp_path / "subdir"
+        sub_dir.mkdir()
+        shutil_file1 = assets_dir / "set_1" / "IMG_3784.jpg"
+        shutil_file2 = assets_dir / "set_1" / "IMG_4026.JPG"
+
+        import shutil
+
+        shutil.copy(shutil_file1, tmp_path / "top.jpg")
+        shutil.copy(shutil_file2, sub_dir / "nested.jpg")
+
+        reader = InboxReader(in_dir_name=tmp_path)
+        rows = reader.get_data_from_files_as_list_of_rows()
+
+        file_names = {r["file_name"] for r in rows}
+        assert len(rows) == 2
+        assert "top.jpg" in file_names
+        assert (
+            os.path.join("subdir", "nested.jpg") in file_names
+            or "subdir/nested.jpg" in file_names
+        )
+
+    def test_flat_reading_when_recursive_false(self, tmp_path, assets_dir):
+        """
+        Test Description: InboxReader with recursive=False ignores subdirectories.
+        """
+        sub_dir = tmp_path / "subdir"
+        sub_dir.mkdir()
+        shutil_file1 = assets_dir / "set_1" / "IMG_3784.jpg"
+        shutil_file2 = assets_dir / "set_1" / "IMG_4026.JPG"
+
+        import shutil
+
+        shutil.copy(shutil_file1, tmp_path / "top.jpg")
+        shutil.copy(shutil_file2, sub_dir / "nested.jpg")
+
+        reader = InboxReader(in_dir_name=tmp_path, recursive=False)
+        rows = reader.get_data_from_files_as_list_of_rows()
+
+        file_names = [r["file_name"] for r in rows]
+        assert len(rows) == 1
+        assert file_names == ["top.jpg"]
+
 
 class TestIngestionLimit:
     """A limit caps how much of the inbox is read at all."""
@@ -354,19 +421,6 @@ class TestIngestionLimit:
 
     def test_progress_total_reflects_the_limit(self, assets_dir):
         """The bar counts to the limit, not to the full inbox size."""
-
-        class RecordingProgress:
-            def __init__(self):
-                self.total = None
-                self.detail = ""
-                self.advances = 0
-
-            def start(self, total, description=""):
-                self.total = total
-
-            def advance(self, step=1):
-                self.advances += step
-
         progress = RecordingProgress()
         reader = InboxReader(in_dir_name=assets_dir / "set_1", limit=2)
 
@@ -374,6 +428,17 @@ class TestIngestionLimit:
 
         assert progress.total == 2
         assert progress.advances == 2
+
+    def test_the_directory_walk_reports_before_the_total_is_known(self, assets_dir):
+        """The scan announces itself, so a big tree does not look like a hang."""
+        progress = RecordingProgress()
+        reader = InboxReader(in_dir_name=assets_dir / "set_1")
+
+        reader.get_data_from_files_as_list_of_rows(progress=progress)
+
+        assert progress.descriptions, "the walk reported nothing"
+        assert "Scanning" in progress.descriptions[0]
+        assert str(assets_dir / "set_1") in progress.descriptions[0]
 
 
 # ---------------------------------------------------------------------------

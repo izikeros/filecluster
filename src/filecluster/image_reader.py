@@ -27,6 +27,23 @@ ATOM_HEADER_SIZE = 8
 # difference between Unix epoch and QuickTime epoch, in seconds
 EPOCH_ADJUSTER = 2082844800
 
+#: How many folders the inbox walk covers between two status updates. Keeps a
+#: deep tree from issuing one update per directory.
+WALK_REPORT_EVERY = 25
+
+
+def _walk_reporter(progress: ProgressSink, root: Path) -> Any:
+    """Build an ``on_progress`` callback that retitles the running phase."""
+
+    def _report(n_folders: int, n_files: int) -> None:
+        if n_folders % WALK_REPORT_EVERY:
+            return
+        progress.update_description(
+            f"Scanning {root} — {n_folders:,} folders, {n_files:,} media files"
+        )
+
+    return _report
+
 
 class Metadata(BaseModel):
     """Class defining media metadata."""
@@ -225,6 +242,7 @@ class InboxReader:
         in_dir_name,
         media_df: MediaDataFrame | None = None,
         limit: int | None = None,
+        recursive: bool = True,
     ) -> None:
         """Initialize the reader.
 
@@ -233,11 +251,13 @@ class InboxReader:
             media_df: Pre-built media frame, if the caller already has one.
             limit: Ingest at most this many files. Useful for trying a run on a
                 large inbox without reading all of it.
+            recursive: Whether to scan subdirectories recursively.
         """
         self.in_dir_name = in_dir_name
         self.image_extensions = default_settings.image_extensions
         self.video_extensions = default_settings.video_extensions
         self.limit = limit
+        self.recursive = recursive
         #: Supported files present in the inbox, before *limit* is applied.
         self.n_available = 0
 
@@ -264,15 +284,24 @@ class InboxReader:
         """
         progress = progress or NullProgress()
         list_of_rows = []
-        in_dir_name = self.in_dir_name
+        in_dir_name = Path(self.in_dir_name)
         ext = self.image_extensions + self.video_extensions
 
-        logger.debug(f"Reading data from: {in_dir_name}")
+        logger.debug(f"Reading data from: {in_dir_name} (recursive={self.recursive})")
         image_extensions = self.image_extensions
         meta = Metadata()
-        file_list = [
-            f for f in os.listdir(in_dir_name) if ut.is_supported_filetype(f, ext)
-        ]
+
+        # Walking a 50k-file tree can take a while on its own, and it happens
+        # before the file total (and so the progress bar) is known, so the walk
+        # reports its own headway.
+        progress.update_description(f"Scanning {in_dir_name}")
+        full_paths = ut.walk_media_files(
+            in_dir_name,
+            ext,
+            recursive=self.recursive,
+            on_progress=_walk_reporter(progress, in_dir_name),
+        )
+        file_list = [str(p.relative_to(in_dir_name)) for p in full_paths]
         self.n_available = len(file_list)
 
         if self.limit is not None and self.limit < len(file_list):
@@ -337,14 +366,14 @@ def configure_inbox_reader(in_dir_name: str | Path) -> Config:
     return conf
 
 
-def get_media_df(in_dir_name: Path) -> MediaDataFrame | None:
+def get_media_df(in_dir_name: Path, recursive: bool = True) -> MediaDataFrame | None:
     """Get a data frame with metadata description of media indicated in Config.
 
     Returns:
         Dataframe with metadata of the contents of the directory.
     """
-    if os.listdir(in_dir_name):
-        inbox_reader = InboxReader(in_dir_name)
+    if os.path.exists(in_dir_name) and os.listdir(in_dir_name):
+        inbox_reader = InboxReader(in_dir_name, recursive=recursive)
         if row_list := inbox_reader.get_data_from_files_as_list_of_rows():
             df = MediaDataFrame(DataFrame(row_list))
             return multiple_timestamps_to_one(df)

@@ -20,6 +20,13 @@ from filecluster.configuration import CopyMode, get_default_config
 from filecluster.file_operations import CopyOp, FileOperationPlan, MkdirOp, SkipOp
 
 
+class _FakeTty(io.StringIO):
+    """A stream that claims to be a terminal."""
+
+    def isatty(self) -> bool:
+        return True
+
+
 @pytest.fixture
 def console():
     """A console that records output at a fixed width."""
@@ -256,15 +263,19 @@ class TestProgress:
         assert "Read inbox" in output(console)
 
     def test_progress_is_suppressed_when_not_a_terminal(self, console):
-        """Redirected output must not receive one bar redraw per refresh."""
+        """Redirected output must not receive one bar redraw per refresh.
+
+        It still gets the bounded milestone lines, so a piped or logged run
+        shows headway, but nothing scales with the file count.
+        """
         reporter = ui.RichReporter(console)
         with reporter.phase("Read inbox") as phase:
             phase.start(50_000, "Reading media")
-            for _ in range(1000):
+            for _ in range(50_000):
                 phase.advance()
 
-        # Only the phase summary line survives.
-        assert len(lines(console)) == 1
+        # Announcement, the total, one line per milestone, and the summary.
+        assert len(lines(console)) == 3 + len(ui.PLAIN_PROGRESS_STEPS)
 
     def test_forced_colour_alone_does_not_enable_animation(self):
         """`FORCE_COLOR` asks for colour in a pipe, not for a redrawing bar.
@@ -278,13 +289,96 @@ class TestProgress:
         assert ui.supports_animation(piped) is False
 
     def test_animation_is_allowed_on_a_real_tty(self):
-        """A genuine terminal still gets its progress bar."""
+        """A genuine terminal still gets its progress bar.
 
-        class FakeTty(io.StringIO):
-            def isatty(self) -> bool:
-                return True
+        ``_environ`` is pinned because rich reads ``TERM`` from the ambient
+        environment, and the suite may itself run under ``TERM=dumb``.
+        """
+        tty = Console(
+            file=_FakeTty(), force_terminal=True, _environ={"TERM": "xterm-256color"}
+        )
 
-        assert ui.supports_animation(Console(file=FakeTty(), force_terminal=True))
+        assert ui.supports_animation(tty) is True
+
+    def test_dumb_terminal_gets_no_animation(self):
+        """`TERM=dumb` drops every live redraw, so animation must be refused.
+
+        Some IDE consoles set it. Rich reports such a console as a terminal but
+        renders no spinner or bar, which used to leave the run silent.
+        """
+        dumb = Console(file=_FakeTty(), force_terminal=True, _environ={"TERM": "dumb"})
+
+        assert dumb.is_terminal is True
+        assert dumb.is_dumb_terminal is True
+        assert ui.supports_animation(dumb) is False
+
+    def test_dumb_terminal_can_still_be_prompted(self, monkeypatch):
+        """A dumb terminal carries keystrokes even though it cannot redraw."""
+        monkeypatch.setattr(ui.sys, "stdin", _FakeTty())
+        dumb = Console(file=_FakeTty(), force_terminal=True, _environ={"TERM": "dumb"})
+
+        assert ui.is_interactive(dumb) is True
+
+    def test_redirected_output_is_not_interactive(self):
+        """A pipe gets no prompt, so automation keeps working unattended."""
+        assert ui.is_interactive(Console(file=io.StringIO())) is False
+
+    def test_phase_announces_itself_before_doing_work(self, console):
+        """Without a spinner, the phase name is printed as work starts.
+
+        A silent multi-minute phase is indistinguishable from a hang, which is
+        exactly what a user reported.
+        """
+        reporter = ui.RichReporter(console)
+        with reporter.phase("Read inbox"):
+            start_output = output(console)
+
+        assert "Read inbox" in start_output
+
+    def test_plain_fallback_reports_milestones_not_every_file(self, console):
+        """12,000 files produce a handful of lines, not 12,000."""
+        reporter = ui.RichReporter(console)
+        with reporter.phase("Read inbox") as phase:
+            phase.start(12_000, "Reading media")
+            for _ in range(12_000):
+                phase.advance()
+            phase.detail = "12,000 files"
+
+        rendered = lines(console)
+        # announcement + total + one line per milestone fraction + summary
+        assert len(rendered) == 3 + len(ui.PLAIN_PROGRESS_STEPS)
+        assert "3,000 of 12,000" in output(console)
+        assert "9,000 of 12,000" in output(console)
+
+    def test_plain_fallback_describes_what_is_being_scanned(self, console):
+        """The first retitle names the directory, which the label does not."""
+        reporter = ui.RichReporter(console)
+        with reporter.phase("Read inbox") as phase:
+            phase.update_description("Scanning /photos/inbox")
+
+        assert "Scanning /photos/inbox" in output(console)
+
+    def test_plain_status_lines_are_throttled(self, console):
+        """Thousands of retitles must not become thousands of lines."""
+        reporter = ui.RichReporter(console)
+        with reporter.phase("Read inbox") as phase:
+            for i in range(2000):
+                phase.update_description(f"Scanning folder {i}")
+
+        # The announcement, one status line that got through, and the summary.
+        assert len(lines(console)) == 3
+
+    def test_repeated_start_keeps_one_plain_total(self, console):
+        """Per-library phases grow one total rather than restarting it."""
+        reporter = ui.RichReporter(console)
+        with reporter.phase("Scanned library") as phase:
+            phase.start(100, "Scanning lib_a")
+            phase.start(100, "Scanning lib_b")
+            for _ in range(200):
+                phase.advance()
+
+        assert "200 of 200" not in output(console)
+        assert "150 of 200" in output(console)
 
     def test_advances_are_batched_for_large_totals(self, console):
         """A 50k loop is not allowed to trigger a redraw per file."""
@@ -295,16 +389,15 @@ class TestProgress:
             assert phase._batch == ui.MAX_PROGRESS_BATCH
 
     def test_phase_reports_its_detail_and_elapsed_time(self, console):
-        """Each phase collapses to a single labelled line."""
+        """Each phase ends in a single labelled summary line."""
         reporter = ui.RichReporter(console)
         with reporter.phase("Read inbox") as phase:
             phase.detail = "48,213 files"
 
-        rendered = lines(console)
-        assert len(rendered) == 1
-        assert "Read inbox" in rendered[0]
-        assert "48,213 files" in rendered[0]
-        assert "0:00:00" in rendered[0]
+        summary = lines(console)[-1]
+        assert "Read inbox" in summary
+        assert "48,213 files" in summary
+        assert "0:00:00" in summary
 
     def test_failing_phase_is_marked_and_the_error_propagates(self, console):
         """A crash inside a phase is visible, and not swallowed."""

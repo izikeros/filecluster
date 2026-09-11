@@ -74,7 +74,7 @@ paste:
 
 ## Sort a flat folder into event folders
 
-The base case: a directory full of pictures, no structure.
+The base case: a directory full of pictures. By default, `filecluster` scans the inbox recursively across subdirectories; pass `--flat` (or `--no-recursive`) to restrict scanning to top-level files only.
 
 ```bash
 filecluster -i inbox -o clustered -n     # -n = dry run, change nothing
@@ -385,18 +385,56 @@ filecluster catalog stats   -l zdjecia
   Library               /tmp/fc-guide/zdjecia
   Database              /tmp/fc-guide/zdjecia/.filecluster.db
   Database size         24.0 KiB
-  Schema version        1
+  Schema version        3
   Cluster rows          4
   File rows             10
+  Hash algo             not set
+  CRC32 policy          off
   Partial hashes        10
   Full hashes           10
+  CRC32 checksums       0
   Indexed bytes         68.0 MiB
   Backups               none
+```
+
+`catalog build` chooses the digest with `--hash-algo`. The default `sha1`
+keeps the historical fast-prefilter split (MD5 partial + SHA-1 full) and stays
+compatible with `reconcile`/`dedup`. `--hash-algo blake3` uses BLAKE3 — a fast,
+modern, cryptographically strong hash — for both the partial and full hashes;
+the algorithm is recorded per file, so old and new catalogs coexist and dedup
+stays correct (it recomputes rather than trusting an incompatible hash).
+Independently, `--crc32` stores a whole-file CRC32 checksum per file, a cheap
+extra baseline for the bit-rot detection in `verify --deep` (off by default).
+
+```bash
+filecluster catalog build -l zdjecia --hash-algo blake3
+filecluster catalog build -l zdjecia --crc32
+```
+
+The algorithm and CRC32 choice are **pinned to the library** on its first
+build and stored in the catalog, so you never end up with a mix of
+incomparable hashes across runs. A plain re-run (`filecluster catalog build -l
+zdjecia`) keeps whatever policy is stored. If you *explicitly* ask for a
+different one on a plain build, it is refused:
+
+```bash
+filecluster catalog build -l zdjecia --hash-algo sha1
+# error: this library is pinned to blake3; re-run with --rebuild to change it
+```
+
+Changing the policy means re-hashing every file, so it only happens under
+`--rebuild`, which backs up the current catalog first. Interactively the CLI
+asks you to confirm; in `--json` or non-interactive use the change is refused
+rather than silently re-hashing a large library.
+
+```bash
+filecluster catalog build -l zdjecia --hash-algo sha1 --rebuild
 ```
 
 ```bash
 filecluster catalog verify  -l zdjecia          # rows vs files on disk
 filecluster catalog verify  -l zdjecia --prune  # drop changed/missing rows, then VACUUM
+filecluster catalog verify  -l zdjecia --deep    # also decode images / probe videos
 filecluster catalog backup  -l zdjecia          # timestamped .bak next to the db
 filecluster catalog restore -l zdjecia          # newest backup, or --from PATH
 ```
@@ -406,6 +444,23 @@ disk (size or mtime no longer match), and gone from disk. A cached hash is only
 trusted while size *and* mtime still match, so an edited file is never mistaken
 for its former self even without pruning. Pruning just keeps the database
 small and honest.
+
+`--deep` adds content-level corruption detection on top of the size/mtime
+check, using two independent signals. First, a **structural decode**: decodable
+images (JPEG, PNG, TIFF, BMP, GIF, WebP) are fully decoded with Pillow, and
+videos are validated with `ffprobe`. Second, a **baseline re-hash**: for files
+that still match their cached size/mtime, the stored full hash and CRC32 are
+recomputed and compared, which catches silent bit rot even in RAW/HEIC files
+that cannot be decoded here (as long as they were hashed or given a `--crc32`
+checksum at build time). The extra buckets are content OK, corrupt (a truncated
+JPEG, a broken container, or a hash/CRC32 mismatch), unreadable (a permission or
+I/O error), and not checked (nothing to decode and no baseline to compare — for
+example a RAW file with no stored hash, or a video when `ffprobe` is absent).
+Damaged files are listed by path. A file whose size/mtime changed is only
+decoded, never compared against its now-outdated hash, so an edit is never
+mistaken for corruption. A deep verify only reads files; it never overwrites the
+stored baseline, so it compares current content against the known-good
+fingerprint captured when the catalog was built.
 
 `restore` backs up the database currently in place before overwriting it, and
 clears stale `-wal`/`-shm` files, so a restore cannot leave a half-written
@@ -557,6 +612,7 @@ command name `run` is optional: `filecluster -i inbox -o out` works.
   -d, --drop-duplicates           Put duplicates in a separate folder instead of clustering
   -c, --use-existing-clusters     Assign media to clusters already in the watch folders
   -r, --restore-original-names    Strip copy suffixes such as '-Kopiuj(1)' or ' - Copy'
+      --flat / --no-recursive     Scan top-level inbox files only (default: recursive)
   -l, --limit INTEGER             Ingest at most this many inbox files, in name order
   -Y, --yes                       Do not ask for confirmation before writing
       --show INTEGER              How many of the largest clusters to list (0 = all)  [20]
@@ -623,8 +679,15 @@ Inspect and maintain the per-library SQLite catalog. Every subcommand takes
 `-l/--library` and `--json`.
 
 ```
+  filecluster catalog build   -l LIB [-f/--rebuild] [--image-hash MODE]
+                              [--video-hash MODE] [--full-hash]
+                              [--hash-algo sha1|blake3] [--crc32] [--no-exif]
+                                                Build/update the catalog from disk
   filecluster catalog stats   -l LIB            Rows, hash coverage, backups
-  filecluster catalog verify  -l LIB [--prune]  Cached rows vs files on disk
+  filecluster catalog verify  -l LIB [--prune] [--deep]
+                                                Cached rows vs files on disk
+                                                (--deep decodes images/probes video
+                                                 and re-hashes against the baseline)
   filecluster catalog backup  -l LIB            Timestamped .bak copy
   filecluster catalog restore -l LIB [--from PATH]
                                                 Newest backup unless --from

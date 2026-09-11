@@ -6,8 +6,6 @@ fixed handful of lines. Per-file detail belongs in ``--report``.
 
 from __future__ import annotations
 
-import sys
-
 from rich.console import Console, RenderableType
 from rich.padding import Padding
 from rich.prompt import Confirm
@@ -21,7 +19,7 @@ from filecluster.ui import (
     fmt_count,
     fmt_duration,
     fmt_files,
-    supports_animation,
+    is_interactive,
 )
 from filecluster.version import get_version
 
@@ -152,6 +150,6 @@ def confirm_plan(console: Console, plan: CurationOperationPlan) -> bool:
             f"  [yellow]{fmt_count(plan.n_renamed)} files will be renamed[/]"
             " [dim]to avoid overwriting existing files[/]"
         )
-    if not supports_animation(console) or not sys.stdin.isatty():
+    if not is_interactive(console):
         return True
     return Confirm.ask("  Proceed?", console=console, default=False)

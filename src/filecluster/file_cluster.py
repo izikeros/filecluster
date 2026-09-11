@@ -33,6 +33,7 @@ def main(
     use_existing_clusters: bool | None = None,
     restore_original_names: bool | None = None,
     limit: int | None = None,
+    flat: bool | None = None,
     reporter: Reporter | None = None,
     confirm: Callable[[Any, Any], bool] | None = None,
     banner: Callable[[Any], None] | None = None,
@@ -57,6 +58,7 @@ def main(
         limit: Ingest at most this many inbox files. Only the first *limit*
             files in name order are read, which keeps a trial run on a large
             inbox both quick and repeatable.
+        flat: Only process top-level inbox files (do not scan subdirectories).
         reporter: Renders progress and phase results. Defaults to a silent
             reporter so library callers produce no terminal output.
         confirm: Called with ``(plan, config)`` before files are written. When it
@@ -87,6 +89,7 @@ def main(
         use_existing_clusters=use_existing_clusters,
         restore_original_names=restore_original_names,
         limit=limit,
+        flat=flat,
     )
 
     if banner is not None:
@@ -118,7 +121,11 @@ def main(
     }
 
     # Configure image reader and initialize media database
-    image_reader = InboxReader(in_dir_name=config.in_dir_name, limit=config.inbox_limit)
+    image_reader = InboxReader(
+        in_dir_name=config.in_dir_name,
+        limit=config.inbox_limit,
+        recursive=config.recursive_inbox,
+    )
     with ui.phase("Read inbox") as phase:
         image_reader.get_media_files_info(progress=phase)
         n_read = len(image_reader.media_df)

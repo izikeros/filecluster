@@ -479,10 +479,13 @@ class LibraryIndex:
 
         record = records.get(key)
         if record is not None:
-            if record.matches(size, st.st_mtime):
+            # Only legacy rows (MD5 partial + SHA-1 full) are comparable with
+            # the hashes computed here; rows built with an explicit
+            # --hash-algo are recomputed instead of trusted.
+            if record.matches(size, st.st_mtime) and record.uses_legacy_hashes:
                 p_hash = record.partial_hash
                 f_hash = record.full_hash
-            else:
+            elif not record.matches(size, st.st_mtime):
                 self.n_stale_cache_entries += 1
 
         if p_hash is not None:

@@ -376,6 +376,10 @@ class _HashCache:
             st = stats.get(path)
             if st is None or not record.matches(*st):
                 continue
+            # Reuse cached hashes only from legacy (MD5 partial + SHA-1 full)
+            # rows; rows built with an explicit --hash-algo are recomputed.
+            if not record.uses_legacy_hashes:
+                continue
             if record.partial_hash is not None:
                 self._partial[path] = record.partial_hash
             if record.full_hash is not None:

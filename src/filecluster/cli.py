@@ -18,7 +18,11 @@ from typer.core import TyperGroup
 
 from filecluster import ui
 from filecluster.configuration import CopyMode
-from filecluster.exceptions import DateStringNoneError, OverlappingPathsError
+from filecluster.exceptions import (
+    DateStringNoneError,
+    HashPolicyConflictError,
+    OverlappingPathsError,
+)
 from filecluster.file_cluster import main
 from filecluster.version import get_version
 
@@ -158,6 +162,14 @@ def run(  # noqa: C901 - a CLI entry point is a flat list of options by nature
             min=1,
         ),
     ] = None,
+    flat: Annotated[
+        bool,
+        typer.Option(
+            "--flat",
+            "--no-recursive",
+            help="Only process top-level inbox files (do not scan subdirectories).",
+        ),
+    ] = False,
     yes: Annotated[
         bool,
         typer.Option("-Y", "--yes", help="Do not ask for confirmation before writing."),
@@ -230,6 +242,7 @@ def run(  # noqa: C901 - a CLI entry point is a flat list of options by nature
             use_existing_clusters=use_existing_clusters,
             restore_original_names=restore_original_names,
             limit=limit,
+            flat=flat,
             reporter=reporter,
             confirm=None if yes else _make_confirm(console, render),
             banner=_make_banner(console) if render else None,
@@ -675,6 +688,248 @@ def catalog_stats_cmd(library: _LibraryOption, as_json: _JsonOption = False) -> 
     raise typer.Exit(EXIT_OK)
 
 
+def _stored_hash_policy(library) -> dict | None:
+    """Read the library's pinned hashing policy without creating a catalog."""
+    from filecluster.catalog import LibraryCatalog
+
+    try:
+        with LibraryCatalog.open(library, read_only=True) as catalog:
+            return catalog.get_hash_policy()
+    except FileNotFoundError:
+        return None
+
+
+def _hash_policy_conflicts(
+    stored: dict, requested: dict, hash_algo_explicit: bool, crc32_explicit: bool
+) -> bool:
+    """Whether an explicitly requested policy differs from the stored one."""
+    return (hash_algo_explicit and stored["hash_algo"] != requested["hash_algo"]) or (
+        crc32_explicit and stored["crc32"] != requested["crc32"]
+    )
+
+
+def _confirm_hash_policy_change(
+    console, render: bool, as_json: bool, stored: dict, requested: dict
+) -> bool:
+    """Confirm switching a library's hashing policy (a full re-hash).
+
+    Returns True to proceed as a rebuild. In JSON or non-interactive mode the
+    change is refused (returns False) so the build then raises the conflict
+    error instead of silently re-hashing everything.
+    """
+    import sys
+
+    from rich.prompt import Confirm
+
+    from filecluster.exceptions import HashPolicyConflictError
+
+    if as_json or not render or not sys.stdin.isatty():
+        return False
+    console.print()
+    console.print(
+        "  [yellow]This library uses a different hashing policy[/] "
+        f"[dim]({HashPolicyConflictError._fmt(stored)})[/]."
+    )
+    console.print(
+        f"  Switching to [bold]{HashPolicyConflictError._fmt(requested)}[/] "
+        "re-hashes every file and backs up the current catalog first."
+    )
+    return Confirm.ask("  Proceed with a full re-hash?", console=console, default=False)
+
+
+@catalog_app.command("build")
+def catalog_build_cmd(
+    ctx: typer.Context,
+    library: _LibraryOption,
+    rebuild: Annotated[
+        bool,
+        typer.Option(
+            "-f",
+            "--rebuild",
+            help=(
+                "Rebuild from scratch: back up the existing catalog, clear it, "
+                "then re-read every file. Without this flag only new or changed "
+                "files are scanned."
+            ),
+        ),
+    ] = False,
+    image_hash: Annotated[
+        str,
+        typer.Option(
+            "--image-hash",
+            help="Hash images using 'full' (default) or 'short' (first 1 MiB).",
+        ),
+    ] = "full",
+    video_hash: Annotated[
+        str,
+        typer.Option(
+            "--video-hash",
+            help="Hash videos using 'short' (default) or 'full'.",
+        ),
+    ] = "short",
+    full_hash: Annotated[
+        bool,
+        typer.Option(
+            "--full-hash",
+            help="Compatibility shortcut: use full hashes for images and videos.",
+        ),
+    ] = False,
+    hash_algo: Annotated[
+        str,
+        typer.Option(
+            "--hash-algo",
+            help=(
+                "Digest for the content hashes: 'sha1' (legacy default, keeps "
+                "MD5 prefilter) or 'blake3' (fast, modern; used for both "
+                "hashes). Recorded per file so old catalogs keep working."
+            ),
+        ),
+    ] = "sha1",
+    crc32: Annotated[
+        bool,
+        typer.Option(
+            "--crc32",
+            help=(
+                "Also store a whole-file CRC32 checksum per file for cheap "
+                "bit-rot detection on later 'verify --deep' runs."
+            ),
+        ),
+    ] = False,
+    no_exif: Annotated[
+        bool,
+        typer.Option(
+            "--no-exif",
+            help="Skip reading EXIF capture dates (faster, but no per-file dates).",
+        ),
+    ] = False,
+    as_json: _JsonOption = False,
+    verbose: Annotated[
+        int,
+        typer.Option("-v", "--verbose", count=True, help="-v for info, -vv for debug."),
+    ] = 0,
+    quiet: Annotated[
+        bool, typer.Option("-q", "--quiet", help="Only report errors.")
+    ] = False,
+) -> None:
+    """Scan an organised library and build its SQLite catalog.
+
+    Records size, mtime, hashes and EXIF dates, and indexes event folders into
+    the clusters table. Images get full hashes and videos short hashes by
+    default; each policy can be changed independently.
+    Runs incrementally by default; use --rebuild to start over after backing
+    up the current catalog.
+    """
+    from filecluster.catalog import HashAlgo, HashMode, LibraryCatalog
+
+    try:
+        image_hash_mode = HashMode(image_hash.lower())
+        video_hash_mode = HashMode(video_hash.lower())
+    except ValueError as exc:
+        _fail(
+            ui.make_console(stderr=True),
+            exc,
+            verbose,
+            message="Hash mode must be 'full' or 'short'.",
+            hint="Use --image-hash full|short and --video-hash full|short.",
+        )
+    if full_hash:
+        image_hash_mode = video_hash_mode = HashMode.FULL
+
+    # 'sha1' keeps the legacy MD5-prefilter/SHA-1-full split (recorded as
+    # hash_algo NULL so reconcile/dedup keep reusing it); 'blake3' switches
+    # both hashes to BLAKE3.
+    algo_choice = hash_algo.lower()
+    if algo_choice not in {"sha1", "blake3"}:
+        _fail(
+            ui.make_console(stderr=True),
+            ValueError(hash_algo),
+            verbose,
+            message="Hash algorithm must be 'sha1' or 'blake3'.",
+            hint="Use --hash-algo sha1|blake3.",
+        )
+    algo = HashAlgo.BLAKE3 if algo_choice == "blake3" else None
+
+    # Whether the user actually chose these, so build() only treats a genuine
+    # user request as a policy conflict (plain defaults reuse the stored one).
+    # Compare on the enum name rather than importing click's ParameterSource:
+    # typer vendors its own click, so its context returns a different (but
+    # name-compatible) enum and identity comparison would always be False.
+    def _from_commandline(name: str) -> bool:
+        source = ctx.get_parameter_source(name)
+        return source is not None and source.name == "COMMANDLINE"
+
+    hash_algo_explicit = _from_commandline("hash_algo")
+    crc32_explicit = _from_commandline("crc32")
+
+    ui.configure_logging(verbosity=verbose, quiet=quiet)
+    render = not as_json and not quiet
+    console = _catalog_console(as_json)
+    reporter = (
+        ui.RichReporter(console, verbose=verbose) if render else ui.NullReporter()
+    )
+
+    # When the user explicitly asks for a policy that differs from the one
+    # pinned to the library, changing it means re-hashing everything. Detect
+    # that up front so we can confirm the destructive rebuild interactively
+    # rather than after a partial scan.
+    if not rebuild and (hash_algo_explicit or crc32_explicit):
+        stored = _stored_hash_policy(library)
+        requested = {"hash_algo": algo.value if algo else None, "crc32": crc32}
+        if stored is not None and _hash_policy_conflicts(
+            stored, requested, hash_algo_explicit, crc32_explicit
+        ):
+            rebuild = _confirm_hash_policy_change(
+                console, render, as_json, stored, requested
+            )
+
+    if render:
+        ui.catalog_build_banner(
+            console,
+            library,
+            rebuild,
+            image_hash_mode.value,
+            video_hash_mode.value,
+            not no_exif,
+            hash_algo=algo_choice,
+            crc32=crc32,
+        )
+
+    try:
+        with reporter.phase("Build catalog") as phase:
+            result = LibraryCatalog.build(
+                library,
+                rebuild=rebuild,
+                image_hash=image_hash_mode,
+                video_hash=video_hash_mode,
+                hash_algo=algo,
+                crc32=crc32,
+                hash_algo_explicit=hash_algo_explicit,
+                crc32_explicit=crc32_explicit,
+                read_exif=not no_exif,
+                progress=phase,
+            )
+            phase.detail = (
+                f"{result['added']} files, "
+                f"{result.get('clusters_added', 0) + result.get('clusters_updated', 0)}"
+                f" clusters"
+            )
+    except HashPolicyConflictError as exc:
+        _fail(
+            ui.make_console(stderr=True),
+            exc,
+            verbose,
+            message=exc.message,
+            hint="Re-run with --rebuild to change the hashing policy.",
+        )
+
+    if as_json:
+        typer.echo(json.dumps(result, indent=2))
+        raise typer.Exit(EXIT_OK)
+
+    ui.catalog_build_results(console, library, result)
+    raise typer.Exit(EXIT_OK)
+
+
 @catalog_app.command("backup")
 def catalog_backup_cmd(library: _LibraryOption, as_json: _JsonOption = False) -> None:
     """Copy the catalog to a timestamped .bak file."""
@@ -737,13 +992,47 @@ def catalog_verify_cmd(
             help="Delete rows for files that are missing or have changed.",
         ),
     ] = False,
+    deep: Annotated[
+        bool,
+        typer.Option(
+            "--deep",
+            help=(
+                "Also decode images and probe videos to catch corruption "
+                "(needs ffprobe for video). Slower; reads full file content."
+            ),
+        ),
+    ] = False,
     as_json: _JsonOption = False,
+    verbose: Annotated[
+        int,
+        typer.Option("-v", "--verbose", count=True, help="-v for info, -vv for debug."),
+    ] = 0,
+    quiet: Annotated[
+        bool, typer.Option("-q", "--quiet", help="Only report errors.")
+    ] = False,
 ) -> None:
-    """Check cached file rows against the files on disk."""
+    """Check cached file rows against the files on disk.
+
+    By default this compares size and mtime only. With --deep every file still
+    present on disk is decoded (images) or probed with ffprobe (videos) to
+    detect content-level corruption; the stored baseline hashes are not
+    touched.
+    """
     from filecluster.catalog import LibraryCatalog
 
+    ui.configure_logging(verbosity=verbose, quiet=quiet)
+    render = not as_json and not quiet
+    console = _catalog_console(as_json)
+    reporter = (
+        ui.RichReporter(console, verbose=verbose) if render else ui.NullReporter()
+    )
+
     with LibraryCatalog.open(library) as catalog:
-        result = catalog.verify(library)
+        if deep and render:
+            with reporter.phase("Verify catalog") as phase:
+                result = catalog.verify(library, deep=True, progress=phase)
+        else:
+            result = catalog.verify(library, deep=deep)
         removed = 0
         if prune:
             removed = catalog.delete_file_rows(result["missing"] + result["stale"])
@@ -756,6 +1045,12 @@ def catalog_verify_cmd(
         "missing": len(result["missing"]),
         "pruned": removed,
     }
+    if deep:
+        payload["decoded_ok"] = len(result["decoded_ok"])
+        payload["corrupt"] = len(result["corrupt"])
+        payload["unreadable"] = len(result["unreadable"])
+        payload["skipped"] = len(result["skipped"])
+        payload["corrupt_files"] = sorted(result["corrupt"] + result["unreadable"])
     if as_json:
         typer.echo(json.dumps(payload, indent=2))
         raise typer.Exit(EXIT_OK)
@@ -765,11 +1060,24 @@ def catalog_verify_cmd(
         ("Changed on disk", ui.fmt_count(payload["stale"])),
         ("Gone from disk", ui.fmt_count(payload["missing"])),
     ]
+    if deep:
+        rows.extend(
+            [
+                ("Content OK", ui.fmt_count(payload["decoded_ok"])),
+                ("Corrupt", ui.fmt_count(payload["corrupt"])),
+                ("Unreadable", ui.fmt_count(payload["unreadable"])),
+                ("Not checked", ui.fmt_count(payload["skipped"])),
+            ]
+        )
     if prune:
         rows.append(("Rows pruned", ui.fmt_count(removed)))
-    else:
+    elif not deep:
         rows.append(("Next step", "re-run with --prune to clean up"))
     ui.catalog_message(_catalog_console(as_json), "Catalog verification", rows)
+    if deep and (payload["corrupt"] or payload["unreadable"]):
+        ui.catalog_damaged_files(
+            console, sorted(result["corrupt"] + result["unreadable"])
+        )
     raise typer.Exit(EXIT_OK)
 
 

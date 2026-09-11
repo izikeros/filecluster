@@ -153,10 +153,14 @@ def resolve_destination_names(
     rows = list(inbox_media_df.iterrows())
     if restore:
         originals = [
-            r for _, r in rows if strip_copy_suffix(r["file_name"]) == r["file_name"]
+            r
+            for _, r in rows
+            if strip_copy_suffix(Path(r["file_name"]).name) == Path(r["file_name"]).name
         ]
         suffixed = [
-            r for _, r in rows if strip_copy_suffix(r["file_name"]) != r["file_name"]
+            r
+            for _, r in rows
+            if strip_copy_suffix(Path(r["file_name"]).name) != Path(r["file_name"]).name
         ]
         suffixed.sort(key=lambda r: str(r["file_name"]))
         ordered_rows = [*originals, *suffixed]
@@ -165,11 +169,12 @@ def resolve_destination_names(
 
     for row in ordered_rows:
         name = row["file_name"]
+        base_name = Path(name).name
         target_dir = Path(out_dir) / str(row["target_path"])
         claimed_names = allocator.claimed_for(target_dir)
 
-        desired = strip_copy_suffix(name) if restore else name
-        fallback = name if desired.lower() in claimed_names else desired
+        desired = strip_copy_suffix(base_name) if restore else base_name
+        fallback = base_name if desired.lower() in claimed_names else desired
         mapping[name] = allocator.allocate(target_dir, fallback).name
 
     return mapping

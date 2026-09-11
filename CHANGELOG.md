@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Recursive inbox scanning by default (`--flat` / `--no-recursive`)** —
+  `filecluster run` now recursively scans subdirectories in the inbox directory
+  by default. Added `--flat` (with `--no-recursive` alias) CLI flag to restrict
+  inbox scanning to top-level files only.
+- **`filecluster catalog build`** — build the per-library SQLite catalog
+  (`.filecluster.db`) directly from an organised library, recording each media
+  file's size, mtime, partial hash and EXIF capture date, and indexing event
+  folders into the clusters table (start/end/median dates, file count,
+  continuity). Runs incrementally by default (only new or changed files and
+  folders are re-read) and offers `-f`/`--rebuild` for a from-scratch rebuild
+  that backs up the existing catalog first. Images receive full SHA-1 hashes
+  by default while videos receive short first-1-MiB hashes; configure each with
+  `--image-hash full|short` and `--video-hash full|short`, or use
+  `--full-hash` as a shortcut for full hashes on both. Other options include
+  `--no-exif` and `--json`. Previously the catalog could only be populated as
+  a side effect of `reconcile --execute` / clustering.
+- **`filecluster catalog verify --deep`** — opt-in content-level corruption
+  detection. On top of the default size/mtime comparison, every file still on
+  disk is checked with two independent signals: a structural decode (decodable
+  images — JPEG, PNG, TIFF, BMP, GIF, WebP — are fully decoded with Pillow and
+  videos are validated with `ffprobe`) and a **baseline re-hash** that
+  recomputes the stored full hash and CRC32 and compares them, catching silent
+  bit rot even in formats that cannot be decoded here (RAW/HEIC). Files whose
+  size/mtime changed are only decoded, never compared against a now-outdated
+  hash, so an edit is never mistaken for corruption. Results add `Content OK`,
+  `Corrupt`, `Unreadable` and `Not checked` counts and list the damaged files.
+  The stored baseline is never overwritten.
+- **Configurable hash algorithm (`catalog build --hash-algo sha1|blake3`)** —
+  the default `sha1` keeps the historical fast-prefilter split (MD5 partial +
+  SHA-1 full) and stays fully compatible with `reconcile`/`dedup`. `blake3`
+  switches *both* the partial and full hashes to BLAKE3, a fast, modern,
+  cryptographically strong digest. The algorithm is recorded per file
+  (`hash_algo` column) so old and new catalogs coexist; `reconcile`/`dedup`
+  reuse only the legacy hashes and recompute the rest, so dedup stays correct.
+  Adds `blake3` as a dependency and bumps the catalog schema (existing catalogs
+  migrate in place).
+- **Optional CRC32 checksums (`catalog build --crc32`)** — independently of the
+  hash algorithm, stores a whole-file CRC32 per file (`crc32` column). CRC32 is
+  a cheap, fast checksum for catching bit rot on later `verify --deep` runs.
+  Off by default.
+- **Pinned per-library hashing policy** — the hash algorithm and CRC32 choice
+  are recorded in a `library_settings` table on the first `catalog build` and
+  reused on every later run, so a library never ends up with a mix of
+  incomparable hashes. A plain re-run keeps the stored policy; a build that
+  *explicitly* asks for a different algorithm or CRC32 setting is refused with
+  a clear error pointing at `--rebuild`. `--rebuild` backs up the catalog, then
+  re-hashes the whole library under the new policy (the CLI confirms this
+  interactively first, and refuses in `--json`/non-interactive mode).
+  `catalog stats` now reports the pinned `Hash algo` and `CRC32 policy`.
+  Bumps the catalog schema to v3 (existing catalogs migrate in place).
+- **`webui/catalog-browser.html`** — a self-contained, server-less web UI to
+  browse and search a `.filecluster.db` catalog. Reads the database entirely in
+  the browser via sql.js (nothing is uploaded); provides summary stats, a
+  sortable/paginated/searchable files table, and a clusters view. See
+  `webui/README.md`.
+
+### Fixed
+- **No feedback for the first seconds of a run** — a run against a large inbox
+  printed the banner and then nothing until the whole inbox had been read,
+  which looked like a hang. Two causes, both addressed:
+  - Terminals reporting `TERM=dumb` (used by some IDE consoles) are no longer
+    given a spinner or progress bar. Rich silently drops every live redraw
+    there, so such a run produced no output at all for the length of a phase.
+    They now get static lines instead: each phase announces itself before it
+    starts working, and reports quarter-way milestones as it goes. Output stays
+    bounded — a handful of lines per phase regardless of inbox size. Redirected
+    output (pipes, log files) gets the same treatment.
+  - Scanning the inbox directory tree now reports its own headway (folders and
+    media files found so far). That walk runs *before* the file total is known,
+    so it could not previously drive a progress bar, and on a large or
+    network-mounted tree it accounts for much of the initial wait.
+- **Confirmation prompts on a dumb terminal** — `run` and `curation` treated a
+  dumb terminal as non-interactive and silently auto-approved the write. They
+  now prompt, since such a terminal accepts input even though it cannot redraw.
+  Pipes and other non-tty output still auto-approve, so automation is
+  unaffected.
+
 ## [0.7.0] - 2026-09-10
 
 ### Added
