@@ -181,6 +181,9 @@ reference for every command:
 before clustering: how to run it, how the decision is made, its current
 limitations and what is still pending.
 
+**[Architecture](docs/architecture.md)** — a concise map of workflows, module
+ownership, shared safety invariants, and contributor guidance.
+
 ### How the clustering works
 Files are sorted by timestamp and split wherever the gap between two
 consecutive files exceeds the time granularity (60 minutes by default). Each
