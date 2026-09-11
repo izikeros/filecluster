@@ -1,5 +1,7 @@
 """Tests for the lightweight pixel feature stage."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -20,6 +22,21 @@ from .conftest import make_item, page_array, scene_array, write_document, write_
 
 
 class TestWorkingImage:
+    def test_decodes_a_real_heic_sample(self, settings):
+        sample = (
+            Path(__file__).parents[1]
+            / "assets"
+            / "curration"
+            / "real_photos"
+            / "IMG_0313.HEIC"
+        )
+
+        image = load_working_image(sample, settings)
+
+        assert image.mode == "RGB"
+        assert image.size[0] > 0
+        assert image.size[1] > 0
+
     def test_downscales_to_the_configured_side(self, tmp_path, settings):
         path = tmp_path / "big.jpg"
         Image.fromarray(scene_array(3000, 2000)).save(path)

@@ -17,12 +17,22 @@ from PIL import Image, ImageFile
 
 from filecluster import logger
 
-#: Image extensions whose pixels Pillow can fully decode without extra plugins.
-#: RAW (``.cr2``, ``.dng``) and HEIC need optional backends, so decoding them
-#: here would raise and falsely flag good files; they are left to the hash
-#: check instead and reported as ``SKIPPED`` by the decode pass.
+#: Image extensions whose pixels Pillow can fully decode in the base install.
+#: RAW formats still need optional backends, so they are left to the hash check
+#: and reported as ``SKIPPED`` by the decode pass.
 DECODABLE_IMAGE_EXTENSIONS: frozenset[str] = frozenset(
-    {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
+    {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".tif",
+        ".tiff",
+        ".bmp",
+        ".gif",
+        ".webp",
+        ".heic",
+        ".heif",
+    }
 )
 
 #: How long a single ffprobe call may run before it is treated as unreadable.

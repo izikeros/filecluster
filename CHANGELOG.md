@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **HEIC/HEIF decoding** — `pillow-heif` is now a required dependency and its
+  Pillow opener is registered in `filecluster/__init__.py`, so `.heic`/`.heif`
+  files are decoded everywhere Pillow is used. They are also listed in
+  `media_integrity.DECODABLE_IMAGE_EXTENSIONS`. Previously every HEIC file
+  failed to decode and was routed to `review` with `processing.decode_error`.
+- **`notebooks/curation_evaluation.ipynb`** — an evaluation of the curation
+  cascade against the labelled samples in `tests/assets/curration`, reporting
+  per-level accuracy (metadata precision/recall, per-signal AUC, fusion
+  outcomes), a gate-by-gate diagnosis of why files are deferred to `review`,
+  and a threshold sweep that replays the real `fuse()` over collected evidence.
+  `matplotlib` was added to the `dev` dependency group for it.
+
+### Changed
+- **The confidence floor applies to `reject` only.** For a fused verdict,
+  `confidence` is a monotone function of the distance from the nearest
+  threshold, so requiring `thresholds.minimum_confidence` on both sides merely
+  re-imposed stricter thresholds — invisibly, since the configured numbers were
+  then not the ones in force (at the defaults, `keep` really was 0.82 rather
+  than 0.70). The extra margin is now charged to the destructive direction
+  only, matching the rest of the system, where a stage may hand down a terminal
+  `reject` but never a terminal `keep`. On the sample set this raises automated
+  decisions from 8 to 32 of 112 at 91% accuracy and cuts the review rate from
+  93% to 71%, with no personal photo auto-rejected.
+
+### Fixed
+- **A failed stage now forces `review` for every decision, including `keep`.**
+  The documented "unknown means review" guarantee — a broken provider, an
+  undecodable image or an exception anywhere in the cascade — had been
+  delivered only as a side effect of the two-sided confidence floor, so it
+  would have regressed silently when that floor was narrowed. It is now
+  enforced by the stage-error rule itself and covered by its own test.
+
 ## [0.7.1] - 2026-09-11
 
 ### Added

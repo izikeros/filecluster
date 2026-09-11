@@ -152,7 +152,10 @@ def confidence_for(
     """How far the score sits from the nearest threshold, in band units.
 
     Not the maximum model similarity: a file just past the keep threshold is
-    barely decided, however certain a single model was about its label.
+    barely decided, however certain a single model was about its label. Because
+    this is a margin rather than independent evidence, the confidence floor in
+    :func:`_apply_safety_rules` is applied to ``reject`` only; see the comment
+    there.
     """
     if score is None:
         return 0.0
@@ -255,8 +258,12 @@ def _apply_safety_rules(
         reason_set & (reasons.DECISIVE_UTILITY_SIGNALS | {reasons.SEMANTIC_SCREENSHOT})
     )
 
-    # A stage that could not do its job must not influence the outcome.
-    if stage_failed and decision is not CurationDecision.KEEP:
+    # A stage that could not do its job must not influence the outcome, in
+    # either direction: "unknown means review" covers a confident-looking keep
+    # assembled from partial evidence just as much as it covers a reject. This
+    # used to exempt `keep`, and the guarantee was delivered only as a side
+    # effect of the confidence floor below.
+    if stage_failed:
         notes.append(reasons.STAGE_ERROR)
         return CurationDecision.REVIEW, min(confidence, 0.5)
 
@@ -284,12 +291,17 @@ def _apply_safety_rules(
             notes.append(reasons.NO_SEMANTIC_EVIDENCE)
             return CurationDecision.REVIEW, min(confidence, 0.6)
 
-    if (
-        decision is not CurationDecision.REVIEW
-        and confidence < settings.minimum_confidence
-    ):
-        notes.append(reasons.LOW_CONFIDENCE)
-        return CurationDecision.REVIEW, confidence
+        # The floor is deliberately one-sided. For a fused verdict, confidence
+        # is a monotone function of the distance from the threshold, so asking
+        # for it on both sides only re-imposes stricter thresholds - and does it
+        # invisibly, because the configured numbers are then not the ones in
+        # force. Charging that extra margin to `reject` alone matches the rest
+        # of the system: a stage may only ever hand down a terminal `reject`,
+        # and a wrong keep leaves clutter in the library while a wrong reject
+        # buries a photograph.
+        if confidence < settings.minimum_confidence:
+            notes.append(reasons.LOW_CONFIDENCE)
+            return CurationDecision.REVIEW, confidence
 
     return decision, confidence
 

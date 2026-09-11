@@ -30,6 +30,7 @@ seams that refuse to run rather than guess.
 - [Testing](#testing)
 - [Integrating with the main CLI](#integrating-with-the-main-cli)
 - [Current limitations](#current-limitations)
+- [Prerequisites for semantic embeddings and VLM](#prerequisites-for-semantic-embeddings-and-vlm)
 - [Pending work and next steps](#pending-work-and-next-steps)
 - [What is needed to unlock the full potential](#what-is-needed-to-unlock-the-full-potential)
 
@@ -94,7 +95,8 @@ Because the third column is not symmetric, the pipeline holds these invariants:
    `reject/`, and that is all it means.
 2. **Unknown means review.** A missing file, an undecodable image, an oversized
    image, a video, a broken provider or an exception anywhere in the cascade all
-   produce `review`, never `reject`.
+   produce `review` — not `reject`, and not `keep` either, whatever the partial
+   evidence that did arrive happened to suggest.
 3. **Reject needs to know *what* the file is.** Technical quality and metadata
    alone can never discard a file: the verdict requires a semantic reason
    (`semantic.utility`, `semantic.screenshot`, `vlm.decision`) or a decisive
@@ -104,9 +106,13 @@ Because the third column is not symmetric, the pipeline holds these invariants:
 5. **Conflicting strong signals mean review.** Personal and utility evidence
    both above `0.55` sends the file to a human whichever way the arithmetic
    landed.
-6. **Low confidence means review.** Confidence is the distance from the nearest
-   threshold, not a model's self-reported certainty, and a terminal decision has
-   to clear `thresholds.minimum_confidence`.
+6. **Low confidence blocks a reject.** Confidence is the distance from the
+   nearest threshold, not a model's self-reported certainty, so an automatic
+   `reject` — whether handed down early by a stage or produced by fusion — has
+   to clear `thresholds.minimum_confidence` as well. The floor is deliberately
+   one-sided: applying it to `keep` too would merely re-impose a stricter keep
+   threshold, invisibly, since the configured number would no longer be the one
+   in force.
 
 All six rules live in `scoring._apply_safety_rules`, and each one appends its own
 reason code so a verdict can always be explained.
@@ -133,13 +139,20 @@ than the overall scale. Defaults:
 | --- | --- | --- |
 | `keep` | 0.70 | at or above → `keep` |
 | `reject` | 0.30 | at or below → `reject` candidate, subject to the safety rules |
-| `minimum_confidence` | 0.75 | a terminal decision below this becomes `review` |
+| `minimum_confidence` | 0.75 | an automatic `reject` below this becomes `review` |
 | `conflict_margin` | 0.12 | semantic top-two gap below this adds `semantic.low_margin` |
 | `vlm_band` | `(0.35, 0.75)` | confidence band that qualifies for VLM escalation |
 
 Confidence is computed in band units: `0.5 + distance_from_threshold / (keep −
 reject)`, and it is multiplied by `0.95` while the personal signal is heuristic
 rather than semantic, so uncalibrated evidence cannot produce certainty.
+
+Because that value is a monotone function of the margin, requiring it of a
+fused verdict is equivalent to moving the threshold: at the defaults, a `reject`
+must actually reach `0.20` rather than `0.30`. That extra caution is charged to
+the destructive direction only. Until calibration lands (see *Pending work*),
+read `minimum_confidence` as "how much further past the reject threshold a file
+has to be", not as a probability.
 
 ---
 
@@ -513,6 +526,172 @@ Read these before trusting a verdict.
    passes one image at a time.
 8. **The prompt bank is untested against a real corpus.** The 17 labels and their
    prompts are a reasonable first guess, no more.
+
+---
+
+## Prerequisites for semantic embeddings and VLM
+
+The cascade already supports semantic classification, but it does not yet expose
+reusable image embeddings or provide an operational VLM backend. Implement these
+capabilities in the following order rather than treating the VLM as a replacement
+for calibrated semantic evidence.
+
+### 1. Define the purpose of the embeddings
+
+Decide which downstream features consume the embedding before changing its
+lifecycle:
+
+- Zero-shot semantic labels already work and do not require persisted embeddings.
+- Personal preference learning needs the embedding associated with each explicit
+  user correction.
+- Similarity search or duplicate detection would require a separate index,
+  retrieval policy and retention policy; it should not be added implicitly as
+  part of preference learning.
+
+Keep embeddings in memory unless a concrete feature requires persistence. Never
+include them in CSV or JSON reports.
+
+### 2. Build a representative labelled evaluation set
+
+Collect roughly 1,000-2,000 files from the target library and label each one
+`keep`, `review` or `reject`. Include difficult boundary cases: screenshots of
+photos, photographed documents, receipts containing people, scanned prints,
+whiteboards, product photos with sentimental value and utility material that
+contains a protected subject.
+
+Split evaluation data by event, not randomly, so near-duplicates from one burst
+cannot appear in both training and validation. Define the acceptable
+false-reject rate for protected subjects before selecting thresholds; reducing
+the review pile is secondary to that constraint.
+
+### 3. Complete the embedding data path
+
+The contracts already anticipate this path:
+
+- `SemanticPrediction.embedding` exists in `providers/base.py`.
+- `SigLipSemanticProvider` computes normalised image features but currently
+  discards them after calculating prompt similarities.
+- `SemanticStage` consumes label scores but does not pass the embedding to a
+  preference provider.
+- `LogisticPreferenceProvider` can train and score embeddings once they reach it.
+
+Return each normalised image feature from `SigLipSemanticProvider`, carry it in a
+private in-memory field on `CurationContext`, and let a preference stage consume
+it after semantic classification. Do not put it in `StageResult.scores`, because
+that mapping is for scalar signals and participates in reporting and caching.
+
+If training requires persistence, add a dedicated cache table keyed by file
+SHA-256 and the complete semantic model fingerprint. Store the embedding
+dimension and serialization format with the record, and invalidate the record
+whenever the model or preprocessing identity changes.
+
+### 4. Pin the embedding model and preprocessing
+
+The embedding space is a versioned data format. `ProviderInfo` must identify:
+
+- model ID and immutable revision,
+- preprocessing version,
+- embedding dimension and normalisation method,
+- prompt-bank version where classification results are involved,
+- weights checksum when an immutable upstream revision is unavailable.
+
+Never train preference weights using one embedding fingerprint and score with
+another. Loading a preference model against an incompatible embedding
+fingerprint must fail explicitly rather than silently returning misleading
+scores.
+
+### 5. Provide a feedback and training workflow
+
+Add a workflow that records corrections made while reviewing results. Each
+training example needs the file content hash, corrected decision, semantic model
+fingerprint, embedding and an event or group identifier. The existing
+`feedback` table can hold the correction metadata; embedding storage should be
+separate so verdict rows and reports remain small.
+
+`LogisticPreferenceProvider` requires at least 100 examples per class. Train
+with event-grouped validation, report class counts and validation quality, and
+activate the `preference` weight only when a compatible trained model is
+available. Missing or stale preference weights remain an absent signal, never a
+zero.
+
+### 6. Batch semantic inference
+
+The semantic provider accepts a sequence, but the pipeline currently passes one
+image at a time. Before scaling to large libraries, collect bounded batches and
+perform one encoder forward pass per batch. Preserve the existing guarantees:
+
+- cache hits do not enter a batch,
+- one corrupt image cannot fail other files,
+- decoded working images remain memory-bounded,
+- output order stays deterministic,
+- per-file duration, reasons and failure handling remain available.
+
+Benchmark CPU, Apple Silicon MPS and CUDA before choosing defaults. Treat batch
+size as part of runtime tuning, not model identity, unless it measurably changes
+answers.
+
+### 7. Choose and pin a VLM backend
+
+Evaluate candidate runtimes and checkpoints against licence and redistribution
+terms, checkpoint size, RAM/VRAM requirements, CPU/MPS/CUDA support,
+quantisation support, latency and reliability of structured JSON output.
+
+Implement `VlmProvider.info()` and `judge(image)`. Keep `VlmStage`,
+`VlmJudgement`, `PROMPT` and `parse_vlm_response()` as the trust boundary.
+`judge()` should return only the validated decision, confidence, known labels
+and short reasons; raw model text must not enter reports or path handling.
+
+### 8. Keep VLM escalation narrow and conservative
+
+Run the VLM only after ordinary fusion and initially only for results that would
+otherwise be `review` and whose confidence lies inside `thresholds.vlm_band`.
+Do not send files already settled by decisive metadata or a confidently fused
+verdict.
+
+The VLM prompt may include bounded upstream context such as top semantic labels,
+OCR density and conflicting signal names, but not recognised OCR text. A
+timeout, malformed response, unavailable model, unknown decision or internal
+error must produce `review`.
+
+Initially allow only `review -> keep` and `review -> reject` transitions. A VLM
+`reject` must still satisfy the global minimum-confidence rule, protected-subject
+guard and strong-signal conflict rule. The VLM must not bypass
+`scoring._apply_safety_rules` merely because `VlmStage` returns a terminal
+decision.
+
+### 9. Make remote inference explicitly opt-in
+
+Local processing remains the default. A hosted endpoint requires both
+`vlm_endpoint` and `allow_remote_vlm`; document which pixels and metadata leave
+the machine. Use explicit connection and inference timeouts, and never log image
+data, embeddings, OCR text, full prompts or raw VLM responses.
+
+Include endpoint model identity, revision and preprocessing in the provider
+fingerprint. A generic endpoint URL is not enough to guarantee cache validity.
+
+### 10. Calibrate before enabling either capability by default
+
+Measure the semantic and VLM stages independently:
+
+| Capability | Required measurements |
+| --- | --- |
+| Semantic classification | Per-label precision and recall, protected-subject false rejects, throughput and memory |
+| Preference model | Class balance, event-grouped validation quality and calibration |
+| VLM escalation | Escalation rate, accuracy of changed verdicts, false rejects, review-volume reduction and latency |
+
+Enable preference scoring only after its validation target is met. Enable VLM
+escalation by default only if it reduces manual review without violating the
+protected-subject false-reject target. Recommended implementation order:
+
+```text
+labelled evaluation set
+  -> return embeddings from SigLIP
+  -> feedback and embedding storage
+  -> preference training and calibration
+  -> semantic batching
+  -> local VLM provider
+  -> VLM escalation evaluation
+```
 
 ---
 

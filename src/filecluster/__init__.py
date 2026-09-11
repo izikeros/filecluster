@@ -46,6 +46,11 @@ As name indicates can be helpful during the development phase
 import sys
 
 from loguru import logger
+from pillow_heif import register_heif_opener
+
+# HEIC/HEIF is a supported media format. Registering the Pillow opener here
+# makes it available to every image-reading path in the package.
+register_heif_opener()
 
 # Logs are diagnostics, so they go to stderr and leave stdout free for results.
 # Importing the package must not print progress noise, so the default level is

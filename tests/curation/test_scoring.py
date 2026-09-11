@@ -232,14 +232,35 @@ class TestSafetyRules:
         assert verdict.decision is CurationDecision.REVIEW
         assert reasons.STAGE_ERROR in verdict.reasons
 
+    def test_a_failed_stage_also_blocks_a_confident_keep(self):
+        """Unknown means review, and that has to hold for keeps too.
+
+        This guarantee used to be delivered only as a side effect of the
+        confidence floor, so it needs a case of its own.
+        """
+        verdict = fuse(
+            {"personal_probability": 0.95, "technical_quality": 0.9},
+            ["portrait"],
+            [reasons.SEMANTIC_PERSONAL],
+            CurationSettings(),
+            stage_failed=True,
+        )
+
+        assert verdict.decision is CurationDecision.REVIEW
+        assert reasons.STAGE_ERROR in verdict.reasons
+
     def test_no_signals_at_all_means_review(self):
         verdict = fuse({}, [], [], CurationSettings())
 
         assert verdict.decision is CurationDecision.REVIEW
         assert reasons.MISSING_SIGNALS in verdict.reasons
 
-    def test_a_borderline_keep_is_downgraded_to_review(self):
-        """Until calibration exists, barely-decided files need a human."""
+    def test_a_borderline_keep_is_not_downgraded(self):
+        """The keep threshold already encodes the margin a keep has to clear.
+
+        Confidence is a function of that same distance, so re-checking it here
+        would silently move the threshold the user configured.
+        """
         settings = CurationSettings()
         verdict = fuse(
             {"personal_probability": 0.90, "technical_quality": 0.35},
@@ -248,6 +269,22 @@ class TestSafetyRules:
             settings,
         )
 
+        assert verdict.keep_score >= settings.keep_threshold
+        assert verdict.confidence < settings.minimum_confidence
+        assert verdict.decision is CurationDecision.KEEP
+        assert reasons.LOW_CONFIDENCE not in verdict.reasons
+
+    def test_a_borderline_reject_is_downgraded_to_review(self):
+        """The destructive direction still pays for the extra margin."""
+        settings = CurationSettings()
+        verdict = fuse(
+            {"personal_probability": 0.32, "utility_probability": 0.10},
+            ["screenshot"],
+            [reasons.SEMANTIC_SCREENSHOT],
+            settings,
+        )
+
+        assert verdict.keep_score <= settings.reject_threshold
         assert verdict.confidence < settings.minimum_confidence
         assert verdict.decision is CurationDecision.REVIEW
         assert reasons.LOW_CONFIDENCE in verdict.reasons
