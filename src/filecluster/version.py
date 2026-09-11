@@ -4,7 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 # bump-my-version updates this fallback; importlib.metadata reads the
 # installed package metadata when available.
-_FALLBACK_VERSION = "0.7.1"
+_FALLBACK_VERSION = "0.8.0"
 
 try:
     __version__ = version("filecluster")

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-11
+
 ### Added
 - **HEIC/HEIF decoding** — `pillow-heif` is now a required dependency and its
   Pillow opener is registered in `filecluster/__init__.py`, so `.heic`/`.heif`
