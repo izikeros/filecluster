@@ -11,7 +11,7 @@ import tempfile
 
 import pytest
 
-from filecluster.file_cluster import main, process_watch_dirs
+from filecluster.file_cluster import ClusterRequest, cluster, main, process_watch_dirs
 
 
 # ---------------------------------------------------------------------------
@@ -202,3 +202,19 @@ class TestMainOrchestration:
         assert results["new_cluster_df"].empty
         assert results["file_operation_plan"].n_skips == 0
         assert list(output_dir.iterdir()) == []
+
+
+class TestTypedClusterApi:
+    def test_cluster_returns_named_result_fields(self, assets_dir, tmp_path):
+        run = cluster(
+            ClusterRequest(
+                inbox=assets_dir / "set_1",
+                output=tmp_path / "output",
+                development_mode=True,
+                dry_run=True,
+            )
+        )
+
+        assert len(run.new_folder_names) == 4
+        assert run.files_read == 8
+        assert run.plan.n_skips == 8

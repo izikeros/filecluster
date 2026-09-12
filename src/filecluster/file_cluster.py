@@ -5,20 +5,124 @@ This module provides functionality to cluster media files (images and videos)
 based on their timestamps, helping organize them into event-based folders.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 from filecluster import logger
 from filecluster.configuration import (
+    Config,
     CopyMode,
     default_factory,
 )
 from filecluster.dbase import get_existing_clusters_info
 from filecluster.file_operations import FileOperationPlan, execute_plan
+from filecluster.filecluster_types import ClustersDataFrame
 from filecluster.image_grouper import ImageGrouper
 from filecluster.image_reader import InboxReader
 from filecluster.ui import NullReporter, Reporter, fmt_count
+
+
+@dataclass(frozen=True)
+class ClusterRequest:
+    """Explicit inputs for one clustering run.
+
+    This is the preferred library interface. ``main()`` remains as a
+    compatibility wrapper for integrations using its historical keyword flags.
+    """
+
+    inbox: Path | None = None
+    output: Path | None = None
+    watch_dirs: tuple[Path, ...] = ()
+    development_mode: bool = False
+    dry_run: bool = False
+    copy_files: bool = False
+    force_deep_scan: bool | None = None
+    separate_duplicates: bool | None = None
+    assign_existing_clusters: bool | None = None
+    restore_original_names: bool | None = None
+    limit: int | None = None
+    flat: bool | None = None
+
+
+@dataclass(frozen=True)
+class ClusterRun:
+    """Typed outcome of one clustering run."""
+
+    config: Config
+    clusters: ClustersDataFrame
+    empty_folders: list[Path]
+    non_compliant_folders: list[str]
+    files_read: int
+    files_available: int
+    duplicate_files: list[str]
+    duplicate_clusters: list[str]
+    files_assigned_to_existing_clusters: list[str] | None
+    existing_cluster_names: list[str] | None
+    new_clusters: ClustersDataFrame
+    new_folder_names: list[str]
+    plan: FileOperationPlan
+    cluster_sizes: list[tuple[str, int]]
+    elapsed_seconds: float
+    aborted: bool
+
+    @classmethod
+    def from_legacy(cls, results: dict[str, Any]) -> ClusterRun:
+        """Build a typed run from the stable legacy ``main()`` payload."""
+        return cls(
+            config=cast(Config, results["config"]),
+            clusters=cast(ClustersDataFrame, results["df_clusters"]),
+            empty_folders=cast(list[Path], results["empty"]),
+            non_compliant_folders=cast(list[str], results["non_compliant"]),
+            files_read=cast(int, results["n_files_read"]),
+            files_available=cast(int, results["n_files_available"]),
+            duplicate_files=cast(list[str], results["dup_files"]),
+            duplicate_clusters=cast(list[str], results["dup_clusters"]),
+            files_assigned_to_existing_clusters=cast(
+                list[str] | None, results["files_existing_cl"]
+            ),
+            existing_cluster_names=cast(
+                list[str] | None, results["existing_cluster_names"]
+            ),
+            new_clusters=cast(ClustersDataFrame, results["new_cluster_df"]),
+            new_folder_names=cast(list[str], results["new_folder_names"]),
+            plan=cast(FileOperationPlan, results["file_operation_plan"]),
+            cluster_sizes=cast(list[tuple[str, int]], results["cluster_sizes"]),
+            elapsed_seconds=cast(float, results["elapsed"]),
+            aborted=cast(bool, results["aborted"]),
+        )
+
+
+def cluster(
+    request: ClusterRequest,
+    *,
+    reporter: Reporter | None = None,
+    confirm: Callable[[Any, Any], bool] | None = None,
+    banner: Callable[[Any], None] | None = None,
+) -> ClusterRun:
+    """Cluster media using an explicit request and return a typed outcome."""
+    results = main(
+        inbox_dir=str(request.inbox) if request.inbox is not None else None,
+        output_dir=str(request.output) if request.output is not None else None,
+        watch_dir_list=[str(path) for path in request.watch_dirs],
+        development_mode=request.development_mode,
+        no_operation=request.dry_run,
+        copy_mode=request.copy_files,
+        force_deep_scan=request.force_deep_scan,
+        drop_duplicates=request.separate_duplicates,
+        use_existing_clusters=request.assign_existing_clusters,
+        restore_original_names=request.restore_original_names,
+        limit=request.limit,
+        flat=request.flat,
+        reporter=reporter,
+        confirm=confirm,
+        banner=banner,
+    )
+    return ClusterRun.from_legacy(results)
 
 
 def main(
