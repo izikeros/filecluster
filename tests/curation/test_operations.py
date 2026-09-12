@@ -11,6 +11,7 @@ from filecluster.curation.operations import (
     safe_relative_path,
 )
 from filecluster.curation.types import CurationDecision, CurationResult
+from filecluster.file_operations import OperationMode as SharedOperationMode
 
 from .conftest import make_item, write_photo
 
@@ -29,6 +30,9 @@ def result_for(path, decision=CurationDecision.KEEP, relative_path=None):
 
 
 class TestSafePaths:
+    def test_uses_the_shared_operation_mode(self):
+        assert OperationMode is SharedOperationMode
+
     def test_accepts_a_nested_relative_path(self):
         assert safe_relative_path("2024/holiday/IMG_1.jpg").name == "IMG_1.jpg"
 

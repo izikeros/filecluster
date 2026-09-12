@@ -24,19 +24,10 @@ from filecluster.file_operations import (
     CopyOp,
     DestinationAllocator,
     MoveOp,
+    OperationMode,
     execute_file_operation,
 )
 from filecluster.ui import NullProgress, ProgressSink
-
-
-class OperationMode(StrEnum):
-    """What to do with the analysed files."""
-
-    COPY = "copy"
-    MOVE = "move"
-    #: Analyse only. The plan still resolves destinations so a dry run can show
-    #: exactly what a real run would write.
-    SKIP = "skip"
 
 
 class OperationStatus(StrEnum):

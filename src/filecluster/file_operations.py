@@ -13,6 +13,7 @@ import os
 import re
 from contextlib import suppress
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from shutil import copy2
 
@@ -31,6 +32,14 @@ _COPY_SUFFIX_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\s*-\s*Copy(?:\s*\(\d+\))?$", re.IGNORECASE),
     re.compile(r"\s*\(\d+\)$"),
 )
+
+
+class OperationMode(StrEnum):
+    """The filesystem action selected by a workflow plan."""
+
+    COPY = "copy"
+    MOVE = "move"
+    SKIP = "skip"
 
 
 def strip_copy_suffix(name: str) -> str:
