@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PIL import Image, ImageFile
 
-from filecluster import logger
+from filecluster import initialize_image_support, logger
 
 #: Image extensions whose pixels Pillow can fully decode in the base install.
 #: RAW formats still need optional backends, so they are left to the hash check
@@ -61,6 +61,7 @@ def verify_image(path: str | Path) -> IntegrityStatus:
     cannot be read at all (permissions). The decompression-bomb guard is lifted
     for the duration so a legitimately huge panorama is not flagged.
     """
+    initialize_image_support()
     prev_truncated = ImageFile.LOAD_TRUNCATED_IMAGES
     prev_max_pixels = Image.MAX_IMAGE_PIXELS
     # A truncated file must raise here rather than silently loading partial

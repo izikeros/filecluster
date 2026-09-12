@@ -17,7 +17,7 @@ from time import perf_counter
 
 import numpy as np
 
-from filecluster import logger
+from filecluster import initialize_image_support, logger
 from filecluster.curation import reasons
 from filecluster.curation.configuration import CurationSettings
 from filecluster.curation.types import (
@@ -88,6 +88,7 @@ def load_working_image(path: Path, settings: CurationSettings):
     """
     from PIL import Image, ImageOps
 
+    initialize_image_support()
     with Image.open(path) as raw:
         pixels = (raw.size[0] or 0) * (raw.size[1] or 0)
         if pixels > settings.max_pixels:

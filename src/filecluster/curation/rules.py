@@ -16,7 +16,7 @@ from importlib import resources
 from pathlib import Path
 from time import perf_counter
 
-from filecluster import logger
+from filecluster import initialize_image_support, logger
 from filecluster.curation import reasons
 from filecluster.curation.types import (
     CurationContext,
@@ -146,6 +146,7 @@ def read_metadata_facts(path: Path) -> MetadataFacts:
     """
     from PIL import Image
 
+    initialize_image_support()
     try:
         with Image.open(path) as im:
             width, height = im.size

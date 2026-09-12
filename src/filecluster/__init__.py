@@ -1,64 +1,22 @@
-"""Image and video clustering by the event time.
-
-The goal of this package is to help with organization of the multimedia
- (photos and videos) by the event and date.
-
-It help coping with the problem when the content is coming from various devices
- and in different time.
-
-## Organizational scheme
-### inbox folder
-
-Inbox - incoming media lands here.
-
-### outbox folder
-
-Generated clusters are created here. If matching cluster already exist in watch
- folder
-
-### watch folder
-
-Folder with main, structured collection of media. It is watched and compared
-with potential newly created clusters - if corresponding cluster already exists
-in watch folder, the cluster folder in outbox should have the same name as
-existing luster including parent directory (year).
-
-## Quick start
-```bash
-$ file_cluster.py --inbox-dir inbox --watch-dirs zdjecia --db-driver dataframe
-```
-
-or in abbreviated form:
-
-```bash
-$ file_cluster.py -i inbox -w zdjecia -d dataframe
-```
-
-You can add `-n` switch to have dry run.
-
-## Development mode
-As name indicates can be helpful during the development phase
-
-- "copy" operation instead of "move" to protect source files.
-- "delete db" database is usually deleted to ensure "fresh" start
-"""
-
-import sys
+"""Image and video clustering by the event time."""
 
 from loguru import logger
 from pillow_heif import register_heif_opener
 
-# HEIC/HEIF is a supported media format. Registering the Pillow opener here
-# makes it available to every image-reading path in the package.
-register_heif_opener()
+__all__ = ["initialize_image_support", "logger"]
 
-# Logs are diagnostics, so they go to stderr and leave stdout free for results.
-# Importing the package must not print progress noise, so the default level is
-# WARNING; the CLI raises it through filecluster.ui.configure_logging().
-logger.remove()
-logger.add(
-    sys.stderr,
-    format="<level>{level: <8}</level> {message}",
-    colorize=True,
-    level="WARNING",
-)
+
+_image_support_initialized = False
+
+
+def initialize_image_support() -> None:
+    """Register optional Pillow image plugins before opening media files.
+
+    Importing ``filecluster`` deliberately has no process-wide side effects.
+    Image readers call this idempotent function immediately before using
+    Pillow, which keeps HEIC/HEIF support available to every workflow.
+    """
+    global _image_support_initialized
+    if not _image_support_initialized:
+        register_heif_opener()
+        _image_support_initialized = True

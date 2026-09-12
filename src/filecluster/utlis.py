@@ -16,7 +16,7 @@ import blake3
 import exifread
 from PIL import Image
 
-from filecluster import logger
+from filecluster import initialize_image_support, logger
 from filecluster.configuration import Config, CopyMode
 from filecluster.exceptions import DateStringNoneError
 
@@ -202,6 +202,7 @@ def get_date_from_file(path_name: str):
 
 def get_exif_date(path_name: str):
     """Return exif date or none."""
+    initialize_image_support()
     # Open the image file for reading (binary mode)
     with open(path_name, "rb") as img_file:
         # Return Exif tags
@@ -253,6 +254,7 @@ def create_folder_for_cluster(config: Config, date_string: str, mode: CopyMode):
 
 def get_thumbnail(path, width: int = 150, height: int = 150):
     """Read image and create thumbnail of given size."""
+    initialize_image_support()
     i = Image.open(path)
     i.thumbnail((width, height), Image.Resampling.LANCZOS)
     return i
