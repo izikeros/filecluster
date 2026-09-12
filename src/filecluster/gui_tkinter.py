@@ -1,50 +1,41 @@
 #!/usr/bin/env python3
+"""Experimental Tkinter launcher.
+
+This prototype is intentionally isolated from the CLI and package imports.
+"""
+
+from __future__ import annotations
+
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 
 
-def run_app():
-    inbox = inbox_entry.get()
-    lib = lib_entry.get()
-    output = output_entry.get()
-    # Replace with your clustering functionality call
-    res = f"Inbox: {inbox}\nLibrary: {lib}\nOutput: {output}"
-    messagebox.showinfo("Result", res)
+def main() -> None:
+    """Launch the placeholder Tkinter prototype."""
+    root = tk.Tk()
+    root.title("Filecluster (experimental)")
+
+    def browse(entry: tk.Entry) -> None:
+        if folder := filedialog.askdirectory():
+            entry.delete(0, tk.END)
+            entry.insert(0, folder)
+
+    for row, label in enumerate(
+        ("Inbox directory:", "Main library directory:", "Output directory:")
+    ):
+        tk.Label(root, text=label).grid(row=row, column=0, sticky="e")
+        entry = tk.Entry(root, width=50)
+        entry.grid(row=row, column=1)
+        tk.Button(root, text="Browse", command=lambda e=entry: browse(e)).grid(
+            row=row, column=2
+        )
+
+    tk.Label(
+        root, text="This prototype is not connected to the clustering workflow."
+    ).grid(row=3, column=0, columnspan=3, pady=10)
+    tk.Button(root, text="Close", command=root.destroy).grid(row=4, column=1, pady=10)
+    root.mainloop()
 
 
-def browse_folder(entry):
-    folder = filedialog.askdirectory()
-    if folder:
-        entry.delete(0, tk.END)
-        entry.insert(0, folder)
-
-
-root = tk.Tk()
-root.title("Media cluster by event")
-
-# Create labels and entries
-tk.Label(root, text="Inbox dir:").grid(row=0, column=0, sticky="e")
-inbox_entry = tk.Entry(root, width=50)
-inbox_entry.grid(row=0, column=1)
-tk.Button(root, text="Browse", command=lambda: browse_folder(inbox_entry)).grid(
-    row=0, column=2
-)
-
-tk.Label(root, text="Main library dir:").grid(row=1, column=0, sticky="e")
-lib_entry = tk.Entry(root, width=50)
-lib_entry.grid(row=1, column=1)
-tk.Button(root, text="Browse", command=lambda: browse_folder(lib_entry)).grid(
-    row=1, column=2
-)
-
-tk.Label(root, text="Output dir:").grid(row=2, column=0, sticky="e")
-output_entry = tk.Entry(root, width=50)
-output_entry.grid(row=2, column=1)
-tk.Button(root, text="Browse", command=lambda: browse_folder(output_entry)).grid(
-    row=2, column=2
-)
-
-# Run button
-tk.Button(root, text="Run", command=run_app).grid(row=3, column=1, pady=10)
-
-root.mainloop()
+if __name__ == "__main__":  # pragma: no cover - manual experimental entry point
+    main()

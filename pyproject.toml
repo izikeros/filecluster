@@ -15,7 +15,6 @@ dependencies = [
     "python-dateutil>=2.8.2",
     "pytz>=2020.5",
     "pydantic>=2.5.1",
-    "pysimplegui>=4.60.5",
     "loguru>=0.7.2",
     "pydantic-settings>=2.9.1",
     "rich>=13.9.0",
@@ -26,6 +25,9 @@ readme = "README.md"
 license = { text = "MIT" }
 
 [project.optional-dependencies]
+gui = [
+    "pysimplegui>=4.60.5",
+]
 # Model-backed curation stages. Kept optional so a plain `filecluster run`
 # never pulls an ML runtime; without them curation falls back to the cheap
 # metadata and pixel stages and routes the uncertain cases to review.
@@ -169,4 +171,3 @@ exclude = [
     "src/filecluster/gui.py",
     "src/filecluster/gui_tkinter.py",
 ]
-

@@ -1,125 +1,97 @@
 #!/usr/bin/env python3
-"""Simple GUI to configure and run filecluster. EXPERIMENTAL."""
+"""Experimental PySimpleGUI launcher for the clustering workflow."""
 
-import PySimpleGUI as sg  # noqa: N813
+from __future__ import annotations
 
-from filecluster.file_cluster import main
+from pathlib import Path
 
-# TODO: KS: 2020-12-28: read default values from configuration module
 
-# ------ Menu Definition ------ #
+def main() -> None:
+    """Launch the experimental GUI without affecting normal package imports."""
+    try:
+        import PySimpleGUI as sg  # noqa: N813
+    except ImportError as exc:
+        raise RuntimeError(
+            "The experimental GUI needs PySimpleGUI. Install filecluster[gui]."
+        ) from exc
 
-menu_def = [
-    ["File", ["Load configuration", "Save configuration", "Exit"]],
-    ["Help", "About..."],
-]
+    from filecluster.file_cluster import ClusterRequest, cluster
 
-layout = [
-    [sg.Menu(menu_def, tearoff=True)],
-    [
-        sg.Frame(
-            layout=[
+    layout = [
+        [
+            sg.Frame(
+                "Options",
                 [
-                    sg.Checkbox(
-                        "Do not import duplicates existing in the library",
-                        default=True,
-                        size=(50, 1),
-                        key="drop_duplicates",
-                    ),
+                    [
+                        sg.Checkbox(
+                            "Separate duplicates already in the library",
+                            default=True,
+                            key="duplicates",
+                        )
+                    ],
+                    [
+                        sg.Checkbox(
+                            "Assign files to existing events",
+                            default=True,
+                            key="existing",
+                        )
+                    ],
+                    [sg.Checkbox("Dry run", default=True, key="dry_run")],
+                    [
+                        sg.Checkbox(
+                            "Rebuild library metadata",
+                            default=False,
+                            key="force_deep_scan",
+                        )
+                    ],
+                    [
+                        sg.Radio("Move", "operation", default=True, key="move"),
+                        sg.Radio("Copy", "operation", key="copy"),
+                    ],
                 ],
-                [
-                    sg.Checkbox(
-                        "Use existing clusters information",
-                        default=True,
-                        key="use_existing",
-                    ),
-                ],
-                [
-                    sg.Checkbox("Dry run", default=False, key="dry_run"),
-                ],
-                [
-                    sg.Checkbox(
-                        "Rebuild cluster info in libraries",
-                        default=False,
-                        key="force_deep_scan",
-                    ),
-                ],
-                [sg.Text("Operations used to organize media files")],
-                [
-                    sg.Radio("Move", "RADIO1", default=True, size=(10, 1), key="move"),
-                    sg.Radio("Copy", "RADIO1", key="copy"),
-                ],
-                [sg.Text("Max allowed gap between media in event [minutes]")],
-                [sg.InputText("60", key="gap")],
-            ],
-            title="Options",
-            relief=sg.RELIEF_SUNKEN,
-            tooltip="Use these to set flags",
-        )
-    ],
-    [sg.Text("_" * 80)],
-    [sg.Text("Choose folders", size=(35, 1))],
-    [
-        sg.Text(
-            "Inbox dir",
-            size=(15, 1),
-            auto_size_text=False,
-            justification="right",
-        ),
-        sg.InputText("h:\\incomming\\inbox", key="inbox"),
-        sg.FolderBrowse(),
-    ],
-    [
-        sg.Text(
-            "Main library dir",
-            size=(15, 1),
-            auto_size_text=False,
-            justification="right",
-        ),
-        sg.InputText("h:\\zdjecia", key="lib_1"),
-        sg.FolderBrowse(),
-    ],
-    [
-        sg.Text(
-            "Output dir",
-            size=(15, 1),
-            auto_size_text=False,
-            justification="right",
-        ),
-        sg.InputText("h:\\incomming\\clustered", key="output"),
-        sg.FolderBrowse(),
-    ],
-    [sg.Submit(button_text="Run", tooltip="Click to start clustering"), sg.Cancel()],
-]
+            )
+        ],
+        [
+            sg.Text("Inbox directory", size=(18, 1)),
+            sg.Input(key="inbox"),
+            sg.FolderBrowse(),
+        ],
+        [
+            sg.Text("Main library directory", size=(18, 1)),
+            sg.Input(key="library"),
+            sg.FolderBrowse(),
+        ],
+        [
+            sg.Text("Output directory", size=(18, 1)),
+            sg.Input(key="output"),
+            sg.FolderBrowse(),
+        ],
+        [sg.Button("Run"), sg.Button("Cancel")],
+    ]
+    window = sg.Window("Filecluster (experimental)", layout)
+    event, values = window.read()
+    window.close()
+    if event != "Run":
+        return
 
-window = sg.Window(
-    title="Media cluster by event.",
-    layout=layout,
-    default_element_size=(40, 1),
-    grab_anywhere=False,
-)
+    request = ClusterRequest(
+        inbox=Path(values["inbox"]),
+        output=Path(values["output"]),
+        watch_dirs=(Path(values["library"]),) if values["library"] else (),
+        dry_run=values["dry_run"],
+        copy_files=values["copy"],
+        force_deep_scan=values["force_deep_scan"],
+        separate_duplicates=values["duplicates"],
+        assign_existing_clusters=values["existing"],
+    )
+    run = cluster(request)
+    sg.popup(
+        "Filecluster complete",
+        f"{run.files_read} files processed",
+        f"{len(run.new_folder_names)} new event folders",
+        "Dry run; no files changed." if run.config.mode.name == "NOP" else "Done.",
+    )
 
-event, values = window.read()
 
-window.close()
-
-# parse values and event
-sg.popup(
-    "Title",
-    "The results of the window.",
-    f'The button clicked was "{event}"',
-    "The values are",
-    values,
-)
-
-main(
-    inbox_dir=values["inbox"],
-    output_dir=values["output"],
-    watch_dir_list=[values["lib_1"]],
-    development_mode=False,
-    no_operation=values["dry_run"],
-    copy_mode=values["copy"],
-    force_deep_scan=values["force_deep_scan"],
-    drop_duplicates=values["drop_duplicates"],
-    use_existing_clusters=values["use_existing"],
-)
+if __name__ == "__main__":  # pragma: no cover - manual experimental entry point
+    main()

@@ -244,7 +244,10 @@ what each file exercises, and
 for a safe way to drive the CLI by hand.
 
 ## Graphical Interface
-There is available experimental graphical interface: (`src/filecluster/gui.py`).
+Experimental launchers are opt-in and not part of the supported CLI workflow.
+Install `filecluster[gui]` and run `python -m filecluster.gui` for the
+PySimpleGUI prototype. The Tkinter prototype is available through
+`python -m filecluster.gui_tkinter` but is not connected to clustering yet.
 ![img](screenshot.png)
 
 ## Changelog
