@@ -13,6 +13,7 @@
 """
 
 import os
+from dataclasses import replace
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
@@ -307,6 +308,16 @@ class ConfigFactory:
         )
 
     @staticmethod
+    def resolve(config: Config, **overrides: Any) -> Config:
+        """Return a resolved copy of *config* with explicit overrides applied.
+
+        This is the preferred configuration boundary for application services:
+        callers retain their base configuration and receive an independent
+        resolved configuration for one run.
+        """
+        return ConfigFactory.override_from_cli(config, **overrides)
+
+    @staticmethod
     def override_from_cli(  # noqa: C901 too complex
         config: Config,
         inbox_dir: str | Path | None = None,
@@ -323,10 +334,10 @@ class ConfigFactory:
         recursive: bool | None = None,
         **kwargs: Any,
     ) -> Config:
-        """Override config parameters with CLI arguments.
+        """Return a copy of *config* with CLI arguments applied.
 
         Args:
-            config: Base configuration to modify
+            config: Base configuration to resolve without modifying it
             inbox_dir: Override for input directory
             output_dir: Override for output directory
             watch_dir_list: Override for watched directories
@@ -345,6 +356,13 @@ class ConfigFactory:
         Raises:
             ValueError: When configuration constraints are violated
         """
+        config = replace(
+            config,
+            watch_folders=list(config.watch_folders),
+            image_extensions=list(config.image_extensions),
+            video_extensions=list(config.video_extensions),
+        )
+
         # Apply specific CLI overrides
         if inbox_dir is not None:
             config.in_dir_name = Path(inbox_dir)

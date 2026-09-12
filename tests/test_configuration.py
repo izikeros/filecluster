@@ -395,6 +395,15 @@ class TestCliOverride:
         updated = default_factory.override_from_cli(config, inbox_dir=None)
         assert updated.in_dir_name == original_inbox
 
+    def test_resolving_overrides_does_not_mutate_the_base_config(self):
+        config = get_default_config()
+        original_inbox = config.in_dir_name
+
+        resolved = default_factory.resolve(config, inbox_dir="/new/inbox")
+
+        assert resolved.in_dir_name == Path("/new/inbox")
+        assert config.in_dir_name == original_inbox
+
     def test_extra_kwargs_applied_if_attribute_exists(self):
         """Additional keyword arguments are applied when the Config has the attr."""
         config = get_default_config()

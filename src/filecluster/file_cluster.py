@@ -181,7 +181,7 @@ def main(
 
     # Override configuration with CLI parameters
     logger.debug("Applying CLI parameter overrides to configuration")
-    config = default_factory.override_from_cli(
+    config = default_factory.resolve(
         config=config,
         inbox_dir=inbox_dir,
         output_dir=output_dir,
