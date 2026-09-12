@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from filecluster.catalog import LibraryCatalog
+from filecluster.content_index import ContentIndex
 from filecluster.exceptions import OverlappingPathsError
 from filecluster.file_operations import CopyOp, MoveOp, SkipOp
 from filecluster.reconcile import (
@@ -43,6 +44,18 @@ def _write(path: Path, content: bytes = b"hello world") -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
     return path
+
+
+class TestContentIndex:
+    def test_finds_only_byte_identical_same_size_files(self, tmp_path):
+        indexed = _write(tmp_path / "indexed.jpg", b"same-content")
+        identical = _write(tmp_path / "identical.jpg", b"same-content")
+        different = _write(tmp_path / "different.jpg", b"other-content")
+        index = ContentIndex()
+        index.add(indexed, indexed.stat().st_size)
+
+        assert index.find_matches(identical, identical.stat().st_size) == [indexed]
+        assert index.find_matches(different, different.stat().st_size) == []
 
 
 def _populate_library(lib: Path) -> dict[str, Path]:

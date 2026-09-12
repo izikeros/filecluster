@@ -30,6 +30,7 @@ from typing import Any
 from filecluster import logger
 from filecluster.catalog import LibraryCatalog
 from filecluster.configuration import FileClusterSettings
+from filecluster.content_index import ContentIndex
 from filecluster.exceptions import OverlappingPathsError
 from filecluster.file_operations import (
     CopyOp,
@@ -280,65 +281,6 @@ class ReconcilePlan:
                     ]
                 )
         return len(self.file_matches)
-
-
-# ---------------------------------------------------------------------------
-# ContentIndex — the size → partial → full cascade, shared by both sides
-# ---------------------------------------------------------------------------
-class ContentIndex:
-    """Content-addressed index of files, built on the 3-level cascade.
-
-    Hashes are computed lazily: a partial hash only when another file has the
-    same size, a full hash only when the partial hashes agree.
-    """
-
-    def __init__(self) -> None:
-        self._by_size: dict[int, list[Path]] = {}
-        self._partial: dict[str, str | None] = {}
-        self._full: dict[str, str | None] = {}
-
-    def add(self, path: Path, size: int) -> None:
-        self._by_size.setdefault(size, []).append(path)
-
-    def candidates_by_size(self, size: int) -> list[Path]:
-        return self._by_size.get(size, [])
-
-    def partial_hash(self, path: Path) -> str | None:
-        key = str(path)
-        if key not in self._partial:
-            self._partial[key] = get_partial_hash(key)
-        return self._partial[key]
-
-    def full_hash(self, path: Path) -> str | None:
-        key = str(path)
-        if key not in self._full:
-            try:
-                self._full[key] = hash_file(key)
-            except OSError:
-                self._full[key] = None
-        return self._full[key]
-
-    def find_matches(self, path: Path, size: int) -> list[Path]:
-        """Return every indexed file whose content equals *path*'s."""
-        candidates = self.candidates_by_size(size)
-        if not candidates:
-            return []
-        src_partial = get_partial_hash(str(path))
-        if src_partial is None:
-            return []
-        src_full: str | None = None
-        matches: list[Path] = []
-        for candidate in candidates:
-            if self.partial_hash(candidate) != src_partial:
-                continue
-            if src_full is None:
-                try:
-                    src_full = hash_file(str(path))
-                except OSError:
-                    return []
-            if self.full_hash(candidate) == src_full:
-                matches.append(candidate)
-        return matches
 
 
 def _unique_roots(paths: Sequence[Path]) -> list[Path]:
